@@ -21,7 +21,7 @@ const sections = [{
   }]
 }, {
   title: 'Account updates',
-  description: 'Receive updates about Nuxt UI.',
+  description: 'Receive updates about Media Studio.',
   fields: [{
     name: 'weekly_digest',
     label: 'Weekly digest',
