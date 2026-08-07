@@ -1,6 +1,10 @@
 {
-  "name": "frontend",
+  "name": "@media-studio/frontend",
+  "version": "0.0.0",
+  "description": "Media Studio web app — Nuxt UI dashboard for building and running media pipelines.",
+  "author": "Dat Nguyen",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "nuxt build",
@@ -8,6 +12,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
@@ -32,6 +37,5 @@
     "eslint": "^10.8.0",
     "typescript": "^6.0.3",
     "vue-tsc": "^3.3.9"
-  },
-  "packageManager": "pnpm@11.18.0"
+  }
 }

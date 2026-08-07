@@ -1,0 +1,22 @@
+{
+  "name": "media-studio",
+  "version": "0.0.0",
+  "description": "An automated toolbox for generating rich media content across text, images, audio, and video.",
+  "author": "Dat Nguyen",
+  "license": "MIT",
+  "private": true,
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:backend": "pnpm --filter @media-studio/backend run dev",
+    "dev:frontend": "pnpm --filter @media-studio/frontend run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "lint:fix": "pnpm -r run lint:fix",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  }
+}
