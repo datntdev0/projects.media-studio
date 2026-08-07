@@ -1,8 +1,7 @@
-name: ci
+name: continuous_integration
 
 on:
   push:
-  pull_request:
 
 jobs:
   ci:
