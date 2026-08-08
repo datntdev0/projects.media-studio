@@ -5,15 +5,11 @@ defineProps<{
   error: NuxtError
 }>()
 
-useSeoMeta({
-  title: 'Page not found',
-  description: 'We are sorry but this page could not be found.'
-})
-
 useHead({
   htmlAttrs: {
     lang: 'en'
-  }
+  },
+  title: 'Media Studio'
 })
 </script>
 

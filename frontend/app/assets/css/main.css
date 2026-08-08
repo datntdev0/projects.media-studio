@@ -1,18 +1,116 @@
 @import "tailwindcss" theme(static);
 @import "@nuxt/ui";
 
-@theme static {
-  --font-sans: 'Public Sans', sans-serif;
+/* Industry — the design system this app is skinned with.
+   See DESIGN.md at the repository root. */
+@import "./tokens.css";
+@import "./base.css";
+@import "./blueprint.css";
 
-  --color-green-50: #EFFDF5;
-  --color-green-100: #D9FBE8;
-  --color-green-200: #B3F5D1;
-  --color-green-300: #75EDAE;
-  --color-green-400: #00DC82;
-  --color-green-500: #00C16A;
-  --color-green-600: #00A155;
-  --color-green-700: #007F45;
-  --color-green-800: #016538;
-  --color-green-900: #0A5331;
-  --color-green-950: #052E16;
+/* ══════════════════════════════════════════════════════════════════════════
+   Primitives — the raw material of the system: tonal ramps, the type scale,
+   the density scale. Theme-independent, and the only place a literal colour or
+   length is allowed to appear.
+
+   These live in the entry stylesheet because Tailwind only reads `@theme` from
+   the file it is invoked on; in an imported file the block is silently
+   dropped. The roles built on top of them are in ./tokens.css.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@theme static {
+  /* ── Type ────────────────────────────────────────────────────────────────
+     Barlow Condensed for headings over Barlow for body, served locally by
+     @nuxt/fonts (see nuxt.config.ts). */
+  --font-body: "Barlow", system-ui, sans-serif;
+  --font-heading: "Barlow Condensed", system-ui, sans-serif;
+  --font-sans: var(--font-body);
+  --font-heading-weight: 600;
+
+  /* The interface scale. Named by role rather than by t-shirt size so the step
+     a value belongs to survives a retune. Use these in stylesheets; in utility
+     class strings reach for the Tailwind `text-xs`/`text-sm` steps (identical
+     to `--text-label`/`--text-ui`) so tailwind-merge can tell a size from a
+     colour. */
+  --text-meta: 0.6875rem; /* 11px — captions, tags, table headers */
+  --text-label: 0.75rem; /* 12px — field labels */
+  --text-support: 0.8125rem; /* 13px — secondary copy */
+  --text-ui: 0.875rem; /* 14px — controls, navigation */
+  --text-body: 0.9375rem; /* 15px — running text */
+
+  /* Headings — a fixed scale; density moves spacing, not sizes. */
+  --text-h1: 2.625rem; /* 42px */
+  --text-h1--line-height: 1.12;
+  --text-h2: 2rem; /* 32px */
+  --text-h2--line-height: 1.12;
+  --text-h3: 1.5625rem; /* 25px */
+  --text-h3--line-height: 1.12;
+  --text-h4: 1.25rem; /* 20px */
+  --text-h4--line-height: 1.12;
+  --text-h5: 1rem; /* 16px */
+  --text-h5--line-height: 1.12;
+  --text-h6: 0.8125rem; /* 13px */
+  --text-h6--line-height: 1.12;
+
+  /* ── Density ─────────────────────────────────────────────────────────────
+     The system runs at 0.85×, so one spacing step is 3.4px. Rebasing the
+     Tailwind `--spacing` on that step puts every `p-*`, `gap-*` and `size-*`
+     utility on the design-system grid: `p-3` is `--space-3`. */
+  --spacing: 0.2125rem; /* 3.4px */
+
+  /* Aliases carrying the names the design-system guide uses. */
+  --space-1: calc(var(--spacing) * 1); /* 3.4px */
+  --space-2: calc(var(--spacing) * 2); /* 6.8px */
+  --space-3: calc(var(--spacing) * 3); /* 10.2px */
+  --space-4: calc(var(--spacing) * 4); /* 13.6px */
+  --space-6: calc(var(--spacing) * 6); /* 20.4px */
+  --space-8: calc(var(--spacing) * 8); /* 27.2px */
+
+  /* ── Tonal ramps ─────────────────────────────────────────────────────────
+     Generated in OKLCH on one shared lightness scale, so the same step of any
+     role matches the others in visual value. 100–900 come straight from the
+     design system; 50 and 950 extend it to the 11 steps Nuxt UI expects. */
+  --color-graphite-50: #fafafb;
+  --color-graphite-100: #f5f5f8;
+  --color-graphite-200: #e7e7ea;
+  --color-graphite-300: #d4d4d7;
+  --color-graphite-400: #b7b7ba;
+  --color-graphite-500: #98989b;
+  --color-graphite-600: #7a7a7d;
+  --color-graphite-700: #5d5d60;
+  --color-graphite-800: #424244;
+  --color-graphite-900: #2b2b2d;
+  --color-graphite-950: #1d1f20;
+
+  --color-accent-50: #f7fbff;
+  --color-accent-100: #eef6ff;
+  --color-accent-200: #d6ebff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-400: #94bce3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #597ea3; /* the steel the system is named for */
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+  --color-accent-900: #1d2d3d;
+  --color-accent-950: #131e28;
+
+  /* The one colour outside the mono scheme: destructive actions. */
+  --color-rust-400: #c98080;
+  --color-rust-700: #8a2f2f;
+
+  /* The two papers the system prints on — the light ground and its sunk
+     surface. Off-scale by design: they sit between ramp steps. */
+  --color-paper: #f2f2f3;
+  --color-paper-sunk: #e9e9ea;
+
+  /* ── Elevation ───────────────────────────────────────────────────────────
+     Derived from the ground: soft ink-tinted shadows on the light theme,
+     ambient darkness on the dark one. The tint itself is a role. */
+  --shadow-sm: 0 1px 2px var(--color-shadow);
+  --shadow-md: 0 3px 10px var(--color-shadow);
+  --shadow-lg: 0 12px 32px var(--color-shadow-strong);
+
+  /* ── Shell metrics ───────────────────────────────────────────────────────
+     The two fixed dimensions of the app frame. */
+  --layout-sidebar-width: 16.25rem; /* 260px */
+  --layout-header-height: 3.5rem; /* 56px */
 }

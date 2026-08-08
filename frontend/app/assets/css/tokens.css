@@ -1,0 +1,145 @@
+/* Industry — semantic roles.
+
+   The primitives live in ./main.css (Tailwind only reads `@theme` from the
+   entry stylesheet). This file turns them into the roles the app actually
+   speaks: ground, text, accent, dividers — and hands those roles to the
+   Nuxt UI `--ui-*` tokens so the whole component library follows.
+
+   Everything else in the app reads roles, never primitives. */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Semantic roles. Declared unlayered so they win over the `@layer theme`
+   blocks Nuxt UI ships and the ones its colour plugin injects at runtime.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* The ramp names the design-system guide writes against, aliased onto the
+    neutral ramp so markup copied from a design doc resolves unchanged. */
+  --color-neutral-100: var(--color-graphite-100);
+  --color-neutral-200: var(--color-graphite-200);
+  --color-neutral-300: var(--color-graphite-300);
+  --color-neutral-400: var(--color-graphite-400);
+  --color-neutral-500: var(--color-graphite-500);
+  --color-neutral-600: var(--color-graphite-600);
+  --color-neutral-700: var(--color-graphite-700);
+  --color-neutral-800: var(--color-graphite-800);
+  --color-neutral-900: var(--color-graphite-900);
+
+  
+  /* Roles derived from the ground. One formula serves both themes: custom
+    properties resolve against the element they are used on, and `--color-text`
+    has already flipped by the time these are read. */
+  --color-divider: color-mix(in srgb, var(--color-text) 16%, transparent);
+  --color-divider-strong: color-mix(in srgb, var(--color-text) 28%, transparent);
+  --color-toned: color-mix(in srgb, var(--color-text) 70%, transparent);
+  --color-muted: color-mix(in srgb, var(--color-text) 55%, transparent);
+  --color-dimmed: color-mix(in srgb, var(--color-text) 40%, transparent);
+  --color-hover: color-mix(in srgb, var(--color-text) 6%, transparent);
+  --color-pressed: color-mix(in srgb, var(--color-text) 12%, transparent);
+  --color-row-hover: color-mix(in srgb, var(--color-text) 4%, transparent);
+  --color-selection: color-mix(in srgb, var(--color-accent) 30%, transparent);
+
+  /* The sidebar sits on a half-strength surface so the frame reads as one
+     plane with the content, not as a separate panel. */
+  --color-sidebar: color-mix(in srgb, var(--color-surface) 60%, transparent);
+
+}
+
+.light {
+  color-scheme: light;
+
+  --color-bg: var(--color-paper);
+  --color-surface: var(--color-paper-sunk);
+  --color-text: var(--color-graphite-950);
+
+  /* Accent — one step past the base carries hover, two carry pressed. */
+  --color-accent: var(--color-accent-600);
+  --color-accent-hover: var(--color-accent-700);
+  --color-accent-active: var(--color-accent-800);
+  --color-on-accent: var(--color-bg);
+
+  /* Accent-tinted fills: a light wash and a stronger one. */
+  --color-tint: var(--color-accent-100);
+  --color-on-tint: var(--color-accent-800);
+  --color-tint-strong: var(--color-accent-300);
+  --color-on-tint-strong: var(--color-accent-900);
+
+  /* The brand mark — a solid field of the deepest accent step. */
+  --color-mark: var(--color-accent-900);
+  --color-on-mark: var(--color-bg);
+  --color-danger: var(--color-rust-700);
+  --color-shadow: color-mix(in srgb, var(--color-graphite-900) 16%, transparent);
+  --color-shadow-strong: color-mix(in srgb, var(--color-graphite-900) 22%, transparent);
+
+  /* The accent-to-ground pair is tuned to 3:1 — enough for chrome, not for
+    paragraphs — so links take a deep ramp step instead of the accent. */
+  --color-link: var(--color-accent-700);
+  --color-link-hover: var(--color-accent-900);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* The ink becomes the ground and the paper becomes the ink. */
+  --color-bg: var(--color-graphite-950);
+  --color-surface: var(--color-graphite-900);
+  --color-text: var(--color-paper);
+
+  /* Accent — one step past the base carries hover, two carry pressed. */
+  --color-accent: var(--color-accent-400);
+  --color-accent-hover: var(--color-accent-300);
+  --color-accent-active: var(--color-accent-200);
+  --color-on-accent: var(--color-graphite-950);
+
+  /* Accent-tinted fills: a light wash and a stronger one. */
+  --color-tint: var(--color-accent-900);
+  --color-on-tint: var(--color-accent-200);
+  --color-tint-strong: var(--color-accent-800);
+  --color-on-tint-strong: var(--color-accent-100);
+
+  /* The brand mark — a solid field of the deepest accent step. */
+  --color-mark: var(--color-accent-300);
+  --color-on-mark: var(--color-graphite-950);
+  --color-danger: var(--color-rust-400);
+  --color-shadow: color-mix(in srgb, black 55%, transparent);
+  --color-shadow-strong: color-mix(in srgb, black 70%, transparent);
+
+  /* The accent-to-ground pair is tuned to 3:1 — enough for chrome, not for
+    paragraphs — so links take a deep ramp step instead of the accent. */
+  --color-link: var(--color-accent-300);
+  --color-link-hover: var(--color-accent-100);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Nuxt UI bridge. Nuxt UI draws every component from this handful of tokens,
+   so re-pointing them at the roles above re-skins the whole library at once.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Blueprint objects are square. Zeroing the base radius squares every Nuxt
+     UI component in one move (`rounded-full` is literal, so avatars survive). */
+  --ui-radius: 0px;
+  --ui-header-height: var(--layout-header-height);
+
+  --ui-primary: var(--color-accent);
+  --ui-secondary: var(--color-accent); /* mono scheme — one accent voice */
+  --ui-error: var(--color-danger);
+
+  --ui-text-dimmed: var(--color-dimmed);
+  --ui-text-muted: var(--color-muted);
+  --ui-text-toned: var(--color-toned);
+  --ui-text: var(--color-text);
+  --ui-text-highlighted: var(--color-text);
+  --ui-text-inverted: var(--color-bg);
+
+  --ui-bg: var(--color-bg);
+  --ui-bg-muted: var(--color-surface);
+  --ui-bg-elevated: var(--color-hover);
+  --ui-bg-accented: var(--color-pressed);
+  --ui-bg-inverted: var(--color-text);
+
+  --ui-border: var(--color-divider);
+  --ui-border-muted: var(--color-divider);
+  --ui-border-accented: var(--color-divider-strong);
+  --ui-border-inverted: var(--color-text);
+}
