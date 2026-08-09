@@ -4,6 +4,9 @@ packages:
 
 allowBuilds:
   '@parcel/watcher': false
+  # Analytics postinstall inside swagger-ui-dist, which @nestjs/swagger pulls in.
+  # Swagger UI serves fine without it, so the phone-home stays unrun.
+  '@scarf/scarf': false
   '@tailwindcss/oxide': false
   esbuild: false
   maplibre-gl: false
