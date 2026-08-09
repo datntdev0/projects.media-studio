@@ -1,34 +1,37 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EnvironmentVariables, LogLevelName, NodeEnv } from './env.validation';
+import { Inject, Injectable } from '@nestjs/common';
+// `import type`: a type in a decorated signature cannot be a value import while
+// isolatedModules and emitDecoratorMetadata are both on.
+import type { ConfigType } from '@nestjs/config';
+import { appConfig, LogLevelName, NodeEnv } from './configuration';
 
 /**
- * Typed reader for the validated environment.
+ * Typed reader for the environment.
  *
  * Providers inject this rather than `ConfigService`, so a setting is a property
- * with a type instead of a string key, and a test can supply a plain object in
- * place of the whole config module.
+ * with a type instead of a string key, and a spec can hand over a plain object
+ * in place of the whole config module.
  */
 @Injectable()
 export class AppConfigService {
   constructor(
-    private readonly config: ConfigService<EnvironmentVariables, true>,
+    @Inject(appConfig.KEY)
+    private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   get nodeEnv(): NodeEnv {
-    return this.config.get('NODE_ENV', { infer: true });
+    return this.config.nodeEnv;
   }
 
   get port(): number {
-    return this.config.get('PORT', { infer: true });
+    return this.config.port;
   }
 
   get logLevel(): LogLevelName {
-    return this.config.get('LOG_LEVEL', { infer: true });
+    return this.config.logLevel;
   }
 
   get docsEnabled(): boolean {
-    return this.config.get('API_DOCS_ENABLED', { infer: true });
+    return this.config.docsEnabled;
   }
 
   get isProduction(): boolean {

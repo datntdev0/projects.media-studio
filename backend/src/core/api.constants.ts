@@ -1,19 +1,30 @@
 /**
- * The shape of the served URL space, in one place — main.ts, the health
- * controller's opt-out and the docs all have to agree on it.
+ * The shape of the served URL space, in one place — the controllers, main.ts and
+ * the docs all have to agree on it.
  *
- * The API is prefixed and versioned: `/api/v1/...`. Two things deliberately sit
- * outside that space, because neither belongs to a version of the API:
- * `/health`, which orchestrators and the e2e runner probe for liveness, and the
- * docs, which describe every version rather than living inside one.
+ * Three tiers:
+ *
+ * - `/api/v1/…` — the API proper. Anything whose payload can change between
+ *   versions lives here, and gets the version by default.
+ * - `/api/system` — prefixed but version-neutral: which build is running is not
+ *   a per-version question, so a client should not have to pick one to ask.
+ * - `/health`, `/docs`, `/openapi.json` — outside the prefix entirely. Liveness
+ *   is for orchestrators and the e2e readiness probe, and the docs describe
+ *   every version rather than living inside one.
  */
 export const API_PREFIX = 'api';
 
 /** Default URI version. Controllers opt out with `VERSION_NEUTRAL`. */
 export const API_VERSION = '1';
 
-/** Unversioned liveness probe. */
+/** Version-neutral, inside the prefix. */
+export const SYSTEM_PATH = 'system';
+
+/** Unversioned liveness probe, outside the prefix. */
 export const HEALTH_PATH = 'health';
+
+/** Versioned. `/api/v1/auth/…` */
+export const AUTH_PATH = 'auth';
 
 /** The generated OpenAPI document. */
 export const OPENAPI_JSON_PATH = 'openapi.json';

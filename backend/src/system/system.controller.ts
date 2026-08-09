@@ -1,11 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SYSTEM_PATH } from '../core/api.constants';
 import { ServiceInfoDto } from './dto/service-info.dto';
 import { SystemManager } from './system.manager';
 
-/** `/api/v1/system` — the prefix and version come from main.ts. */
+/**
+ * `/api/system` — prefixed, but not versioned.
+ *
+ * What the service is does not change shape from one API version to the next,
+ * and a client checking which build it is talking to should not have to pick a
+ * version to ask. `VERSION_NEUTRAL` drops the `/v1` that versioned routes carry.
+ */
 @ApiTags('System')
-@Controller('system')
+@Controller({ path: SYSTEM_PATH, version: VERSION_NEUTRAL })
 export class SystemController {
   constructor(private readonly system: SystemManager) {}
 
@@ -13,7 +20,7 @@ export class SystemController {
   @ApiOperation({
     summary: 'Service information',
     description:
-      'Identifies the service, its build and the API version serving it.',
+      'Identifies the service, its build and the API version it serves by default.',
   })
   @ApiOkResponse({ type: ServiceInfoDto })
   getInfo(): ServiceInfoDto {

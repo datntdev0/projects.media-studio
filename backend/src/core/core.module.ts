@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppConfigService } from './config/app-config.service';
-import { validate } from './config/env.validation';
+import { appConfig } from './config/configuration';
 import { AppLogger } from './logging/app.logger';
 
 /**
@@ -15,8 +15,8 @@ import { AppLogger } from './logging/app.logger';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      // Validated once here, so no other module may reach for process.env.
-      validate,
+      // Read once, here, so no other module reaches for process.env.
+      load: [appConfig],
       cache: true,
       envFilePath: ['.env.local', '.env'],
     }),

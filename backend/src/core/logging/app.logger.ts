@@ -1,14 +1,23 @@
 import { ConsoleLogger, Injectable, LogLevel } from '@nestjs/common';
 import { AppConfigService } from '../config/app-config.service';
-import { LOG_LEVELS, LogLevelName } from '../config/env.validation';
+import { LOG_LEVELS, LogLevelName } from '../config/configuration';
 import { currentRequestId } from './request-context';
 
 /** Longer than this in the console and the id is shortened to its first 8. */
 const CONSOLE_REQUEST_ID_LIMIT = 12;
 
-/** Every level at or above the configured one. */
+/**
+ * Every level at or above the configured one.
+ *
+ * LOG_LEVEL is read from the environment without being checked, so an
+ * unrecognised value has to land somewhere sensible here. Falling through to
+ * `indexOf`'s -1 would silence everything below `fatal` — a typo would look
+ * exactly like a service that had stopped logging.
+ */
 export function enabledLevels(level: LogLevelName): LogLevel[] {
-  return LOG_LEVELS.slice(LOG_LEVELS.indexOf(level));
+  const from = LOG_LEVELS.indexOf(level);
+
+  return LOG_LEVELS.slice(from === -1 ? LOG_LEVELS.indexOf('log') : from);
 }
 
 /**

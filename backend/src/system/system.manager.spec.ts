@@ -1,4 +1,4 @@
-import { NodeEnv } from '../core/config/env.validation';
+import { NodeEnv } from '../core/config/configuration';
 import { AppConfigService } from '../core/config/app-config.service';
 import { SERVICE_NAME, SERVICE_VERSION } from '../core/service-metadata';
 import { HealthStatus } from './dto/health.dto';

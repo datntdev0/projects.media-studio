@@ -1,5 +1,5 @@
 import { AppConfigService } from '../config/app-config.service';
-import { NodeEnv } from '../config/env.validation';
+import { LogLevelName, NodeEnv } from '../config/configuration';
 import { AppLogger, enabledLevels } from './app.logger';
 import { requestContext } from './request-context';
 
@@ -40,6 +40,14 @@ describe('enabledLevels', () => {
 
   it('enables only fatal at the least verbose level', () => {
     expect(enabledLevels('fatal')).toEqual(['fatal']);
+  });
+
+  it('treats an unrecognised level as the default rather than silence', () => {
+    // LOG_LEVEL is not validated, and a typo that muted the service would be
+    // indistinguishable from a service that had stopped logging.
+    expect(enabledLevels('chatty' as LogLevelName)).toEqual(
+      enabledLevels('log'),
+    );
   });
 });
 

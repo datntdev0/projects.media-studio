@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { NodeEnv } from '../../core/config/env.validation';
+import { NodeEnv } from '../../core/config/configuration';
 
-/** What the service is — the versioned API's entry point. */
+/** What the service is: build, environment and the API version it defaults to. */
 export class ServiceInfoDto {
   @ApiProperty({ example: '@media-studio/backend' })
   name!: string;
@@ -16,7 +16,8 @@ export class ServiceInfoDto {
   environment!: NodeEnv;
 
   @ApiProperty({
-    description: 'The API version serving this response.',
+    description:
+      'The version versioned endpoints answer on when a client names none.',
     example: 'v1',
   })
   apiVersion!: string;

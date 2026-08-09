@@ -1,28 +1,28 @@
-import { ConfigService } from '@nestjs/config';
 import { AppConfigService } from './app-config.service';
-import { EnvironmentVariables, NodeEnv } from './env.validation';
+import { AppConfig, NodeEnv } from './configuration';
 
-function readerFor(env: Partial<EnvironmentVariables>): AppConfigService {
-  const config = {
-    get: (key: keyof EnvironmentVariables) => env[key],
-  } as unknown as ConfigService<EnvironmentVariables, true>;
+const base: AppConfig = {
+  nodeEnv: NodeEnv.Development,
+  port: 3001,
+  logLevel: 'log',
+  docsEnabled: true,
+};
 
-  return new AppConfigService(config);
-}
+const readerFor = (config: Partial<AppConfig>) =>
+  new AppConfigService({ ...base, ...config });
 
 describe('AppConfigService', () => {
-  it('reads each setting from the validated environment', () => {
+  it('reads each setting from the loaded configuration', () => {
     const reader = readerFor({
-      NODE_ENV: NodeEnv.Development,
-      PORT: 3001,
-      LOG_LEVEL: 'debug',
-      API_DOCS_ENABLED: true,
+      port: 4000,
+      logLevel: 'debug',
+      docsEnabled: false,
     });
 
     expect(reader.nodeEnv).toBe(NodeEnv.Development);
-    expect(reader.port).toBe(3001);
+    expect(reader.port).toBe(4000);
     expect(reader.logLevel).toBe('debug');
-    expect(reader.docsEnabled).toBe(true);
+    expect(reader.docsEnabled).toBe(false);
   });
 
   it.each([
@@ -30,7 +30,7 @@ describe('AppConfigService', () => {
     [NodeEnv.Test, false, true],
     [NodeEnv.Development, false, false],
   ])('classifies %s', (nodeEnv, isProduction, isTest) => {
-    const reader = readerFor({ NODE_ENV: nodeEnv });
+    const reader = readerFor({ nodeEnv });
 
     expect(reader.isProduction).toBe(isProduction);
     expect(reader.isTest).toBe(isTest);

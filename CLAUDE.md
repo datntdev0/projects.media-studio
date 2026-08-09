@@ -41,21 +41,23 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 | `@media-studio/frontend` | `frontend/` | Nuxt 4 + Nuxt UI 4 + Tailwind 4, port 3000 |
 | `@media-studio/tests` | `tests/` | Playwright, drives both |
 
-The backend is a layered skeleton with no feature domains yet; the frontend is an app shell with the design system applied and no feature screens yet.
+The backend is a layered skeleton whose only domain is a mock `auth`; the frontend is an app shell with the design system applied and no feature screens yet.
 
 ### Backend
 
 Three layers, dependencies pointing one way only: **controller → manager → repository**. A controller owns HTTP and nothing else; a manager owns the business rules and stays framework-free (no decorator beyond `@Injectable()`, no `Request`/`Response`), which is what lets its specs run without a Nest fixture; a repository owns persistence for one aggregate. A controller never reaches past its manager to a repository.
 
-Modules are feature-first — `src/system/` holds its own controllers, manager and DTOs — with `src/core/` for the cross-cutting layer, imported once by `AppModule`.
+Modules are feature-first — `src/auth/` holds its own controller, manager, repository and DTOs — with `src/core/` for the cross-cutting layer, imported once by `AppModule`. `auth/` is the pattern to copy for a new domain.
 
 - `core/configure-app.ts` owns the served surface: global `api` prefix, URI versioning, validation pipe, request-log interceptor, exception filter. `main.ts` and `test/app.e2e-spec.ts` both call it, so the e2e suite asserts the real wiring rather than a copy.
-- `core/api.constants.ts` is the URL space. The API is `/api/v1/…`; `/health` opts out of both prefix and version (`VERSION_NEUTRAL` plus the `exclude` list) because liveness probes should not track API versions — **`tests/playwright.config.ts` probes `/health` for readiness, and Playwright treats a 404 as "not up yet"**, so moving or versioning it stalls the whole e2e suite for two minutes.
-- `core/config/` validates the environment at boot with class-validator and fails fast, listing every bad variable. Providers read settings through `AppConfigService`, never `process.env`.
+- `core/api.constants.ts` is the URL space, in three tiers: `/api/v1/…` for anything whose payload can change between versions (`auth`); `/api/system` for the build/environment report, which is prefixed but `VERSION_NEUTRAL` because it is not a per-version question; and `/health`, `/docs`, `/openapi.json` outside the prefix entirely. **`tests/playwright.config.ts` probes `/health` for readiness and Playwright treats a 404 as "not up yet"**, so moving or versioning that route stalls the whole e2e suite for two minutes.
+- `core/config/configuration.ts` lifts the environment into a typed object with a default per setting. It reads, it does not validate — an unusable value falls back rather than stopping boot, so anything consuming a setting has to cope with a garbage one (`enabledLevels` treats an unknown `LOG_LEVEL` as the default instead of silencing the service). Providers read settings through `AppConfigService`, never `process.env`. class-validator is for request DTOs, where the global `ValidationPipe` uses it.
 - `core/logging/` extends Nest 11's `ConsoleLogger` — JSON in production, colour elsewhere — and adds a request id from an `AsyncLocalStorage` context, so a line ten calls deep is attributable without threading an argument through. Every response echoes `x-request-id`.
 - Docs are Swagger UI at `/docs` with the document at `/openapi.json`, gated on `API_DOCS_ENABLED`. Generate the document after the prefix and versioning are applied or the paths come out wrong.
 
-Declare a repository — or any seam with more than one implementation — as an `abstract class` used as both type and DI token, provided with `{ provide: Abstract, useClass: Concrete }`. Modules export managers, never repositories. There is no generic base repository on purpose. Storage is not chosen yet.
+Declare a repository — or any seam with more than one implementation — as an `abstract class` used as both type and DI token, provided with `{ provide: UserRepository, useClass: InMemoryUserRepository }`. Modules export managers, never repositories. There is no generic base repository on purpose. Storage is not chosen yet, so repositories are in-memory.
+
+**`auth/` is a mock**: plaintext password comparison and an unsigned token that is just the user's id. It exists to give the frontend endpoints and to make the layering concrete; swap in password hashing and a signed token before it is reachable outside development. Do not build real authorization on top of it as it stands.
 
 Unit specs live beside the file they cover (`*.spec.ts` under `src/`); the supertest suite is `test/app.e2e-spec.ts`. Jest loads `reflect-metadata` via `setupFiles` — a spec importing a decorated class directly does not otherwise get it.
 

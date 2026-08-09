@@ -1,4 +1,4 @@
-import { NodeEnv } from '../core/config/env.validation';
+import { NodeEnv } from '../core/config/configuration';
 import { HealthDto, HealthStatus } from './dto/health.dto';
 import { ServiceInfoDto } from './dto/service-info.dto';
 import { HealthController } from './health.controller';
