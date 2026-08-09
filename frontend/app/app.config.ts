@@ -20,6 +20,33 @@ export default defineAppConfig({
       }
     },
 
+    // Form controls. Labels and checkbox text stay in the body face — a form is
+    // a list of things to read, not a row of actions — and inputs sit on the
+    // sunk surface behind a hairline ring, as the system's fields do.
+    formField: {
+      slots: {
+        label: 'font-body text-xs text-toned'
+      }
+    },
+
+    // Recolour the field through the `outline` variant, not `slots.base`: the
+    // variant's classes are applied after the base slot's, so a `bg-*`/`ring-*`
+    // written on the base loses the tailwind-merge conflict and silently does
+    // nothing. Only the colours are restated — the ring width stays upstream.
+    input: {
+      variants: {
+        variant: {
+          outline: 'bg-muted ring-default'
+        }
+      }
+    },
+
+    checkbox: {
+      slots: {
+        label: 'font-body text-sm'
+      }
+    },
+
     // Menus are blueprint objects too: square, hairline-framed, corner-marked.
     dropdownMenu: {
       slots: {

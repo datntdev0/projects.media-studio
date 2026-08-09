@@ -43,6 +43,16 @@
      plane with the content, not as a separate panel. */
   --color-sidebar: color-mix(in srgb, var(--color-surface) 60%, transparent);
 
+  /* The deep field the sign-in panel is printed on, and the ink that sits on
+     it. Declared here rather than per theme on purpose: the panel is
+     theme-invariant — it stays the deepest accent step in light and dark alike.
+     That is exactly why `--color-mark` cannot be reused for it; the mark flips
+     between accent-900 and accent-300 with the theme. The muted step is the
+     same proportional formula as `--color-toned`, measured against the field's
+     own ink instead of the page's. */
+  --color-field: var(--color-accent-900);
+  --color-on-field: var(--color-paper);
+  --color-on-field-muted: color-mix(in srgb, var(--color-on-field) 70%, transparent);
 }
 
 .light {

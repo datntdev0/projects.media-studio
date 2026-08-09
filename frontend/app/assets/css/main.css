@@ -6,6 +6,8 @@
 @import "./tokens.css";
 @import "./base.css";
 @import "./blueprint.css";
+@import "./lockup.css";
+@import "./auth.css";
 
 /* ══════════════════════════════════════════════════════════════════════════
    Primitives — the raw material of the system: tonal ramps, the type scale,
@@ -38,6 +40,9 @@
   --text-body: 0.9375rem; /* 15px — running text */
 
   /* Headings — a fixed scale; density moves spacing, not sizes. */
+  --text-display: 3.25rem; /* 52px — one step above h1, for a full-height hero */
+  --text-display--line-height: 1.05; /* tighter than the 1.12 the scale runs at:
+     leading that reads as generous at 42px reads as loose at 52px */
   --text-h1: 2.625rem; /* 42px */
   --text-h1--line-height: 1.12;
   --text-h2: 2rem; /* 32px */
