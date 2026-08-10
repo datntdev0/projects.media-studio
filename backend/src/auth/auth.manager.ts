@@ -1,49 +1,45 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import type { UserRecord } from 'firebase-admin/auth';
+import { FirebaseAdminService } from '../core/firebase/firebase-admin.service';
 import { UserDto } from './dto/user.dto';
-import { User, UserRepository } from './user.repository';
 
-const TOKEN_PREFIX = 'mock.';
+const USER_NOT_FOUND = 'auth/user-not-found';
 
 /**
- * "Who am I", and nothing else — issuing tokens is Firebase Authentication's job
- * now, so sign-in and sign-up have gone with the passwords they handled.
+ * "Who am I" — the one auth question this service still answers.
  *
- * ⚠️ A MOCK, standing in until the token is verified for real. It trusts an
- * unsigned token that is just the user's id, so anyone can mint one. Replacing
- * it with `verifyIdToken` is the next change.
- *
- * The rules live here rather than in the controller, and persistence sits behind
- * `UserRepository`, so swapping either the token scheme or the datastore touches
- * one layer at a time.
+ * Firebase Authentication owns accounts and credentials, so there is nothing to
+ * store here: the caller's uid comes from the token the guard verified, and the
+ * account is read straight from Firebase.
  */
 @Injectable()
 export class AuthManager {
-  constructor(private readonly users: UserRepository) {}
+  constructor(private readonly firebase: FirebaseAdminService) {}
 
-  /** The user a bearer token stands for. */
-  async me(authorization: string | undefined): Promise<UserDto> {
-    const id = userIdFromHeader(authorization);
-    const user = id ? await this.users.findById(id) : null;
+  /** The account a verified token belongs to. */
+  async me(uid: string): Promise<UserDto> {
+    try {
+      return publicView(await this.firebase.auth.getUser(uid));
+    } catch (cause) {
+      // A token outlives the account it was issued for; anything else is ours.
+      if ((cause as { code?: string }).code === USER_NOT_FOUND) {
+        throw new UnauthorizedException('That account no longer exists');
+      }
 
-    if (!user) {
-      throw new UnauthorizedException('Missing or invalid access token');
+      throw cause;
     }
-
-    return publicView(user);
   }
 }
 
-/** The credential never leaves the manager. */
-function publicView({ id, email, name }: User): UserDto {
-  return { id, email, name };
-}
-
-function userIdFromHeader(authorization: string | undefined): string | null {
-  const [scheme, token] = authorization?.split(' ') ?? [];
-
-  if (scheme?.toLowerCase() !== 'bearer' || !token?.startsWith(TOKEN_PREFIX)) {
-    return null;
-  }
-
-  return token.slice(TOKEN_PREFIX.length) || null;
+/** Only the fields a client has any use for. */
+function publicView(user: UserRecord): UserDto {
+  return {
+    id: user.uid,
+    email: user.email ?? '',
+    name: user.displayName ?? '',
+    emailVerified: user.emailVerified,
+    photoUrl: user.photoURL ?? null,
+    createdAt: user.metadata.creationTime,
+    lastSignInAt: user.metadata.lastSignInTime || null,
+  };
 }

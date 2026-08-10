@@ -26,6 +26,10 @@ export function setupOpenApi(app: INestApplication, config: AppConfigService): v
       .setTitle('Media Studio API')
       .setDescription('The Media Studio service: media generation pipelines, the content library and scraping jobs.')
       .setVersion(SERVICE_VERSION)
+      // Every protected route reads the same Firebase ID token, so one scheme
+      // covers the document and `persistAuthorization` below keeps it across
+      // reloads — paste a token once and the whole page is usable.
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'A Firebase ID token.' })
       .build(),
   );
 

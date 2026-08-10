@@ -14,7 +14,7 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(app.get(AppLogger));
 
-  configureApp(app);
+  configureApp(app, app.get(AppConfigService));
 
   // After configureApp: the document is generated from the routing table as it
   // stands, so it has to see the prefix and the version already applied.
