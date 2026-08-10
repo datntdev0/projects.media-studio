@@ -14,17 +14,32 @@ const props = defineProps<{
    * default content when a provided slot renders nothing.
    */
   noActions?: boolean
+  /**
+   * Drop the body's padding and let the screen lay itself out edge to edge — for a
+   * section whose top is a control band that has to hold still while the content
+   * under it scrolls. Both `sm:` steps have to be restated, or the responsive
+   * padding survives the override.
+   */
+  flush?: boolean
 }>()
 
 useHead({ title: () => props.title })
 </script>
 
 <template>
-  <UDashboardPanel>
+  <UDashboardPanel :ui="flush ? { body: 'p-0 sm:p-0 gap-0 sm:gap-0' } : undefined">
     <template #header>
       <UDashboardNavbar :title="title">
         <template #leading>
           <UDashboardSidebarCollapse />
+        </template>
+
+        <!--
+          Beside the title: a count, a state, whatever the section is measured in.
+          A passthrough, so a screen can add one without restyling the navbar.
+        -->
+        <template #trailing>
+          <slot name="trailing" />
         </template>
 
         <template #right>

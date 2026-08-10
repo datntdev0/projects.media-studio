@@ -79,17 +79,6 @@ function validate(form: typeof passwords): FormError[] {
   return errors
 }
 
-/** Our API's error body carries a message written for a person; prefer it. */
-function apiMessage(cause: unknown): string {
-  const message = (cause as { data?: { message?: string | string[] } }).data?.message
-
-  if (Array.isArray(message)) {
-    return message[0] ?? FALLBACK_ERROR
-  }
-
-  return message ?? FALLBACK_ERROR
-}
-
 async function onSubmit() {
   changeError.value = null
   changing.value = true
@@ -108,7 +97,7 @@ async function onSubmit() {
     await reauthenticate(passwords.next)
   } catch (cause) {
     if (!changed) {
-      changeError.value = apiMessage(cause)
+      changeError.value = apiMessage(cause, FALLBACK_ERROR)
       return
     }
 

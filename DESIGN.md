@@ -183,7 +183,7 @@ without any size changing.
 | `main.css` | Primitives — tonal ramps, type scale, density scale. The only place a literal colour or length appears. Tailwind reads `@theme` from the entry stylesheet only, which is why they cannot be extracted. |
 | `tokens.css` | Semantic roles built from the primitives, and the bridge that hands those roles to the Nuxt UI `--ui-*` tokens. |
 | `base.css` | Element defaults: the heading face, links, focus rings, selection, scrollbars. |
-| `blueprint.css` | The two primitives the component library has no equivalent for: `.blueprint` (+ corner marks) and `.duotone`. |
+| `blueprint.css` | The primitives the component library has no equivalent for: `.blueprint` (+ corner marks), `.wireframe` and `.duotone`. |
 
 Application code reads roles, never primitives, and never a literal value. If
 something needs a colour or a length that no token carries, add the token.
@@ -288,6 +288,10 @@ and positions the marks; `<AppBlueprint>` renders both. Where an element cannot
 host the four mark children — a popover rendered by the component library, say —
 `.blueprint-marks` paints the same crosses inside the box from background
 layers.
+
+A plane that holds nothing yet — a cover, a thumbnail, a preview — is drawn with
+`.wireframe`: the crossed diagonals a technical drawing puts on an empty face.
+It is the placeholder, not a filled grey box.
 
 Icons are Lucide at stroke-width 1.5. The width is applied globally by an
 `icon.customize` hook in `app.config.ts`, so icons never need per-use styling.
