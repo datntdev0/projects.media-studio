@@ -5,8 +5,9 @@ import { SystemManager } from './system.manager';
 
 /**
  * The service's own status. Two controllers over one manager, because the same
- * knowledge serves two different audiences at two different URLs: clients of
- * the versioned API, and whatever is watching the process stay alive.
+ * knowledge serves two different audiences at two different URLs: `/system`,
+ * for anyone asking which build they are talking to, and `/health`, for
+ * whatever is watching the process stay alive.
  *
  * No repository — the service has nothing to read to describe itself, and
  * inventing one to fill the layer would be worse than leaving it out.

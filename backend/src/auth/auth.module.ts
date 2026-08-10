@@ -15,10 +15,7 @@ import { UserRepository } from './user.repository';
  */
 @Module({
   controllers: [AuthController],
-  providers: [
-    AuthManager,
-    { provide: UserRepository, useClass: InMemoryUserRepository },
-  ],
+  providers: [AuthManager, { provide: UserRepository, useClass: InMemoryUserRepository }],
   exports: [AuthManager],
 })
 export class AuthModule {}

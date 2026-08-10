@@ -33,9 +33,7 @@ export class InMemoryUserRepository extends UserRepository {
 
   findByEmail(email: string): Promise<User | null> {
     const wanted = normalise(email);
-    const found = [...this.users.values()].find(
-      (user) => normalise(user.email) === wanted,
-    );
+    const found = [...this.users.values()].find((user) => normalise(user.email) === wanted);
 
     return Promise.resolve(found ? { ...found } : null);
   }

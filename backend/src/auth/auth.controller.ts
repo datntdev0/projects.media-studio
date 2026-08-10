@@ -1,21 +1,5 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  HttpCode,
-  HttpStatus,
-  Post,
-} from '@nestjs/common';
-import {
-  ApiConflictResponse,
-  ApiCreatedResponse,
-  ApiHeader,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiConflictResponse, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { AUTH_PATH } from '../core/api.constants';
 import { AuthManager } from './auth.manager';
 import { LoginDto } from './dto/login.dto';

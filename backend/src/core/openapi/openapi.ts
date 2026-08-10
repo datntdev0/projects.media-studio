@@ -15,10 +15,7 @@ import { SERVICE_VERSION } from '../service-metadata';
  * client codegen and the frontend consume, and it is worth having a stable URL
  * for even when nobody is reading the page.
  */
-export function setupOpenApi(
-  app: INestApplication,
-  config: AppConfigService,
-): void {
+export function setupOpenApi(app: INestApplication, config: AppConfigService): void {
   if (!config.docsEnabled) {
     return;
   }
@@ -27,9 +24,7 @@ export function setupOpenApi(
     app,
     new DocumentBuilder()
       .setTitle('Media Studio API')
-      .setDescription(
-        'The Media Studio service: media generation pipelines, the content library and scraping jobs.',
-      )
+      .setDescription('The Media Studio service: media generation pipelines, the content library and scraping jobs.')
       .setVersion(SERVICE_VERSION)
       .build(),
   );
@@ -46,7 +41,5 @@ export function setupOpenApi(
     },
   });
 
-  new Logger('OpenApi').log(
-    `Swagger UI at /${DOCS_PATH}, document at /${OPENAPI_JSON_PATH}`,
-  );
+  new Logger('OpenApi').log(`Swagger UI at /${DOCS_PATH}, document at /${OPENAPI_JSON_PATH}`);
 }

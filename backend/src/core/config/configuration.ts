@@ -7,14 +7,7 @@ export enum NodeEnv {
 }
 
 /** Nest's log levels, least to most severe. Enabling one enables everything above it. */
-export const LOG_LEVELS = [
-  'verbose',
-  'debug',
-  'log',
-  'warn',
-  'error',
-  'fatal',
-] as const;
+export const LOG_LEVELS = ['verbose', 'debug', 'log', 'warn', 'error', 'fatal'] as const;
 
 export type LogLevelName = (typeof LOG_LEVELS)[number];
 

@@ -16,8 +16,7 @@ export class ServiceInfoDto {
   environment!: NodeEnv;
 
   @ApiProperty({
-    description:
-      'The version versioned endpoints answer on when a client names none.',
+    description: 'The version versioned endpoints answer on when a client names none.',
     example: 'v1',
   })
   apiVersion!: string;

@@ -7,10 +7,10 @@ import { SystemManager } from './system.manager';
 /**
  * `/health` — outside the prefix and outside the version.
  *
- * Liveness is not part of the API's contract with clients: orchestrators, load
- * balancers and the e2e runner's readiness probe should not have to know which
- * API version is current. `VERSION_NEUTRAL` drops the `/v1`, and main.ts
- * excludes this path from the `/api` prefix.
+ * Liveness is not part of the API's contract with clients: orchestrators and
+ * load balancers should not have to know which API version is current.
+ * `VERSION_NEUTRAL` drops the `/v1`, and `configureApp` excludes this path from
+ * the `/api` prefix.
  */
 @ApiTags('System')
 @Controller({ path: HEALTH_PATH, version: VERSION_NEUTRAL })

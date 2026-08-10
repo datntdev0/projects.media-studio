@@ -8,7 +8,7 @@ allowBuilds:
   # Swagger UI serves fine without it, so the phone-home stays unrun.
   '@scarf/scarf': false
   '@tailwindcss/oxide': false
-  esbuild: false
-  maplibre-gl: false
-  unrs-resolver: false
-  vue-demi: false
+  'esbuild': false
+  'maplibre-gl': false
+  'unrs-resolver': false
+  'vue-demi': false

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 
-const props = defineProps<{
+defineProps<{
   collapsed?: boolean
 }>()
 
@@ -48,16 +48,16 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
   <UDropdownMenu
     :items="items"
     :content="{ align: 'center', collisionPadding: 12 }"
-    :ui="{ content: props.collapsed ? 'w-48' : 'w-(--reka-dropdown-menu-trigger-width)' }"
+    :ui="{ content: collapsed ? 'w-48' : 'w-(--reka-dropdown-menu-trigger-width)' }"
   >
     <UButton
       color="neutral"
       variant="ghost"
-      :block="!props.collapsed"
-      :square="props.collapsed"
-      :aria-label="props.collapsed ? user.name : undefined"
+      :block="!collapsed"
+      :square="collapsed"
+      :aria-label="collapsed ? user.name : undefined"
       class="gap-2 px-3 py-2 font-body font-normal data-[state=open]:bg-elevated"
-      :class="props.collapsed ? 'justify-center' : 'justify-start'"
+      :class="collapsed ? 'justify-center' : 'justify-start'"
     >
       <AppMark
         :initials="user.initials"
@@ -65,7 +65,7 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
         tone="tint"
       />
 
-      <template v-if="!props.collapsed">
+      <template v-if="!collapsed">
         <span class="text-sm truncate">{{ user.name }}</span>
 
         <UIcon

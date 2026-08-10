@@ -1,11 +1,4 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { currentRequestId } from '../logging/request-context';
 
@@ -46,10 +39,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const body: ErrorResponseBody = {
       statusCode: status,
@@ -62,12 +52,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const summary = `${request.method} ${request.originalUrl} ${status}`;
 
     if (status >= SERVER_ERROR_FLOOR) {
-      this.logger.error(
-        summary,
-        exception instanceof Error
-          ? exception.stack
-          : JSON.stringify(exception),
-      );
+      this.logger.error(summary, exception instanceof Error ? exception.stack : JSON.stringify(exception));
     } else {
       this.logger.warn(`${summary} ${JSON.stringify(body.message)}`);
     }
@@ -76,10 +61,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   /** The client-facing message and error name for an exception. */
-  private describe(
-    exception: unknown,
-    status: number,
-  ): Pick<ErrorResponseBody, 'message' | 'error'> {
+  private describe(exception: unknown, status: number): Pick<ErrorResponseBody, 'message' | 'error'> {
     const error = statusName(status);
 
     if (!(exception instanceof HttpException)) {
@@ -102,9 +84,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 /** `404` → `Not Found`. Falls back to the raw status for unusual codes. */
 function statusName(status: number): string {
   // HttpStatus is a numeric enum, so it carries its own reverse mapping.
-  const name = (HttpStatus as unknown as Record<number, string | undefined>)[
-    status
-  ];
+  const name = (HttpStatus as unknown as Record<number, string | undefined>)[status];
 
   if (!name) {
     return String(status);

@@ -16,7 +16,7 @@ useHead({ title: () => props.title })
 <template>
   <UDashboardPanel>
     <template #header>
-      <UDashboardNavbar :title="props.title">
+      <UDashboardNavbar :title="title">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -43,8 +43,8 @@ useHead({ title: () => props.title })
     <template #body>
       <slot>
         <AppPageSlot
-          :title="props.title"
-          :hint="props.hint"
+          :title="title"
+          :hint="hint"
         />
       </slot>
     </template>

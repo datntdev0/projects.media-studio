@@ -80,10 +80,7 @@ export class AppLogger extends ConsoleLogger {
     // A generated uuid is shortened to keep console lines readable, but a
     // caller-supplied id is left whole — clipping it would print something that
     // reads like a different id than the one the caller sent.
-    const short =
-      requestId.length > CONSOLE_REQUEST_ID_LIMIT
-        ? requestId.slice(0, 8)
-        : requestId;
+    const short = requestId.length > CONSOLE_REQUEST_ID_LIMIT ? requestId.slice(0, 8) : requestId;
 
     return super.formatContext(context ? `${context} ${short}` : short);
   }

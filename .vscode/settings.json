@@ -6,6 +6,7 @@
         "**/.nuxt": true,
         "**/.svn": true,
         "**/node_modules": true,
-        "**/Thumbs.db": true
+        "**/Thumbs.db": true,
+        "**/*/debug.log": true
     }
 }
