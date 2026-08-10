@@ -3,6 +3,10 @@ packages:
   - frontend
 
 allowBuilds:
+  # Bakes $FIREBASE_WEBAPP_CONFIG into the package at install time. We pass the
+  # config to `initializeApp` explicitly instead, and the shipped stub already
+  # returns what an unset variable would produce, so it stays unrun.
+  '@firebase/util': false
   '@parcel/watcher': false
   # Analytics postinstall inside swagger-ui-dist, which @nestjs/swagger pulls in.
   # Swagger UI serves fine without it, so the phone-home stays unrun.

@@ -6,12 +6,11 @@ defineProps<{
 }>()
 
 const colorMode = useColorMode()
+const { name, initials, signOut } = useAuth()
 
-/* Placeholder identity — the shell renders the account row; who is signed in
-   is a screen concern, not a layout one. */
-const user = {
-  name: 'Dat Nguyen',
-  initials: 'DN'
+async function logOut() {
+  await signOut()
+  await navigateTo(LOGIN_ROUTE)
 }
 
 function useTheme(preference: 'light' | 'dark') {
@@ -40,7 +39,8 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
 }], [{
   label: 'Log out',
   icon: 'i-lucide-log-out',
-  color: 'error'
+  color: 'error',
+  onSelect: logOut
 }]])
 </script>
 
@@ -55,18 +55,18 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
       variant="ghost"
       :block="!collapsed"
       :square="collapsed"
-      :aria-label="collapsed ? user.name : undefined"
+      :aria-label="collapsed ? name : undefined"
       class="gap-2 px-3 py-2 font-body font-normal data-[state=open]:bg-elevated"
       :class="collapsed ? 'justify-center' : 'justify-start'"
     >
       <AppMark
-        :initials="user.initials"
+        :initials="initials"
         shape="circle"
         tone="tint"
       />
 
       <template v-if="!collapsed">
-        <span class="text-sm truncate">{{ user.name }}</span>
+        <span class="text-sm truncate">{{ name }}</span>
 
         <UIcon
           name="i-lucide-chevrons-up-down"

@@ -17,6 +17,26 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  // All public, because the browser is what talks to Firebase: a web app's
+  // Firebase config is not a secret, access is governed by the project's rules
+  // rather than by hiding these values. Overridden per environment through the
+  // matching NUXT_PUBLIC_* variables — see .env.example.
+  runtimeConfig: {
+    public: {
+      /** The backend, version prefix included. */
+      apiBase: 'http://localhost:3001/api/v1',
+
+      firebase: {
+        apiKey: '',
+        authDomain: '',
+        projectId: '',
+        appId: '',
+        /** Set to run against the Auth emulator; empty talks to Firebase itself. */
+        emulatorHost: ''
+      }
+    }
+  },
+
   compatibilityDate: '2026-06-30',
 
   eslint: {

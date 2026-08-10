@@ -1,27 +1,29 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
+import { FirebaseError } from 'firebase/app'
 
 /**
  * Sign in — `/auth/login`.
  *
- * UI only: nothing signs anybody in yet. `UForm` still runs `validate` and
- * blocks an invalid submit, so the fields behave as they will; the `submit`
- * event is deliberately not listened for, and `error` below is the line a
- * failure message will render in. Wiring an identity provider is its own change.
+ * The credentials go to Firebase Authentication, never to our API: the browser
+ * exchanges them for an ID token and the backend only ever verifies that token.
  *
  * The mockup also draws Google and SSO buttons, an OR divider, "Forgot
  * password?" and "Request access". All four were dropped by decision — the
  * screen is email and password only — so do not restore them from the mockup.
  *
  * `/auth/login` is intentionally absent from `appNavLinks`: it is not a section
- * of the studio, and the sidebar, the command palette and the e2e suite all loop
- * over that list.
+ * of the studio, and the sidebar and the command palette both loop over that
+ * list.
  *
  * Styles: `assets/css/auth.css`.
  */
 definePageMeta({ layout: 'auth' })
 
 useHead({ title: 'Sign in' })
+
+const { signIn } = useAuth()
+const route = useRoute()
 
 const state = reactive({
   email: '',
@@ -30,8 +32,9 @@ const state = reactive({
 })
 
 const showPassword = ref(false)
+const submitting = ref(false)
 
-/** Form-level failure copy. Nothing sets it while this screen is UI only. */
+/** Form-level failure copy — a wrong password rather than a bad field. */
 const error = ref<string | null>(null)
 
 /* A plain function rather than a schema library: two required fields and one
@@ -50,6 +53,43 @@ function validate(form: typeof state): FormError[] {
   }
 
   return errors
+}
+
+/* One line for every way "those credentials are wrong" arrives: which of them it
+   was is the attacker's question, not the user's. */
+const MESSAGES: Record<string, string> = {
+  'auth/invalid-credential': 'Incorrect email or password.',
+  'auth/invalid-email': 'Incorrect email or password.',
+  'auth/user-not-found': 'Incorrect email or password.',
+  'auth/wrong-password': 'Incorrect email or password.',
+  'auth/user-disabled': 'That account has been disabled.',
+  'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
+  'auth/network-request-failed': 'Could not reach the sign-in service. Check your connection.'
+}
+
+/** Where the auth middleware sent us from. Same-origin paths only. */
+function intendedRoute(): string {
+  const redirect = route.query.redirect
+
+  if (typeof redirect !== 'string' || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return '/'
+  }
+
+  return redirect
+}
+
+async function onSubmit() {
+  error.value = null
+  submitting.value = true
+
+  try {
+    await signIn(state.email, state.password, state.keepSignedIn)
+    await navigateTo(intendedRoute())
+  } catch (cause) {
+    error.value = (cause instanceof FirebaseError ? MESSAGES[cause.code] : null) ?? 'Could not sign you in. Try again.'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -73,6 +113,7 @@ function validate(form: typeof state): FormError[] {
       :state="state"
       :validate="validate"
       class="login__form"
+      @submit="onSubmit"
     >
       <UFormField
         label="Email"
@@ -139,6 +180,7 @@ function validate(form: typeof state): FormError[] {
         type="submit"
         block
         size="lg"
+        :loading="submitting"
         class="login__submit blueprint"
       >
         <i class="corner corner-tl" aria-hidden="true" />
