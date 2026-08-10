@@ -1,13 +1,8 @@
-/** A user as the domain sees it, credential included. */
+/** A user as the domain sees it. */
 export interface User {
   id: string;
   email: string;
   name: string;
-  /**
-   * MOCK ONLY — stored as given. A real implementation stores a hash from a
-   * password-hashing function (argon2, bcrypt) and never the password itself.
-   */
-  password: string;
 }
 
 /**
@@ -20,9 +15,5 @@ export interface User {
  * `AuthModule` exports the manager only.
  */
 export abstract class UserRepository {
-  abstract findByEmail(email: string): Promise<User | null>;
-
   abstract findById(id: string): Promise<User | null>;
-
-  abstract create(user: Omit<User, 'id'>): Promise<User>;
 }
