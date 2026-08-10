@@ -18,9 +18,9 @@ export class SystemController {
   constructor(private readonly system: SystemManager) {}
 
   @Get()
-  @ApiOperation({ summary: 'Service information', description: 'Identifies the service, its build and the API version it serves by default.' })
+  @ApiOperation({ summary: 'Service information', description: 'Identifies the service, its build, the API version it serves by default, and what its stored record says about this deployment.' })
   @ApiOkResponse({ type: ServiceInfoDto })
-  getInfo(): ServiceInfoDto {
+  getInfo(): Promise<ServiceInfoDto> {
     return this.system.getInfo();
   }
 }

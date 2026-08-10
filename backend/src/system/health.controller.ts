@@ -18,9 +18,9 @@ export class HealthController {
   constructor(private readonly system: SystemManager) {}
 
   @Get()
-  @ApiOperation({ summary: 'Liveness probe' })
+  @ApiOperation({ summary: 'Liveness probe', description: 'Answers whenever the process is serving. Reports whether Firestore is answering too, without failing when it is not.' })
   @ApiOkResponse({ type: HealthDto })
-  getHealth(): HealthDto {
+  getHealth(): Promise<HealthDto> {
     return this.system.getHealth();
   }
 }

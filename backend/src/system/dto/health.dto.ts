@@ -4,10 +4,19 @@ export enum HealthStatus {
   Ok = 'ok',
 }
 
+/** What the probe found. `down` covers unreachable, misconfigured and too slow alike — from here they are the same fact. */
+export enum FirebaseStatus {
+  Up = 'up',
+  Down = 'down',
+}
+
 /**
- * Liveness. Deliberately thin: it answers "is this process serving?" and
- * nothing else, so it stays cheap enough to poll every few seconds. Dependency
- * checks belong in a readiness endpoint, once there are dependencies to check.
+ * Liveness, and the one dependency worth reporting next to it.
+ *
+ * `status` answers "is this process serving?" and keeps answering `ok` while
+ * `firebaseStatus` is `down`: an orchestrator that restarted the API because the
+ * database was unreachable would take down the endpoint that says so. Whatever
+ * needs the database looks at `firebaseStatus` instead.
  */
 export class HealthDto {
   @ApiProperty({ enum: HealthStatus, enumName: 'HealthStatus' })
@@ -18,4 +27,11 @@ export class HealthDto {
     example: 42,
   })
   uptimeSeconds!: number;
+
+  @ApiProperty({
+    enum: FirebaseStatus,
+    enumName: 'FirebaseStatus',
+    description: 'Whether Firestore answered a single read within the probe deadline.',
+  })
+  firebaseStatus!: FirebaseStatus;
 }
