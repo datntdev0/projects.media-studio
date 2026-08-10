@@ -13,7 +13,7 @@
     "dev": "pnpm --parallel -r run dev",
     "dev:backend": "pnpm --filter @media-studio/backend run dev",
     "dev:frontend": "pnpm --filter @media-studio/frontend run dev",
-    "dev:firebase": "firebase emulators:start --only auth",
+    "dev:firebase": "firebase emulators:start --only auth,firestore",
     "seed:firebase": "node scripts/seed-firebase-auth.mjs",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",

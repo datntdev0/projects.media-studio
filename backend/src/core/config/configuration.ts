@@ -11,15 +11,26 @@ export const LOG_LEVELS = ['verbose', 'debug', 'log', 'warn', 'error', 'fatal'] 
 
 export type LogLevelName = (typeof LOG_LEVELS)[number];
 
+/**
+ * Where the local emulator suite is, one host per service. Empty means the real
+ * Firebase — and the two are set independently, because a service is emulated or
+ * it is not, regardless of what its neighbour does.
+ */
+export interface FirebaseEmulatorConfig {
+  /** `host:port` of the Authentication emulator. Set locally, empty everywhere else. */
+  authenticationHost: string;
+  /** `host:port` of the Firestore emulator. Set locally, empty everywhere else. */
+  firestoreHost: string;
+}
+
 export interface FirebaseConfig {
   /** The `demo-` prefix marks an emulator-only project, and fails loudly against the real API. */
   projectId: string;
   /** The web API key. Used to check a password before changing it — see IdentityToolkitClient. */
   apiKey: string;
-  /** `host:port` of the Auth emulator. Set locally, empty everywhere else. */
-  authEmulatorHost: string;
   /** A service account, as inline JSON. Empty falls back to application default credentials. */
   serviceAccountJson: string;
+  emulators: FirebaseEmulatorConfig;
 }
 
 export interface AppConfig {
@@ -62,9 +73,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     firebase: {
       projectId: env.FIREBASE_PROJECT_ID ?? DEFAULT_FIREBASE_PROJECT_ID,
       apiKey: env.FIREBASE_API_KEY ?? DEFAULT_FIREBASE_API_KEY,
-      // The Admin SDK reads this variable itself, which is why it keeps its name.
-      authEmulatorHost: env.FIREBASE_AUTH_EMULATOR_HOST ?? '',
       serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT ?? '',
+      // Named for the service each one stands in for, rather than after the
+      // variables the Admin SDK reads — those are its business, and
+      // `FirebaseAdminService` is where ours are handed over to them.
+      emulators: {
+        authenticationHost: env.FIREBASE_EMULATOR_AUTHENTICATION_HOST ?? '',
+        firestoreHost: env.FIREBASE_EMULATOR_FIRESTORE_HOST ?? '',
+      },
     },
   };
 }

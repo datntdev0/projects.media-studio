@@ -15,6 +15,7 @@ This is a pnpm workspace monorepo.
 
 - Node.js `>=22`
 - pnpm `11.18.0` (pinned via the `packageManager` field — run `corepack enable` to have it picked up automatically)
+- A Java runtime (JDK 11+) on the `PATH` — the Firestore emulator runs on the JVM. Nothing else in the repository needs it, and the Auth emulator runs without it.
 
 ## Getting started
 
@@ -51,11 +52,11 @@ pnpm --filter @media-studio/backend run test
 Sign-in is Firebase Authentication: the browser exchanges credentials with Firebase directly, and the API only ever verifies the ID token it is handed. Locally that runs against the [Auth emulator](https://firebase.google.com/docs/emulator-suite), so no Firebase project or network access is needed.
 
 ```bash
-pnpm dev:firebase     # Auth emulator on :9099, Emulator UI on :4000
+pnpm dev:firebase     # Auth on :9099, Firestore on :8080, Emulator UI on :4000
 pnpm seed:firebase    # creates admin@datntdev.com / StrongPassword123!
 ```
 
-Leave the emulator running in its own terminal and start the app as usual. The emulator keeps nothing between runs, so re-run `pnpm seed:firebase` after each restart.
+The same command starts the Firestore emulator, which is where everything the API stores itself lives. Leave both running in their own terminal and start the app as usual. They keep nothing between runs, so re-run `pnpm seed:firebase` after each restart.
 
 Both packages read their Firebase settings from a gitignored `.env` — copy each package's `.env.example` to get the emulator defaults. See [`_docs/plan/[auth]-google_firebase_authentication_integration.md`](./_docs/plan/%5Bauth%5D-google_firebase_authentication_integration.md) for how the pieces fit together.
 

@@ -37,7 +37,7 @@ There is no sign-in endpoint. The browser exchanges credentials with Firebase Au
 
 Changing a password is the one exception to "the Admin SDK is enough": it can set a password but cannot check one, so `IdentityToolkitClient` proves the current password over the same REST API the browser uses before `updateUser` runs. Without that, a stolen token would be enough to lock an account's owner out.
 
-Locally this runs against the [Auth emulator](../README.md#authentication) — `FIREBASE_AUTH_EMULATOR_HOST` makes the Admin SDK skip the signature check and use no credential at all, so the guard is only as good as the emulator is private.
+Locally this runs against the [Auth emulator](../README.md#authentication) — `FIREBASE_EMULATOR_AUTHENTICATION_HOST` makes the Admin SDK skip the signature check and use no credential at all, so the guard is only as good as the emulator is private.
 
 ## Architecture
 
@@ -98,7 +98,7 @@ A module exports managers, never repositories — persistence stays private to t
 
 Every variable is documented in [`.env.example`](.env.example) and lifted into a typed object by `src/core/config/configuration.ts`, which reads and defaults but does not validate: an unusable value falls back to its default rather than stopping the process. `.env.local` is read before `.env`; neither is committed.
 
-Providers read settings through `AppConfigService`, so `process.env` is interpreted in exactly one file. The single exception writes rather than reads: `FirebaseAdminService` puts `FIREBASE_AUTH_EMULATOR_HOST` back into the environment, because the Admin SDK offers no option for it and reads that variable itself.
+Providers read settings through `AppConfigService`, so `process.env` is interpreted in exactly one file. The single exception writes rather than reads: `FirebaseAdminService` copies the two `FIREBASE_EMULATOR_*_HOST` settings into `FIREBASE_AUTH_EMULATOR_HOST` and `FIRESTORE_EMULATOR_HOST`, because the Admin SDK offers no option for either and reads those variables itself.
 
 class-validator earns its place on request DTOs instead, where the global `ValidationPipe` uses it — see `src/auth/dto/`.
 

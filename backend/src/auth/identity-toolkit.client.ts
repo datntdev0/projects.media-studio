@@ -55,9 +55,9 @@ export class IdentityToolkitClient {
 
   /** The emulator serves the real API's paths under its own host. */
   private get baseUrl(): string {
-    const { authEmulatorHost } = this.config.firebase;
+    const { authenticationHost } = this.config.firebase.emulators;
 
-    return authEmulatorHost ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1` : `${PRODUCTION_HOST}/v1`;
+    return authenticationHost ? `http://${authenticationHost}/identitytoolkit.googleapis.com/v1` : `${PRODUCTION_HOST}/v1`;
   }
 }
 
