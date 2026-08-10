@@ -65,7 +65,7 @@ sequenceDiagram
 
 The Admin SDK can set a password but cannot check one, so `PATCH /auth/me/password` proves the current password through the Identity Toolkit REST `signInWithPassword` before updating. A stolen ID token on its own therefore cannot change a password.
 
-A server-side password change bumps the user's `validSince`, which invalidates the caller's refresh token — so the frontend silently re-signs-in with the new password on success, falling back to sign-out and a redirect to `/auth/login`.
+A password change does not revoke what the caller is already holding: the guard does not check for revocation, so an ID token stays good until it expires. Firebase revokes the account's refresh tokens, which ends the session at the next refresh; the Auth emulator does not do even that. So the frontend does not try to reason about it — on success it silently signs in again with the new password, and falls back to sign-out and a redirect to `/auth/login` if that fails.
 
 ## Steps
 
