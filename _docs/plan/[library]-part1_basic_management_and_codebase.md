@@ -22,10 +22,10 @@ persistence layer the rest of the product will sit on. Nothing more.
 
 | Deferred | Why |
 | --- | --- |
-| Scraping jobs, crawlers, discovery, progress | Part 2. The `Scraping` and `Failed` statuses and every counter in `metadata` exist on the entity but no code moves them yet. |
-| The detail screens — novel chapters, chapter reader, gallery assets | Part 3. Nothing on the listing page navigates. |
-| The 3-step create wizard from the mockup | Steps 2 (crawler + URL validation) and 3 (fetched preview) are scraping features. Part 1 collapses creation into one metadata form. |
-| Cover and asset uploads | Needs Cloud Storage. `coverUrl` is a plain URL field in part 1 — a link you paste, not a file you upload. |
+| Scraping jobs, crawlers, discovery, progress | The `Scraping` and `Failed` statuses and every counter in `metadata` exist on the entity but no code moves them yet. |
+| The detail screens — novel chapters, chapter reader, gallery assets | Nothing on the listing page navigates. |
+| A real crawler registry and a real URL check | The mockup's 3-step create wizard is built, but steps 2 and 3 run against a mocked registry and a mocked validation in `app/utils/crawlers.ts`. Part 2 replaces both with the server's. The created item is still a draft — nothing queues a job. |
+| Somewhere to put an uploaded file | Needs Cloud Storage. The dialog has the uploader, but `utils/covers.ts` mocks it: the file is resized in a canvas and kept with the item as a `data:` URL. `coverUrl` stays a URL string either way, so the swap is one function body. Asset uploads are untouched. |
 | Full-text search | Firestore has no substring index — see [Known limits](#known-limits). |
 
 The rule the whole part follows: **every field the later parts need exists on the entity now,
@@ -296,7 +296,10 @@ screen from the mockup.
 | `app/components/AppLibraryFilters.vue` | The 52px control bar: type tabs (`UTabs`), the search input, status and source selects, the `{visible} of {total}` count, and the table/grid toggle. |
 | `app/components/AppLibraryTable.vue` | The table view — cover or wireframe placeholder, title over description, type, source over URL, content, status, updated, and the row's `…` menu. |
 | `app/components/AppLibraryGrid.vue` | The grid view — `AppBlueprint` cards, 16:9 cover or wireframe head with the type and status tags, title, description, content and updated, and the same `…` menu. |
-| `app/components/AppLibraryFormDialog.vue` | One `UModal` for both create and edit. Type and source-mode pickers are the mockup's blueprint radio cards, disabled when editing. The novel metadata block (novel status, author, language, genres, description) appears only for `type === 'novel'` — there is nothing else writable for a set. |
+| `app/components/AppLibraryFormDialog.vue` | One `UModal` for both create and edit. Creating is the mockup's wizard — 1: type and source mode as blueprint radio cards, 2: a crawler and its URL, or the metadata typed in, 3: the crawler's findings, reviewed. Editing is one form, because the `PUT` replaces the whole writable representation. The novel metadata block (novel status, author, language, genres, description) appears only for `type === 'novel'` — there is nothing else writable for a set. |
+| `app/components/AppLibraryCoverField.vue` | The cover picker — the mockup's dashed 3:4 plane, clicked or dropped onto, with the preview, the mocked upload and a link box for a cover that outlives this machine. |
+| `app/utils/covers.ts` | The mocked upload: type and size checks, a canvas resize to a 320px 3:4 WebP, and the `data:` URL it hands back. |
+| `app/utils/crawlers.ts` | The mocked crawler registry and the mocked URL check behind step 2 — a list to pick from, a call that can fail off-domain, and a metadata block to review. Derived from the URL, so the same URL always reads back the same item. |
 | `app/components/AppLibraryDeleteDialog.vue` | Names the item it is about to delete. Destructive action, so `--color-danger`. |
 | `app/components/AppPage.vue` | Add a passthrough `#trailing` slot over `UDashboardNavbar`, so the page can put the `{total} items` badge beside the title without any screen restyling the navbar. |
 

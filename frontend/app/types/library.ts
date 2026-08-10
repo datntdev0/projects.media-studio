@@ -156,3 +156,32 @@ export interface LibraryChoice<Value> extends LibraryFilterOption<Value> {
   hint: string
   icon: string
 }
+
+/**
+ * A crawler the dialog can offer. Part 2 registers these on the server; until
+ * then `utils/crawlers.ts` holds a mocked list.
+ */
+export interface CrawlerOption {
+  name: string
+  domain: string
+  /** The one type of item it reads, which is what filters the list. */
+  kind: LibraryItemType
+  healthy: boolean
+}
+
+/** What a crawler reports back about a URL, before anything is created. */
+export interface CrawlerPreview {
+  crawler: string
+  title: string
+  coverUrl: string | null
+  author: string
+  language: string
+  status: NovelStatus
+  genres: string[]
+  description: string
+  /** How many pieces of content the source holds, and what they are called. */
+  discoveredCount: number
+  unit: string
+  /** The newest piece, as the source names it. */
+  latest: string
+}

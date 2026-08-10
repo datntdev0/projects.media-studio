@@ -169,9 +169,9 @@ export const LIBRARY_TYPE_CHOICES: LibraryChoice<LibraryItemType>[] = [
   { value: 'video', label: 'Video set', hint: 'Many clips in one item', icon: 'i-lucide-video' }
 ]
 
-/** The dialog's source cards. Part 1 registers no crawlers, so the name is typed in. */
+/** The dialog's source cards, and what each one turns the wizard into. */
 export const LIBRARY_SOURCE_CHOICES: LibraryChoice<LibrarySourceMode>[] = [
-  { value: 'crawler', label: 'From a crawler', hint: 'Name the crawler and paste the URL it reads.', icon: 'i-lucide-globe' },
+  { value: 'crawler', label: 'From a crawler', hint: 'Pick a source, paste a URL. The crawler reads the metadata for you.', icon: 'i-lucide-globe' },
   { value: 'manual', label: 'Manually', hint: 'Enter the metadata yourself, then add content later.', icon: 'i-lucide-pencil' }
 ]
 
