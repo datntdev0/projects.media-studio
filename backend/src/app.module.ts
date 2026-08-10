@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { CoreModule } from './core/core.module';
+import { LibraryModule } from './library/library.module';
 import { SystemModule } from './system/system.module';
 
 /**
@@ -9,6 +10,6 @@ import { SystemModule } from './system/system.module';
  * has no module to own it.
  */
 @Module({
-  imports: [CoreModule, SystemModule, AuthModule],
+  imports: [CoreModule, SystemModule, AuthModule, LibraryModule],
 })
 export class AppModule {}

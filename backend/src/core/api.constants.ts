@@ -25,6 +25,9 @@ export const HEALTH_PATH = 'health';
 /** Versioned. `/api/v1/auth/…` */
 export const AUTH_PATH = 'auth';
 
+/** Versioned. `/api/v1/library/…` */
+export const LIBRARY_PATH = 'library';
+
 /** The generated OpenAPI document. */
 export const OPENAPI_JSON_PATH = 'openapi.json';
 
