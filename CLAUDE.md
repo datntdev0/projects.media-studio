@@ -11,6 +11,8 @@ pnpm install          # single lockfile wires up all three packages
 pnpm dev              # backend + frontend in parallel
 pnpm dev:backend      # NestJS on :3001 (override with PORT)
 pnpm dev:frontend     # Nuxt on :3000
+pnpm dev:firebase     # Firebase Auth emulator on :9099, Emulator UI on :4000
+pnpm seed:firebase    # put dat@media.studio / password into the emulator
 pnpm lint             # every package (pnpm lint:fix to autofix)
 pnpm typecheck        # every package
 ```

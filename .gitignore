@@ -28,6 +28,9 @@ Thumbs.db
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Firebase emulator runtime state and exports
+.firebase
+
 # Temp
 .temp
 .tmp
