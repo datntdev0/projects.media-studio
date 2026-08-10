@@ -17,9 +17,8 @@ Listens on `http://localhost:3001` (override with `PORT`).
 
 | Route | Purpose |
 | --- | --- |
-| `POST /api/v1/auth/login` | Exchange credentials for an access token (**mock**) |
-| `POST /api/v1/auth/register` | Create an account and sign in (**mock**) |
-| `GET /api/v1/auth/me` | The user an access token belongs to (**mock**) |
+| `GET /api/v1/auth/me` | The account the ID token belongs to |
+| `PATCH /api/v1/auth/me/password` | Change that account's password |
 | `GET /system` | Service name, build, environment, default API version |
 | `GET /health` | Liveness |
 | `/docs` | Swagger UI |
@@ -32,9 +31,17 @@ Two tiers, wired in `src/core/configure-app.ts` and named in `src/core/api.const
 
 Every response carries an `x-request-id`, echoing the inbound one if there was one. Failures answer in a single shape (`statusCode`, `message`, `error`, `requestId`, `path`, `timestamp`), so the id in a bug report is enough to find the request in the logs.
 
+## Authentication
+
+There is no sign-in endpoint. The browser exchanges credentials with Firebase Authentication directly, so no password reaches this service; both `auth/` routes sit behind `FirebaseAuthGuard`, which verifies the bearer ID token with the Admin SDK and hands the decoded claims to the handler through `@CurrentUser()`. Expired, malformed and forged tokens all answer `401` — which of them it was goes to the log.
+
+Changing a password is the one exception to "the Admin SDK is enough": it can set a password but cannot check one, so `IdentityToolkitClient` proves the current password over the same REST API the browser uses before `updateUser` runs. Without that, a stolen token would be enough to lock an account's owner out.
+
+Locally this runs against the [Auth emulator](../README.md#authentication) — `FIREBASE_AUTH_EMULATOR_HOST` makes the Admin SDK skip the signature check and use no credential at all, so the guard is only as good as the emulator is private.
+
 ## Architecture
 
-Three layers, dependencies pointing one way: **controller → manager → repository**.
+Three layers, dependencies pointing one way: **controller → manager → repository**. No domain owns a repository yet — `auth/` reads accounts from Firebase and `system/` has nothing to store — but the contract below is what one gets when a datastore is chosen.
 
 | Layer | Owns | May depend on | Must not |
 | --- | --- | --- | --- |
@@ -55,8 +62,9 @@ src/
     config/                environment reader and its typed accessor
     logging/               logger, request context, request log line
     http/                  the global exception filter
+    firebase/              the Admin SDK app, initialised once
     openapi/               document and Swagger UI
-  auth/                    all three layers — the worked example
+  auth/                    controller over manager, guard, token verification
   system/                  two controllers over one manager, no repository
 ```
 
@@ -64,39 +72,35 @@ Modules are feature-first: a domain folder holds its own controller, manager and
 
 ### Adding a domain
 
-`auth/` is the pattern to copy. The repository is an `abstract class`, serving as both the type the manager is checked against and the token Nest resolves:
+`auth/` is the shape to copy for a controller over a manager. When the domain needs persistence, the repository is an `abstract class` — both the type the manager is checked against and the token Nest resolves:
 
 ```ts
-// auth/user.repository.ts
-export abstract class UserRepository {
-  abstract findByEmail(email: string): Promise<User | null>;
+// library/item.repository.ts
+export abstract class ItemRepository {
+  abstract findById(id: string): Promise<Item | null>;
 }
 
-// auth/auth.module.ts — the only line that knows what backs it
+// library/library.module.ts — the only line that knows what backs it
 @Module({
-  controllers: [AuthController],
+  controllers: [LibraryController],
   providers: [
-    AuthManager,
-    { provide: UserRepository, useClass: InMemoryUserRepository },
+    LibraryManager,
+    { provide: ItemRepository, useClass: PostgresItemRepository },
   ],
-  exports: [AuthManager], // never the repository
+  exports: [LibraryManager], // never the repository
 })
-export class AuthModule {}
+export class LibraryModule {}
 ```
 
-A module exports managers, never repositories — persistence stays private to the domain that owns it. There is no generic base repository: each aggregate declares the methods it actually needs.
-
-Storage is not chosen yet, so `InMemoryUserRepository` stands in. Replacing it is one line, with nothing to change in the manager or the controller.
-
-### ⚠️ The auth module is a mock
-
-`auth/` compares passwords in plain text and issues an unsigned token that is just the user's id, so anyone can mint one. It exists to give the frontend endpoints to build against and to make the layering concrete. Before it is reachable outside development, replace the credential check with a password hash (argon2/bcrypt) and the token with a signed JWT or a server-side session. The seeded account is `dat@media.studio` / `password`.
+A module exports managers, never repositories — persistence stays private to the domain that owns it. There is no generic base repository: each aggregate declares the methods it actually needs, so swapping the datastore is one line in the module with nothing to change in the manager or the controller.
 
 ## Configuration
 
 Every variable is documented in [`.env.example`](.env.example) and lifted into a typed object by `src/core/config/configuration.ts`, which reads and defaults but does not validate: an unusable value falls back to its default rather than stopping the process. `.env.local` is read before `.env`; neither is committed.
 
-Providers read settings through `AppConfigService`, so `process.env` is interpreted in exactly one file. class-validator earns its place on request DTOs instead, where the global `ValidationPipe` uses it — see `src/auth/dto/`.
+Providers read settings through `AppConfigService`, so `process.env` is interpreted in exactly one file. The single exception writes rather than reads: `FirebaseAdminService` puts `FIREBASE_AUTH_EMULATOR_HOST` back into the environment, because the Admin SDK offers no option for it and reads that variable itself.
+
+class-validator earns its place on request DTOs instead, where the global `ValidationPipe` uses it — see `src/auth/dto/`.
 
 ## Commands
 

@@ -5,7 +5,7 @@ export class UserDto {
   @ApiProperty({ description: 'The Firebase uid.', example: 'ibYD2mzCTz7DeQ5SqcR5Q7U4ySQv' })
   id!: string;
 
-  @ApiProperty({ example: 'dat@media.studio' })
+  @ApiProperty({ example: 'admin@datntdev.com' })
   email!: string;
 
   @ApiProperty({ description: "The account's display name, empty if it has none.", example: 'Dat Nguyen' })

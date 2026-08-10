@@ -38,6 +38,21 @@ const _useAuth = () => {
     await signInWithEmailAndPassword(auth, email, password)
   }
 
+  /**
+   * Signs in again as the account already signed in, keeping the persistence
+   * chosen at sign-in. Used after a password change: the change does not renew
+   * the session it was made from.
+   */
+  async function reauthenticate(password: string): Promise<void> {
+    const email = user.value?.email
+
+    if (!email) {
+      throw new Error('No signed-in account to re-authenticate')
+    }
+
+    await signInWithEmailAndPassword(auth, email, password)
+  }
+
   function signOut(): Promise<void> {
     return firebaseSignOut(auth)
   }
@@ -53,6 +68,7 @@ const _useAuth = () => {
     initials,
     ready,
     signIn,
+    reauthenticate,
     signOut,
     getIdToken
   }

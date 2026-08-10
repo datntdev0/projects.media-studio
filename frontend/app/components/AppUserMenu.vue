@@ -31,7 +31,8 @@ function useTheme(preference: 'light' | 'dark') {
 
 const items = computed<DropdownMenuItem[][]>(() => [[{
   label: 'Profile',
-  icon: 'i-lucide-user'
+  icon: 'i-lucide-user',
+  to: '/profile'
 }, {
   label: 'Theme',
   icon: 'i-lucide-sun',

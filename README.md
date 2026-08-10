@@ -52,7 +52,7 @@ Sign-in is Firebase Authentication: the browser exchanges credentials with Fireb
 
 ```bash
 pnpm dev:firebase     # Auth emulator on :9099, Emulator UI on :4000
-pnpm seed:firebase    # creates dat@media.studio / password
+pnpm seed:firebase    # creates admin@datntdev.com / StrongPassword123!
 ```
 
 Leave the emulator running in its own terminal and start the app as usual. The emulator keeps nothing between runs, so re-run `pnpm seed:firebase` after each restart.

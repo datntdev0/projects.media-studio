@@ -77,7 +77,7 @@ Each step is one commit, and each leaves `pnpm lint`, `pnpm typecheck` and `pnpm
 | --- | --- |
 | `firebase.json` | Auth emulator on `9099`, Emulator UI on `4000`, `singleProjectMode`. |
 | `.firebaserc` | Defaults to project `demo-media-studio` — the `demo-` prefix is what lets firebase-tools run with no credentials. |
-| `scripts/seed-firebase-auth.mjs` | Creates `dat@media.studio` / `password` through the emulator's REST surface. Plain `fetch`, no dependency, idempotent. |
+| `scripts/seed-firebase-auth.mjs` | Creates `admin@datntdev.com` / `StrongPassword123!` through the emulator's REST surface. Plain `fetch`, no dependency, idempotent. |
 | `package.json` | `firebase-tools` devDependency, plus `dev:firebase` and `seed:firebase`. |
 
 ### 2. The login page signs in with the client SDK
@@ -115,7 +115,7 @@ Sign-in happens client-side now, so the credential-handling half of the mock is 
 ```bash
 pnpm install
 pnpm dev:firebase     # Auth emulator on :9099, Emulator UI on :4000
-pnpm seed:firebase    # dat@media.studio / password
+pnpm seed:firebase    # admin@datntdev.com / StrongPassword123!
 pnpm dev              # backend :3001 + frontend :3000
 ```
 

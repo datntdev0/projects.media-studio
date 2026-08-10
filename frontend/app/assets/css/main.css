@@ -115,7 +115,11 @@
   --shadow-lg: 0 12px 32px var(--color-shadow-strong);
 
   /* ── Shell metrics ───────────────────────────────────────────────────────
-     The two fixed dimensions of the app frame. */
+     The fixed dimensions of the app frame. */
   --layout-sidebar-width: 16.25rem; /* 260px */
   --layout-header-height: 3.5rem; /* 56px */
+
+  /* The widest a screen's content is drawn inside the panel body, so a form or
+     a table stops growing rather than spanning a large display. */
+  --layout-content-width: 64rem; /* 1024px */
 }

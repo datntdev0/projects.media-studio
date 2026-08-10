@@ -17,8 +17,8 @@ const HOST = (process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099').repla
 const API_KEY = 'demo-key'
 
 const ACCOUNT = {
-  email: 'dat@media.studio',
-  password: 'password',
+  email: 'admin@datntdev.com',
+  password: 'StrongPassword123!',
   displayName: 'Dat Nguyen'
 }
 
