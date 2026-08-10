@@ -1,4 +1,40 @@
 {
   "indexes": [],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "coverUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "sourceName",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "sourceUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "metadata",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    }
+  ]
 }
