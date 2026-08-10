@@ -6,15 +6,13 @@
  * lockup on its own, for screens outside the shell. The sign-in screen draws it
  * twice — inverted on the deep panel, normal above the form — which is why it is
  * a component rather than the same markup written out in two places.
- *
- * Styles: `assets/css/lockup.css`.
  */
 </script>
 
 <template>
-  <div class="lockup">
+  <div class="flex items-center gap-3">
     <AppMark initials="MS" />
 
-    <span class="lockup__wordmark">Media Studio</span>
+    <span class="font-heading [font-weight:var(--font-heading-weight)] text-h5 leading-none tracking-[0.04em] uppercase">Media Studio</span>
   </div>
 </template>

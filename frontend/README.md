@@ -41,8 +41,8 @@ The app is skinned with **Industry**, documented in [DESIGN.md](../DESIGN.md) at
 | `tokens.css` | Semantic roles, and the bridge that hands them to the Nuxt UI `--ui-*` tokens |
 | `base.css` | Element defaults — heading face, links, focus, selection, scrollbars |
 | `blueprint.css` | The `.blueprint` frame and `.duotone` image wrapper |
-| `lockup.css` | The brand lockup |
-| `auth.css` | The sign-in screen and its deep side panel |
+
+Everything else is written as Tailwind utilities at the call site: the roles above reach markup through the Nuxt UI utilities (`text-muted`, `bg-elevated`, `border-default`) or, where no utility exists, as `bg-(--color-field)`.
 
 Source mockups live in `_docs/design/` at the repository root — local only, not committed.
 

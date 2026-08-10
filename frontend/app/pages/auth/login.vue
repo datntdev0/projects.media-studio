@@ -15,8 +15,6 @@ import { FirebaseError } from 'firebase/app'
  * `/auth/login` is intentionally absent from `appNavLinks`: it is not a section
  * of the studio, and the sidebar and the command palette both loop over that
  * list.
- *
- * Styles: `assets/css/auth.css`.
  */
 definePageMeta({ layout: 'auth' })
 
@@ -94,25 +92,25 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="login">
-    <AppLockup class="login__lockup" />
+  <div class="w-full max-w-[25rem]">
+    <AppLockup class="mb-8" />
 
-    <p class="login__kicker">
+    <p class="text-meta tracking-widest uppercase text-primary">
       Sign in
     </p>
 
-    <h2 class="login__title">
+    <h2 class="mt-1 mb-2">
       Welcome back
     </h2>
 
-    <p class="login__subline">
+    <p class="mb-8 text-ui text-muted">
       Use your workspace account to continue.
     </p>
 
     <UForm
       :state="state"
       :validate="validate"
-      class="login__form"
+      class="grid gap-4"
       @submit="onSubmit"
     >
       <UFormField
@@ -165,7 +163,7 @@ async function onSubmit() {
 
       <p
         v-if="error"
-        class="login__error"
+        class="flex items-center gap-2 text-support text-error"
         role="alert"
       >
         <UIcon
@@ -175,13 +173,15 @@ async function onSubmit() {
         {{ error }}
       </p>
 
-      <!-- The one solid object on the board, wearing the registration marks. -->
+      <!-- The one solid object on the board, wearing the registration marks.
+           Drawn taller than the fields it submits, and the frame takes the
+           button's own colour so no hairline is scratched across the fill. -->
       <UButton
         type="submit"
         block
         size="lg"
         :loading="submitting"
-        class="login__submit blueprint"
+        class="blueprint mt-2 min-h-12 border-(--color-accent)"
       >
         <i class="corner corner-tl" aria-hidden="true" />
         <i class="corner corner-tr" aria-hidden="true" />

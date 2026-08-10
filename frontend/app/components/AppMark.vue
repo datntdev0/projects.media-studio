@@ -17,40 +17,13 @@ withDefaults(defineProps<{
 
 <template>
   <span
-    class="mark"
-    :class="[`mark--${shape}`, `mark--${tone}`]"
+    class="grid place-items-center flex-none size-6 leading-none font-heading [font-weight:var(--font-heading-weight)]"
+    :class="[
+      shape === 'circle' ? 'rounded-full text-meta' : 'text-label',
+      tone === 'tint'
+        ? 'bg-(--color-tint-strong) text-(--color-on-tint-strong)'
+        : 'bg-(--color-mark) text-(--color-on-mark)'
+    ]"
     aria-hidden="true"
   >{{ initials }}</span>
 </template>
-
-<style scoped>
-.mark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: calc(var(--spacing) * 6);
-  height: calc(var(--spacing) * 6);
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  line-height: 1;
-}
-
-.mark--square {
-  font-size: var(--text-label);
-}
-
-.mark--circle {
-  border-radius: 50%;
-  font-size: var(--text-meta);
-}
-
-.mark--solid {
-  background: var(--color-mark);
-  color: var(--color-on-mark);
-}
-
-.mark--tint {
-  background: var(--color-tint-strong);
-  color: var(--color-on-tint-strong);
-}
-</style>

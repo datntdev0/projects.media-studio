@@ -24,8 +24,11 @@ const active = computed(() => props.to === '/'
   >
     <NuxtLink
       :to="to"
-      class="nav-link"
-      :class="{ 'nav-link--active': active, 'nav-link--collapsed': collapsed }"
+      class="flex items-center gap-2 px-3 py-2 text-ui no-underline"
+      :class="[
+        active ? 'bg-(--color-accent) text-(--color-on-accent)' : 'text-default hover:bg-elevated',
+        collapsed && 'justify-center'
+      ]"
       :aria-current="active ? 'page' : undefined"
       :aria-label="collapsed ? label : undefined"
     >
@@ -40,31 +43,3 @@ const active = computed(() => props.to === '/'
     </NuxtLink>
   </UTooltip>
 </template>
-
-<style scoped>
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-ui);
-  color: var(--color-text);
-  text-decoration: none;
-}
-
-.nav-link:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-
-.nav-link--collapsed {
-  justify-content: center;
-}
-
-/* The active section is the one solid field in the sidebar. */
-.nav-link--active,
-.nav-link--active:hover {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-}
-</style>

@@ -41,5 +41,7 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 - Do not write too long comments inside the code.
 - Do not write too complex code. Keep it simple and readable.
 - Do not write import in multiple lines. Use single line import.
+- Prefer to use the tailwind classes instead of writing custom CSS.
+- Do not write `<style>` tag in the Nuxt component. Use the CSS file or tailwind classes.
 - Use `pnpm typecheck` to ensure TypeScript types are correct.
 - Use `pnpm lint` and `pnpm lint:fix` to check and fix the linting issues.

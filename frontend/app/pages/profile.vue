@@ -135,10 +135,11 @@ async function onSubmit() {
     title="Profile"
     no-actions
   >
-    <div class="profile">
+    <!-- Capped and centred, so the panels stop growing on a large display. -->
+    <div class="w-full max-w-(--layout-content-width) mx-auto">
       <div
         v-if="loadError"
-        class="profile__failure"
+        class="flex items-center gap-2 text-support text-error"
         role="alert"
       >
         <UIcon
@@ -157,33 +158,35 @@ async function onSubmit() {
         />
       </div>
 
+      <!-- Two cells on one row above `lg`, stacked below. -->
       <div
         v-else-if="profile"
-        class="profile__panels"
+        class="grid gap-6 items-start lg:grid-cols-2"
       >
         <AppBlueprint
           as="section"
-          class="profile__panel"
+          class="p-6"
         >
-          <p class="profile__kicker">
+          <p class="text-meta tracking-widest uppercase text-primary">
             Account
           </p>
 
-          <div class="profile__identity">
+          <div class="flex items-center gap-3 mt-4">
             <AppMark
               :initials="initials"
               shape="circle"
               tone="tint"
             />
 
-            <div class="profile__who">
-              <h3 class="profile__name">
+            <div class="min-w-0">
+              <h3 class="text-h4">
                 {{ profile.name || profile.email }}
               </h3>
 
+              <!-- Verified is the accent, unverified is muted. No second colour — see DESIGN.md. -->
               <p
-                class="profile__verified"
-                :class="{ 'profile__verified--yes': profile.emailVerified }"
+                class="flex items-center gap-2 mt-1 text-support"
+                :class="profile.emailVerified ? 'text-primary' : 'text-muted'"
               >
                 <UIcon
                   :name="profile.emailVerified ? 'i-lucide-shield-check' : 'i-lucide-shield-alert'"
@@ -194,17 +197,18 @@ async function onSubmit() {
             </div>
           </div>
 
-          <dl class="profile__facts">
+          <dl class="mt-6">
+            <!-- Hairlines rather than fills, and none above the first row. -->
             <div
               v-for="detail in details"
               :key="detail.label"
-              class="profile__fact"
+              class="grid grid-cols-[9rem_minmax(0,1fr)] gap-4 py-3 border-t border-default"
             >
-              <dt class="profile__label">
+              <dt class="text-label text-muted">
                 {{ detail.label }}
               </dt>
 
-              <dd class="profile__value">
+              <dd class="text-support wrap-anywhere">
                 {{ detail.value }}
               </dd>
             </div>
@@ -213,20 +217,20 @@ async function onSubmit() {
 
         <AppBlueprint
           as="section"
-          class="profile__panel"
+          class="p-6"
         >
-          <p class="profile__kicker">
+          <p class="text-meta tracking-widest uppercase text-primary">
             Change password
           </p>
 
-          <p class="profile__hint">
+          <p class="mt-2 text-support text-muted text-pretty">
             Your current password is checked before the new one is set.
           </p>
 
           <UForm
             :state="passwords"
             :validate="validate"
-            class="profile__form"
+            class="grid gap-4 mt-6"
             @submit="onSubmit"
           >
             <UFormField
@@ -270,7 +274,7 @@ async function onSubmit() {
 
             <p
               v-if="changeError"
-              class="profile__error"
+              class="flex items-center gap-2 text-support text-error"
               role="alert"
             >
               <UIcon
@@ -285,7 +289,7 @@ async function onSubmit() {
               label="Change password"
               size="lg"
               :loading="changing"
-              class="profile__submit"
+              class="justify-self-start mt-2"
             />
           </UForm>
         </AppBlueprint>
@@ -293,123 +297,3 @@ async function onSubmit() {
     </div>
   </AppPage>
 </template>
-
-<style scoped>
-/* The content container: capped and centred, so the two panels stop growing
-   instead of stretching across a large display. */
-.profile {
-  width: 100%;
-  max-width: var(--layout-content-width);
-  margin-inline: auto;
-}
-
-/* Two cells on one row above `lg`, stacked below — the modular grid the system
-   lays content out on. */
-.profile__panels {
-  display: grid;
-  gap: var(--space-6);
-  align-items: start;
-}
-
-@media (min-width: 64rem) {
-  .profile__panels {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.profile__panel {
-  padding: var(--space-6);
-}
-
-/* The kicker recipe the page slot and the sign-in screen both use. */
-.profile__kicker {
-  margin: 0;
-  font-size: var(--text-meta);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-}
-
-.profile__identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-
-.profile__who {
-  min-width: 0;
-}
-
-.profile__name {
-  margin: 0;
-  font-size: var(--text-h4);
-  line-height: var(--text-h4--line-height);
-}
-
-.profile__verified {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-support);
-  color: var(--color-muted);
-}
-
-/* Verified is the accent, unverified is muted. No second colour — see DESIGN.md. */
-.profile__verified--yes {
-  color: var(--color-accent);
-}
-
-.profile__facts {
-  margin: var(--space-6) 0 0;
-}
-
-/* Hairlines rather than fills, and none above the first row. */
-.profile__fact {
-  display: grid;
-  grid-template-columns: 9rem minmax(0, 1fr);
-  gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-divider);
-}
-
-.profile__label {
-  font-size: var(--text-label);
-  color: var(--color-muted);
-}
-
-.profile__value {
-  margin: 0;
-  font-size: var(--text-support);
-  overflow-wrap: anywhere;
-}
-
-.profile__hint {
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-support);
-  color: var(--color-muted);
-  text-wrap: pretty;
-}
-
-.profile__form {
-  display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-6);
-}
-
-.profile__error,
-.profile__failure {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-support);
-  color: var(--color-danger);
-}
-
-.profile__submit {
-  justify-self: start;
-  margin-top: var(--space-2);
-}
-</style>

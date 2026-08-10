@@ -12,53 +12,23 @@ defineProps<{
 <template>
   <AppBlueprint
     dashed
-    class="page-slot"
+    class="flex-1 grid place-items-center p-8 text-center"
   >
     <div>
-      <p class="page-slot__kicker">
+      <p class="text-meta tracking-widest uppercase text-primary">
         Page slot
       </p>
 
-      <h3 class="page-slot__title">
+      <h3 class="mt-1 mb-2">
         {{ title }}
       </h3>
 
       <p
         v-if="hint"
-        class="page-slot__hint"
+        class="max-w-sm text-support text-muted text-pretty"
       >
         {{ hint }}
       </p>
     </div>
   </AppBlueprint>
 </template>
-
-<style scoped>
-.page-slot {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  padding: var(--space-8);
-  text-align: center;
-}
-
-.page-slot__kicker {
-  margin: 0;
-  font-size: var(--text-meta);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-}
-
-.page-slot__title {
-  margin: var(--space-1) 0 var(--space-2);
-}
-
-.page-slot__hint {
-  margin: 0;
-  max-width: 24rem;
-  font-size: var(--text-support);
-  color: var(--color-muted);
-  text-wrap: pretty;
-}
-</style>
