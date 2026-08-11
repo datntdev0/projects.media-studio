@@ -2,12 +2,17 @@
 /**
  * The cover picker: the mockup's dashed plane, clicked or dropped onto.
  *
- * What it holds is still a URL — `uploadCover` mocks the upload and hands one
- * back, and a crawler-fetched cover arrives as one already. The link box below
- * is the same value typed in, kept because part 1 has no real storage behind
- * the plane and a pasted link is the only cover that outlives this machine.
+ * Picking is not uploading. The file is resized here and held as a blob until
+ * the item is saved, so a cancelled dialog leaves nothing in the bucket and the
+ * URL an item stores is only ever one that exists.
+ *
+ * `model` is that URL — the cover the item already has, or one a crawler found —
+ * and while a picked file is waiting it is the preview of what will be uploaded.
  */
 const model = defineModel<string>({ required: true })
+
+/** The picked file, for whoever saves the form to upload. */
+const file = defineModel<Blob | null>('file', { required: true })
 
 const props = withDefaults(defineProps<{
   /** The item's title, so the preview is announced as that item's cover. */
@@ -18,11 +23,15 @@ const props = withDefaults(defineProps<{
 
 const picker = useTemplateRef<HTMLInputElement>('picker')
 
-const uploading = ref(false)
+const reading = ref(false)
 
 const error = ref<string | null>(null)
 
 const dragging = ref(false)
+
+const caption = computed(() => file.value
+  ? 'This image is uploaded when you save.'
+  : `PNG, JPG or WebP, up to ${COVER_MAX_MB} MB.`)
 
 function onPick() {
   picker.value?.click()
@@ -30,25 +39,28 @@ function onPick() {
 
 function onDrop(event: DragEvent) {
   dragging.value = false
-  void upload(event.dataTransfer?.files ?? null)
+  void select(event.dataTransfer?.files ?? null)
 }
 
-async function upload(files: FileList | null) {
-  const file = files?.[0]
+async function select(files: FileList | null) {
+  const picked = files?.[0]
 
-  if (!file || uploading.value) {
+  if (!picked || reading.value) {
     return
   }
 
   error.value = null
-  uploading.value = true
+  reading.value = true
 
   try {
-    model.value = await uploadCover(file)
+    const draft = await prepareCover(picked)
+
+    file.value = draft.blob
+    model.value = draft.preview
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not read that image.'
   } finally {
-    uploading.value = false
+    reading.value = false
 
     // Cleared so picking the same file twice still fires a change.
     if (picker.value) {
@@ -59,6 +71,7 @@ async function upload(files: FileList | null) {
 
 function clear() {
   model.value = ''
+  file.value = null
   error.value = null
 }
 </script>
@@ -71,7 +84,7 @@ function clear() {
       dashed
       class="relative w-full aspect-3/4 grid place-items-center overflow-hidden transition-colors"
       :class="dragging ? 'bg-(--color-tint)' : 'bg-elevated'"
-      :aria-label="model ? 'Replace the cover image' : 'Upload a cover image'"
+      :aria-label="model ? 'Replace the cover image' : 'Choose a cover image'"
       @click="onPick"
       @dragenter.prevent="dragging = true"
       @dragover.prevent="dragging = true"
@@ -86,7 +99,7 @@ function clear() {
       />
 
       <UIcon
-        v-if="uploading"
+        v-if="reading"
         name="i-lucide-loader-circle"
         class="size-5 animate-spin text-primary"
       />
@@ -100,7 +113,7 @@ function clear() {
     </AppBlueprint>
 
     <p class="text-label text-muted text-pretty">
-      PNG, JPG or WebP, up to {{ COVER_MAX_MB }} MB.
+      {{ caption }}
     </p>
 
     <div class="flex flex-wrap items-center gap-1">
@@ -110,7 +123,7 @@ function clear() {
         color="neutral"
         variant="subtle"
         size="sm"
-        :loading="uploading"
+        :loading="reading"
         @click="onPick"
       />
 
@@ -143,7 +156,7 @@ function clear() {
       :accept="COVER_ACCEPT"
       class="sr-only"
       tabindex="-1"
-      @change="upload(($event.target as HTMLInputElement).files)"
+      @change="select(($event.target as HTMLInputElement).files)"
     >
   </div>
 </template>

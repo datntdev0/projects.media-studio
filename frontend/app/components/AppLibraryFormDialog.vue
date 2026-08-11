@@ -22,6 +22,8 @@ interface FormState {
   sourceMode: LibrarySourceMode
   title: string
   coverUrl: string
+  /** A picked cover waiting for the save that uploads it. Null once it has a URL. */
+  coverFile: Blob | null
   sourceName: string
   sourceUrl: string
   status: WritableLibraryItemStatus
@@ -51,6 +53,8 @@ const emit = defineEmits<{
 
 const library = useLibrary()
 
+const covers = useCovers()
+
 /** A manual novel — the most common thing to add by hand. */
 function blank(): FormState {
   return {
@@ -58,6 +62,7 @@ function blank(): FormState {
     sourceMode: 'manual',
     title: '',
     coverUrl: '',
+    coverFile: null,
     sourceName: '',
     sourceUrl: '',
     status: 'draft',
@@ -286,6 +291,8 @@ async function onValidate() {
 function applyPreview(found: CrawlerPreview) {
   form.title = found.title
   form.coverUrl = found.coverUrl ?? ''
+  // A crawler cover is already a URL, so whatever was picked by hand is dropped.
+  form.coverFile = null
   form.novelStatus = found.status
   form.author = found.author
   form.language = found.language
@@ -298,11 +305,11 @@ function applyPreview(found: CrawlerPreview) {
  * server, and only a novel has writable metadata — an image or video set is all
  * counters, and those are the job runner's.
  */
-function payload(): CreateLibraryItem {
+function payload(coverUrl: string | null): CreateLibraryItem {
   return {
     type: form.type,
     title: form.title.trim(),
-    coverUrl: form.coverUrl.trim() || null,
+    coverUrl,
     sourceMode: form.sourceMode,
     sourceName: isCrawler.value ? form.sourceName.trim() : undefined,
     sourceUrl: isCrawler.value ? form.sourceUrl.trim() : null,
@@ -339,15 +346,37 @@ function onBack() {
   step.value -= 1
 }
 
+/**
+ * The save, and the one moment anything is uploaded: a picked cover goes to
+ * Storage first, so the item is only ever written with a URL that resolves.
+ *
+ * A cover it replaces is dropped afterwards — after the item points at the new
+ * one, so a failed save never leaves the item pointing at a deleted file.
+ */
 async function save() {
   saveError.value = null
   saving.value = true
 
+  const replaced = form.coverFile ? props.item?.coverUrl : null
+
+  let coverUrl: string | null
+
+  // Its own step: Storage answers with codes, so the sentence to print is the
+  // one `useCovers` threw, not the one the API would have sent.
+  try {
+    coverUrl = form.coverFile ? await covers.upload(form.coverFile) : form.coverUrl.trim() || null
+  } catch (cause) {
+    saveError.value = cause instanceof Error ? cause.message : FALLBACK_ERROR
+    saving.value = false
+
+    return
+  }
+
   try {
     if (props.item) {
-      await library.replace(props.item.id, { ...payload(), status: form.status })
+      await library.replace(props.item.id, { ...payload(coverUrl), status: form.status })
     } else {
-      await library.create(payload())
+      await library.create(payload(coverUrl))
     }
   } catch (cause) {
     saveError.value = apiMessage(cause, FALLBACK_ERROR)
@@ -356,6 +385,8 @@ async function save() {
   } finally {
     saving.value = false
   }
+
+  await covers.discard(replaced)
 
   open.value = false
   emit('saved')
@@ -569,17 +600,36 @@ function cardTone(selected: boolean, fixed = editing.value) {
           :class="editing ? 'border-t border-default pt-6' : ''"
         >
           <div class="flex-1 min-w-0 grid gap-4 content-start">
-            <UFormField
-              label="Title"
-              name="title"
-            >
-              <UInput
-                v-model="form.title"
-                placeholder="The Silent Cartographer"
-                size="lg"
-                class="w-full"
-              />
-            </UFormField>
+            <div class="w-full flex gap-4">
+              <UFormField
+                v-if="editing"
+                label="Status"
+                name="status"
+                :help="runnerStatus
+                  ? `This item is ${runnerStatus}, which only the job runner sets — saving moves it out of that.`
+                  : undefined"
+              >
+                <USelect
+                  v-model="form.status"
+                  :items="WRITABLE_STATUS_OPTIONS"
+                  size="lg"
+                  class="w-40"
+                />
+              </UFormField>
+
+              <UFormField
+                label="Title"
+                name="title"
+                :ui="{ root: 'flex-1' }"
+              >
+                <UInput
+                  v-model="form.title"
+                  placeholder="The Silent Cartographer"
+                  size="lg"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
 
             <div
               v-if="showSourceFields"
@@ -607,21 +657,6 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 />
               </UFormField>
             </div>
-
-            <UFormField
-              v-if="editing"
-              label="Status"
-              name="status"
-              :help="runnerStatus
-                ? `This item is ${runnerStatus}, which only the job runner sets — saving moves it out of that.`
-                : undefined"
-            >
-              <USelect
-                v-model="form.status"
-                :items="WRITABLE_STATUS_OPTIONS"
-                class="w-40"
-              />
-            </UFormField>
 
             <template v-if="isNovel">
               <UFormField
@@ -662,7 +697,6 @@ function cardTone(selected: boolean, fixed = editing.value) {
               <UFormField
                 label="Genres"
                 name="genres"
-                help="Comma separated."
               >
                 <UInput
                   v-model="form.genres"
@@ -686,7 +720,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
 
           <div class="w-full sm:w-48 flex-none">
             <UFormField label="Cover" name="coverUrl">
-              <AppLibraryCoverField v-model="form.coverUrl" :title="form.title" />
+              <AppLibraryCoverField v-model="form.coverUrl" v-model:file="form.coverFile" :title="form.title" />
             </UFormField>
           </div>
         </div>

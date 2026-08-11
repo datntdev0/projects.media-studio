@@ -5,8 +5,12 @@
  *
  * The aspect ratio and the frame are the caller's — a table row draws a bordered
  * 3:4 book cover, a grid card a 16:9 head under one hairline — so this decides
- * only what fills the box. A cover that is there is a photograph, and photographs
- * take the accent through `.duotone`.
+ * only what fills the box.
+ *
+ * A cover is content rather than decoration: it is the artwork the item is
+ * recognised by, so it is drawn as it was uploaded. The `.duotone` wash the
+ * system puts over photographs would recolour it to the accent, which is the one
+ * thing a cover cannot afford.
  */
 defineProps<{
   url: string | null
@@ -18,7 +22,7 @@ defineProps<{
 <template>
   <span
     v-if="url"
-    class="duotone block"
+    class="block overflow-hidden"
   >
     <img
       :src="url"

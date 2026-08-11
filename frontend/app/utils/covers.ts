@@ -1,19 +1,21 @@
 /**
- * The cover "upload" behind `AppLibraryCoverField` — mocked, and client-side
- * only.
+ * Turning a picked file into the cover that gets uploaded.
  *
- * There is no Cloud Storage yet, so the picked file is resized in a canvas and
- * handed back as a `data:` URL. That keeps `coverUrl` a plain URL string, which
- * is what the API takes and what a crawler-fetched cover already is — so when
- * storage arrives, only the body of `uploadCover` changes and nothing above it
- * moves. The resize is what makes it safe to store: a 3:4 WebP at this width is
- * tens of kilobytes, nowhere near Firestore's 1 MiB document limit.
+ * The file is not sent as it came off the disk: it is centre-cropped to the 3:4
+ * every cover is drawn at and re-encoded as WebP, so a phone photo reaches the
+ * bucket as tens of kilobytes rather than several megabytes.
+ *
+ * Both halves come back — the blob to upload, and a preview to draw while the
+ * item is still being filled in.
  */
 
 /** What the picker offers and what a drop is checked against. */
 export const COVER_ACCEPT = 'image/png,image/jpeg,image/webp,image/avif'
 
 export const COVER_MAX_MB = 8
+
+/** What every cover is stored as, whatever was picked. */
+export const COVER_CONTENT_TYPE = 'image/webp'
 
 const MAX_FILE_BYTES = COVER_MAX_MB * 1024 * 1024
 
@@ -24,19 +26,20 @@ const COVER_HEIGHT = Math.round(COVER_WIDTH * 4 / 3)
 
 const COVER_QUALITY = 0.7
 
-/** Refuse anything that would bloat the document, however it got this big. */
-const MAX_ENCODED_BYTES = 200 * 1024
-
-/** Long enough to read as an upload rather than a redraw. */
-const UPLOAD_DELAY = 500
+/** A picked file, resized and waiting for the save that uploads it. */
+export interface CoverDraft {
+  blob: Blob
+  /** A data URL rather than an object URL, so there is nothing to revoke. */
+  preview: string
+}
 
 /**
- * Takes the picked file and hands back the URL to store.
+ * Takes the picked file and hands back what to upload and what to show.
  *
- * Rejects with the sentence to show — the field prints it and keeps the cover
+ * Rejects with the sentence to print — the field shows it and keeps the cover
  * it already had.
  */
-export async function uploadCover(file: File): Promise<string> {
+export async function prepareCover(file: File): Promise<CoverDraft> {
   if (!file.type.startsWith('image/')) {
     throw new Error('That file is not an image.')
   }
@@ -45,19 +48,19 @@ export async function uploadCover(file: File): Promise<string> {
     throw new Error(`Covers are capped at ${COVER_MAX_MB} MB.`)
   }
 
-  await new Promise(resolve => setTimeout(resolve, UPLOAD_DELAY))
+  const canvas = await resize(file)
 
-  const encoded = await resize(file)
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, COVER_CONTENT_TYPE, COVER_QUALITY))
 
-  if (encoded.length > MAX_ENCODED_BYTES) {
-    throw new Error('That image will not compress small enough. Try another one.')
+  if (!blob) {
+    throw new Error('Could not encode that image.')
   }
 
-  return encoded
+  return { blob, preview: canvas.toDataURL(COVER_CONTENT_TYPE, COVER_QUALITY) }
 }
 
 /** Centre-cropped to 3:4, the ratio every cover is drawn at. */
-async function resize(file: File): Promise<string> {
+async function resize(file: File): Promise<HTMLCanvasElement> {
   const bitmap = await createImageBitmap(file).catch(() => null)
 
   if (!bitmap) {
@@ -86,5 +89,5 @@ async function resize(file: File): Promise<string> {
   context.drawImage(bitmap, (COVER_WIDTH - width) / 2, (COVER_HEIGHT - height) / 2, width, height)
   bitmap.close()
 
-  return canvas.toDataURL('image/webp', COVER_QUALITY)
+  return canvas
 }

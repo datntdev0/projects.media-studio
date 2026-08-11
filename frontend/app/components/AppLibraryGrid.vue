@@ -2,8 +2,12 @@
 import type { LibraryItem } from '~/types/library'
 
 /**
- * The listing as a grid of blueprint cards: a 16:9 head carrying the type and
- * status tags, then the title, its summary line, and what the card is measured in.
+ * The listing as a grid of blueprint cards: the cover standing 3:4 down the left
+ * with the type tag over it, and the item's lines beside it — title, summary,
+ * status, and what the card is measured in along the foot.
+ *
+ * The cover sets the height of the card, which is what keeps a row of them even
+ * however long the titles run.
  *
  * Cards are inert for the same reason rows are — the `…` menu is the only thing on
  * one that does anything.
@@ -24,17 +28,19 @@ const SKELETON_CARDS = 8
 
 <template>
   <!-- Equal cells that reflow rather than a fixed column count — the modular grid. -->
-  <div class="grid gap-8 grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]">
+  <div class="grid gap-6 grid-cols-[repeat(auto-fill,minmax(23.75rem,1fr))]">
     <template v-if="loading">
       <AppBlueprint
         v-for="card in SKELETON_CARDS"
         :key="card"
+        class="flex items-stretch"
       >
-        <USkeleton class="aspect-video w-full" />
+        <USkeleton class="w-34 aspect-3/4 flex-none" />
 
-        <div class="grid gap-2 p-4">
+        <div class="flex-1 min-w-0 grid gap-2 content-start p-4">
           <USkeleton class="h-5 w-3/4" />
           <USkeleton class="h-3 w-1/2" />
+          <USkeleton class="h-4 w-16" />
         </div>
       </AppBlueprint>
     </template>
@@ -44,13 +50,13 @@ const SKELETON_CARDS = 8
         v-for="item in items"
         :key="item.id"
         as="article"
-        class="flex flex-col"
+        class="flex items-stretch"
       >
-        <div class="relative">
+        <div class="relative w-34 flex-none aspect-3/4 border-r border-default">
           <AppLibraryCover
             :url="item.coverUrl"
             :title="item.title"
-            class="aspect-video border-b border-default"
+            class="size-full"
           />
 
           <!-- The outline tag needs the ground behind it to stay legible over a cover. -->
@@ -61,37 +67,42 @@ const SKELETON_CARDS = 8
             size="sm"
             class="absolute top-2 left-2 bg-default"
           />
-
-          <UBadge
-            :label="statusTag(item.status).label"
-            :color="statusTag(item.status).color"
-            :variant="statusTag(item.status).variant"
-            size="sm"
-            class="absolute bottom-2 left-2"
-          />
-
-          <div class="absolute top-2 right-2 bg-default">
-            <AppLibraryRowMenu
-              :item="item"
-              @edit="$emit('edit', item)"
-              @remove="$emit('remove', item)"
-            />
-          </div>
         </div>
 
-        <div class="p-4 pt-3">
-          <h3 class="text-h5 truncate">
-            {{ item.title }}
-          </h3>
+        <div class="flex-1 min-w-0 flex flex-col gap-1 p-4">
+          <div class="flex items-start gap-2">
+            <h3 class="flex-1 min-w-0 text-h5 truncate">
+              {{ item.title }}
+            </h3>
+
+            <!-- Pulled up into the padding, so the menu does not open a gap the
+                 stack beside it has to carry. -->
+            <div class="shrink-0 -mt-1 -me-2">
+              <AppLibraryRowMenu
+                :item="item"
+                @edit="$emit('edit', item)"
+                @remove="$emit('remove', item)"
+              />
+            </div>
+          </div>
 
           <p
             v-if="itemSummary(item)"
-            class="mt-1 text-label text-muted truncate"
+            class="text-label text-muted truncate"
           >
             {{ itemSummary(item) }}
           </p>
 
-          <div class="flex items-center justify-between gap-3 mt-3 text-meta text-muted">
+          <div>
+            <UBadge
+              :label="statusTag(item.status).label"
+              :color="statusTag(item.status).color"
+              :variant="statusTag(item.status).variant"
+              size="sm"
+            />
+          </div>
+
+          <div class="flex items-center justify-between gap-2 mt-auto text-meta text-muted">
             <span class="truncate">{{ contentLabel(item) }}</span>
             <span class="shrink-0">{{ relativeUpdated(item.updatedAt) }}</span>
           </div>
