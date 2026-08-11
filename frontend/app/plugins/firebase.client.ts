@@ -3,16 +3,11 @@ import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectStorageEmulator, getStorage } from 'firebase/storage'
 
 /**
- * The Firebase app, created once and handed out as `$firebaseAuth` and
- * `$firebaseStorage`.
+ * The Firebase app, created once as `$firebaseAuth` and `$firebaseStorage`.
  *
- * A plugin rather than part of `useAuth()` because `connectAuthEmulator` has to
- * run before anything else touches the Auth instance — a request that goes out
- * first would go to the real project. Storage is the same: it is connected here
- * so no upload can start before the emulator is pointed at.
- *
- * The emulator prints its own console banner; that warning is left on, so it is
- * never a question which backend a session came from.
+ * A plugin rather than part of `useAuth()` because the emulators must be
+ * connected before anything touches Auth or Storage — a request that goes out
+ * first would hit the real project.
  */
 export default defineNuxtPlugin(() => {
   const { firebase } = useRuntimeConfig().public

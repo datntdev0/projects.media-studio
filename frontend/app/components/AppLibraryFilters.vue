@@ -2,11 +2,8 @@
 import type { LibraryFilters, LibraryView } from '~/types/library'
 
 /**
- * The control band over the listing: type tabs, the search box, the status and
- * source selects, how much of the catalogue is on screen, and which view draws it.
- *
- * One model per control rather than one for the whole filter object, so the page
- * that owns the state is the only thing that mutates it.
+ * The control band over the listing. One model per control rather than one for the
+ * whole filter object, so the page owning the state is the only thing that mutates it.
  */
 const type = defineModel<LibraryFilters['type']>('type', { required: true })
 
@@ -43,10 +40,7 @@ defineProps<{
       class="w-full sm:w-76"
       :ui="{ trailing: 'pe-1' }"
     >
-      <template
-        v-if="search"
-        #trailing
-      >
+      <template v-if="search" #trailing>
         <UButton
           icon="i-lucide-x"
           color="neutral"

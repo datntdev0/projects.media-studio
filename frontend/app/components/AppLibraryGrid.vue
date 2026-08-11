@@ -2,15 +2,9 @@
 import type { LibraryItem } from '~/types/library'
 
 /**
- * The listing as a grid of blueprint cards: the cover standing 3:4 down the left
- * with the type tag over it, and the item's lines beside it — title, summary,
- * status, and what the card is measured in along the foot.
- *
- * The cover sets the height of the card, which is what keeps a row of them even
- * however long the titles run.
- *
- * Cards are inert for the same reason rows are — the `…` menu is the only thing on
- * one that does anything.
+ * The listing as a grid of blueprint cards. The cover sets the card height, which
+ * keeps a row even however long the titles run. Cards are inert — the `…` menu is
+ * the only thing that acts.
  */
 defineProps<{
   items: LibraryItem[]
@@ -30,11 +24,7 @@ const SKELETON_CARDS = 8
   <!-- Equal cells that reflow rather than a fixed column count — the modular grid. -->
   <div class="grid gap-6 grid-cols-[repeat(auto-fill,minmax(23.75rem,1fr))]">
     <template v-if="loading">
-      <AppBlueprint
-        v-for="card in SKELETON_CARDS"
-        :key="card"
-        class="flex items-stretch"
-      >
+      <AppBlueprint v-for="card in SKELETON_CARDS" :key="card" class="flex items-stretch">
         <USkeleton class="w-34 aspect-3/4 flex-none" />
 
         <div class="flex-1 min-w-0 grid gap-2 content-start p-4">
@@ -53,11 +43,7 @@ const SKELETON_CARDS = 8
         class="flex items-stretch"
       >
         <div class="relative w-34 flex-none aspect-3/4 border-r border-default">
-          <AppLibraryCover
-            :url="item.coverUrl"
-            :title="item.title"
-            class="size-full"
-          />
+          <AppLibraryCover :url="item.coverUrl" :title="item.title" class="size-full" />
 
           <!-- The outline tag needs the ground behind it to stay legible over a cover. -->
           <UBadge
@@ -78,18 +64,11 @@ const SKELETON_CARDS = 8
             <!-- Pulled up into the padding, so the menu does not open a gap the
                  stack beside it has to carry. -->
             <div class="shrink-0 -mt-1 -me-2">
-              <AppLibraryRowMenu
-                :item="item"
-                @edit="$emit('edit', item)"
-                @remove="$emit('remove', item)"
-              />
+              <AppLibraryRowMenu :item="item" @edit="$emit('edit', item)" @remove="$emit('remove', item)" />
             </div>
           </div>
 
-          <p
-            v-if="itemSummary(item)"
-            class="text-label text-muted truncate"
-          >
+          <p v-if="itemSummary(item)" class="text-label text-muted truncate">
             {{ itemSummary(item) }}
           </p>
 

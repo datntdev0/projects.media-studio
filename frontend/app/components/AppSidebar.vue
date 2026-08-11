@@ -34,14 +34,8 @@ const size = {
 
       <nav aria-label="Sections">
         <ul class="flex flex-col gap-0.5">
-          <li
-            v-for="link in links"
-            :key="link.to"
-          >
-            <AppNavLink
-              v-bind="link"
-              :collapsed="collapsed"
-            />
+          <li v-for="link in links" :key="link.to">
+            <AppNavLink v-bind="link" :collapsed="collapsed" />
           </li>
         </ul>
       </nav>

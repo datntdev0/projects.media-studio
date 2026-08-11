@@ -1,10 +1,7 @@
 /**
- * Industry — the Nuxt UI half of the design system.
- *
- * Colours and radii are re-pointed at the design tokens in
- * `assets/css/tokens.css`; this file only carries what CSS variables cannot
- * express: which palette fills which role, and the per-component class
- * overrides that put Nuxt UI's shell on the system's density and type scale.
+ * Industry — the Nuxt UI half of the design system. Colours and radii live in
+ * `assets/css/tokens.css`; this carries only what CSS variables cannot express —
+ * palette roles and the per-component class overrides.
  */
 export default defineAppConfig({
   ui: {

@@ -3,18 +3,11 @@ import type { FormError } from '@nuxt/ui'
 import { FirebaseError } from 'firebase/app'
 
 /**
- * Sign in — `/auth/login`.
+ * Sign in. Credentials go to Firebase Auth, never to our API — the browser
+ * exchanges them for an ID token the backend only verifies.
  *
- * The credentials go to Firebase Authentication, never to our API: the browser
- * exchanges them for an ID token and the backend only ever verifies that token.
- *
- * The mockup also draws Google and SSO buttons, an OR divider, "Forgot
- * password?" and "Request access". All four were dropped by decision — the
- * screen is email and password only — so do not restore them from the mockup.
- *
- * `/auth/login` is intentionally absent from `appNavLinks`: it is not a section
- * of the studio, and the sidebar and the command palette both loop over that
- * list.
+ * Email and password only: the mockup's Google/SSO/forgot-password buttons were
+ * dropped by decision. Absent from `appNavLinks` on purpose — it is not a section.
  */
 definePageMeta({ layout: 'auth' })
 
@@ -113,10 +106,7 @@ async function onSubmit() {
       class="grid gap-4"
       @submit="onSubmit"
     >
-      <UFormField
-        label="Email"
-        name="email"
-      >
+      <UFormField label="Email" name="email">
         <UInput
           v-model="state.email"
           type="email"
@@ -127,10 +117,7 @@ async function onSubmit() {
         />
       </UFormField>
 
-      <UFormField
-        label="Password"
-        name="password"
-      >
+      <UFormField label="Password" name="password">
         <UInput
           v-model="state.password"
           :type="showPassword ? 'text' : 'password'"
@@ -156,20 +143,10 @@ async function onSubmit() {
         </UInput>
       </UFormField>
 
-      <UCheckbox
-        v-model="state.keepSignedIn"
-        label="Keep me signed in"
-      />
+      <UCheckbox v-model="state.keepSignedIn" label="Keep me signed in" />
 
-      <p
-        v-if="error"
-        class="flex items-center gap-2 text-support text-error"
-        role="alert"
-      >
-        <UIcon
-          name="i-lucide-triangle-alert"
-          class="size-4 shrink-0"
-        />
+      <p v-if="error" class="flex items-center gap-2 text-support text-error" role="alert">
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
         {{ error }}
       </p>
 

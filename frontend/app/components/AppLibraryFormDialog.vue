@@ -5,17 +5,11 @@ import type { CrawlerPreview, CreateLibraryItem, LibraryItem, LibraryItemType, L
 /**
  * One dialog for both creating and editing an item.
  *
- * Creating is the mockup's three-step wizard: the shape of the item, then its
- * source, then — for a crawler — a review of what the crawler found. A manual
- * item has nothing to review, so it ends at step 2. The crawler list and the
- * URL check are mocked in `utils/crawlers.ts` until part 2 registers real ones.
+ * Creating is a three-step wizard: shape, source, then — for a crawler — a review
+ * of what it found. A manual item ends at step 2. Editing is one form, because the
+ * `PUT` replaces the whole writable representation.
  *
- * Editing is one form: the `PUT` behind it replaces the whole writable
- * representation, so what the form shows is exactly what the item will be, and
- * walking that through steps would only hide half of it at a time.
- *
- * `type` and `sourceMode` decide the shape of the item, so both are fixed after
- * creation — the server refuses a change, and the form does not offer one.
+ * `type` and `sourceMode` are fixed after creation; the server refuses a change.
  */
 interface FormState {
   type: LibraryItemType
@@ -232,11 +226,7 @@ function fromItem(item: LibraryItem): FormState {
   }
 }
 
-/**
- * Only what the step on screen asks for. Shapes at that: what a crawler item
- * needs and what a set may not carry are the server's rules, and its refusals
- * read as sentences — repeating them here would be two places to keep in step.
- */
+/** Only what the step on screen asks for — the deeper rules are the server's, and its refusals already read as sentences. */
 function validate(state: FormState): FormError[] {
   const errors: FormError[] = []
 
@@ -300,11 +290,7 @@ function applyPreview(found: CrawlerPreview) {
   form.description = found.description
 }
 
-/**
- * What is sent. A manual item carries no URL and names itself `Manual` on the
- * server, and only a novel has writable metadata — an image or video set is all
- * counters, and those are the job runner's.
- */
+/** What is sent. A manual item carries no URL, and only a novel has writable metadata. */
 function payload(coverUrl: string | null): CreateLibraryItem {
   return {
     type: form.type,
@@ -347,11 +333,9 @@ function onBack() {
 }
 
 /**
- * The save, and the one moment anything is uploaded: a picked cover goes to
- * Storage first, so the item is only ever written with a URL that resolves.
- *
- * A cover it replaces is dropped afterwards — after the item points at the new
- * one, so a failed save never leaves the item pointing at a deleted file.
+ * The save, and the only moment anything is uploaded: a picked cover goes to Storage
+ * first, so the item is only written with a URL that resolves. The replaced cover is
+ * dropped afterwards, so a failed save never points the item at a deleted file.
  */
 async function save() {
   saveError.value = null
@@ -419,11 +403,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
       >
         <!-- step 1: what the item is, and where its content comes from -->
         <template v-if="showShape">
-          <UFormField
-            label="Library type"
-            name="type"
-            :hint="editing ? 'Fixed after creation' : undefined"
-          >
+          <UFormField label="Library type" name="type" :hint="editing ? 'Fixed after creation' : undefined">
             <div class="grid gap-4 sm:grid-cols-3">
               <AppBlueprint
                 v-for="choice in LIBRARY_TYPE_CHOICES"
@@ -441,12 +421,9 @@ function cardTone(selected: boolean, fixed = editing.value) {
                   class="sr-only"
                 >
 
-                <UIcon
-                  :name="choice.icon"
-                  class="size-5 text-primary"
-                />
+                <UIcon :name="choice.icon" class="size-5 text-primary" />
 
-                <span class="block mt-2 font-heading [font-weight:var(--font-heading-weight)] text-h5">
+                <span class="block mt-2 heading text-h5">
                   {{ choice.label }}
                 </span>
 
@@ -480,12 +457,9 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 >
 
                 <span class="flex items-center gap-2">
-                  <UIcon
-                    :name="choice.icon"
-                    class="size-4 text-primary"
-                  />
+                  <UIcon :name="choice.icon" class="size-4 text-primary" />
 
-                  <span class="font-heading [font-weight:var(--font-heading-weight)] text-h5">
+                  <span class="heading text-h5">
                     {{ choice.label }}
                   </span>
                 </span>
@@ -539,10 +513,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
             </div>
           </UFormField>
 
-          <UFormField
-            label="Resource URL"
-            name="sourceUrl"
-          >
+          <UFormField label="Resource URL" name="sourceUrl">
             <div class="flex gap-2">
               <UInput
                 v-model="form.sourceUrl"
@@ -562,38 +533,20 @@ function cardTone(selected: boolean, fixed = editing.value) {
             </div>
           </UFormField>
 
-          <p
-            v-if="preview"
-            class="flex items-center gap-2 -mt-4 text-label text-primary"
-          >
-            <UIcon
-              name="i-lucide-check"
-              class="size-4 shrink-0"
-            />
+          <p v-if="preview" class="flex items-center gap-2 -mt-4 text-label text-primary">
+            <UIcon name="i-lucide-check" class="size-4 shrink-0" />
 
             URL matches {{ preview.crawler }} · {{ countLabel(preview.discoveredCount) }} {{ preview.unit }} detected
           </p>
 
-          <p
-            v-else-if="validateError"
-            class="flex items-center gap-2 -mt-4 text-label text-error"
-            role="alert"
-          >
-            <UIcon
-              name="i-lucide-triangle-alert"
-              class="size-4 shrink-0"
-            />
+          <p v-else-if="validateError" class="flex items-center gap-2 -mt-4 text-label text-error" role="alert">
+            <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
 
             {{ validateError }}
           </p>
         </template>
 
-        <!--
-          Step 2 manual, and the edit form entire: the mockup's two columns —
-          what a person types, and the cover standing beside it. Only a novel has
-          anything descriptive to type; a set is all counters, so its column is
-          the title and nothing else.
-        -->
+        <!-- Step 2 manual, and the whole edit form: what a person types, and the cover beside it. -->
         <div
           v-if="showDetails"
           class="flex flex-col gap-6 sm:flex-row"
@@ -617,11 +570,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 />
               </UFormField>
 
-              <UFormField
-                label="Title"
-                name="title"
-                :ui="{ root: 'flex-1' }"
-              >
+              <UFormField label="Title" name="title" :ui="{ root: 'flex-1' }">
                 <UInput
                   v-model="form.title"
                   placeholder="The Silent Cartographer"
@@ -631,25 +580,12 @@ function cardTone(selected: boolean, fixed = editing.value) {
               </UFormField>
             </div>
 
-            <div
-              v-if="showSourceFields"
-              class="grid gap-4 sm:grid-cols-2"
-            >
-              <UFormField
-                label="Crawler"
-                name="sourceName"
-              >
-                <UInput
-                  v-model="form.sourceName"
-                  placeholder="novelbin.crawler"
-                  class="w-full"
-                />
+            <div v-if="showSourceFields" class="grid gap-4 sm:grid-cols-2">
+              <UFormField label="Crawler" name="sourceName">
+                <UInput v-model="form.sourceName" placeholder="novelbin.crawler" class="w-full" />
               </UFormField>
 
-              <UFormField
-                label="Resource URL"
-                name="sourceUrl"
-              >
+              <UFormField label="Resource URL" name="sourceUrl">
                 <UInput
                   v-model="form.sourceUrl"
                   placeholder="https://novelbin.net/n/silent-cartographer"
@@ -659,61 +595,26 @@ function cardTone(selected: boolean, fixed = editing.value) {
             </div>
 
             <template v-if="isNovel">
-              <UFormField
-                label="Author"
-                name="author"
-              >
-                <UInput
-                  v-model="form.author"
-                  placeholder="Nguyen Van A"
-                  class="w-full"
-                />
+              <UFormField label="Author" name="author">
+                <UInput v-model="form.author" placeholder="Nguyen Van A" class="w-full" />
               </UFormField>
 
               <div class="grid gap-4 sm:grid-cols-2">
-                <UFormField
-                  label="Novel status"
-                  name="novelStatus"
-                >
-                  <USelect
-                    v-model="form.novelStatus"
-                    :items="NOVEL_STATUS_OPTIONS"
-                    class="w-full"
-                  />
+                <UFormField label="Novel status" name="novelStatus">
+                  <USelect v-model="form.novelStatus" :items="NOVEL_STATUS_OPTIONS" class="w-full" />
                 </UFormField>
 
-                <UFormField
-                  label="Language"
-                  name="language"
-                >
-                  <UInput
-                    v-model="form.language"
-                    placeholder="English"
-                    class="w-full"
-                  />
+                <UFormField label="Language" name="language">
+                  <UInput v-model="form.language" placeholder="English" class="w-full" />
                 </UFormField>
               </div>
 
-              <UFormField
-                label="Genres"
-                name="genres"
-              >
-                <UInput
-                  v-model="form.genres"
-                  placeholder="fantasy, adventure"
-                  class="w-full"
-                />
+              <UFormField label="Genres" name="genres">
+                <UInput v-model="form.genres" placeholder="fantasy, adventure" class="w-full" />
               </UFormField>
 
-              <UFormField
-                label="Description"
-                name="description"
-              >
-                <UTextarea
-                  v-model="form.description"
-                  :rows="3"
-                  class="w-full"
-                />
+              <UFormField label="Description" name="description">
+                <UTextarea v-model="form.description" :rows="3" class="w-full" />
               </UFormField>
             </template>
           </div>
@@ -726,16 +627,9 @@ function cardTone(selected: boolean, fixed = editing.value) {
         </div>
 
         <!-- step 3: what the crawler found, before anything is written -->
-        <div
-          v-if="showReview && preview"
-          class="flex gap-6"
-        >
+        <div v-if="showReview && preview" class="flex gap-6">
           <AppBlueprint class="w-36 flex-none aspect-3/4">
-            <AppLibraryCover
-              :url="preview.coverUrl"
-              :title="preview.title"
-              class="size-full"
-            />
+            <AppLibraryCover :url="preview.coverUrl" :title="preview.title" class="size-full" />
           </AppBlueprint>
 
           <div class="flex-1 min-w-0">
@@ -747,17 +641,11 @@ function cardTone(selected: boolean, fixed = editing.value) {
               {{ preview.title }}
             </h4>
 
-            <p
-              v-if="previewByline"
-              class="text-support text-muted"
-            >
+            <p v-if="previewByline" class="text-support text-muted">
               {{ previewByline }}
             </p>
 
-            <div
-              v-if="preview.genres.length"
-              class="flex flex-wrap gap-1 mt-3"
-            >
+            <div v-if="preview.genres.length" class="flex flex-wrap gap-1 mt-3">
               <UBadge
                 v-for="genre in preview.genres"
                 :key="genre"
@@ -792,10 +680,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
               </dd>
             </dl>
 
-            <p
-              v-if="preview.description"
-              class="mt-4 text-support text-muted text-pretty"
-            >
+            <p v-if="preview.description" class="mt-4 text-support text-muted text-pretty">
               {{ preview.description }}
             </p>
 
@@ -805,25 +690,15 @@ function cardTone(selected: boolean, fixed = editing.value) {
           </div>
         </div>
 
-        <p
-          v-if="saveError"
-          class="flex items-center gap-2 text-support text-error"
-          role="alert"
-        >
-          <UIcon
-            name="i-lucide-triangle-alert"
-            class="size-4 shrink-0"
-          />
+        <p v-if="saveError" class="flex items-center gap-2 text-support text-error" role="alert">
+          <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
           {{ saveError }}
         </p>
       </UForm>
     </template>
 
     <template #footer>
-      <span
-        v-if="!editing"
-        class="text-label text-muted"
-      >
+      <span v-if="!editing" class="text-label text-muted">
         {{ stepLabel }}
       </span>
 

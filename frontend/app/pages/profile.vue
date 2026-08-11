@@ -2,15 +2,9 @@
 import type { FormError } from '@nuxt/ui'
 
 /**
- * Profile — `/profile`.
- *
- * The account as Firebase holds it, read through `GET /auth/me` rather than from
- * the client SDK: the API is the thing that has to agree with us about who the
- * caller is, so showing what it says is the honest view.
- *
- * Reached from the account menu, which is why it stays out of `appNavLinks` — it
- * is an account screen, not a section of the studio, the same reasoning that
- * keeps `/auth/login` out of that list.
+ * Profile. Read through `GET /auth/me` rather than the client SDK, so the screen
+ * shows who the API agrees the caller is. Out of `appNavLinks` — an account
+ * screen, not a section.
  */
 interface Profile {
   id: string
@@ -120,21 +114,11 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AppPage
-    title="Profile"
-    no-actions
-  >
+  <AppPage title="Profile" no-actions>
     <!-- Capped and centred, so the panels stop growing on a large display. -->
     <div class="w-full max-w-(--layout-content-width) mx-auto">
-      <div
-        v-if="loadError"
-        class="flex items-center gap-2 text-support text-error"
-        role="alert"
-      >
-        <UIcon
-          name="i-lucide-triangle-alert"
-          class="size-4 shrink-0"
-        />
+      <div v-if="loadError" class="flex items-center gap-2 text-support text-error" role="alert">
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
 
         Could not load your account.
 
@@ -148,24 +132,14 @@ async function onSubmit() {
       </div>
 
       <!-- Two cells on one row above `lg`, stacked below. -->
-      <div
-        v-else-if="profile"
-        class="grid gap-6 items-start lg:grid-cols-2"
-      >
-        <AppBlueprint
-          as="section"
-          class="p-6"
-        >
+      <div v-else-if="profile" class="grid gap-6 items-start lg:grid-cols-2">
+        <AppBlueprint as="section" class="p-6">
           <p class="text-meta tracking-widest uppercase text-primary">
             Account
           </p>
 
           <div class="flex items-center gap-3 mt-4">
-            <AppMark
-              :initials="initials"
-              shape="circle"
-              tone="tint"
-            />
+            <AppMark :initials="initials" shape="circle" tone="tint" />
 
             <div class="min-w-0">
               <h3 class="text-h4">
@@ -204,10 +178,7 @@ async function onSubmit() {
           </dl>
         </AppBlueprint>
 
-        <AppBlueprint
-          as="section"
-          class="p-6"
-        >
+        <AppBlueprint as="section" class="p-6">
           <p class="text-meta tracking-widest uppercase text-primary">
             Change password
           </p>
@@ -222,10 +193,7 @@ async function onSubmit() {
             class="grid gap-4 mt-6"
             @submit="onSubmit"
           >
-            <UFormField
-              label="Current password"
-              name="current"
-            >
+            <UFormField label="Current password" name="current">
               <UInput
                 v-model="passwords.current"
                 type="password"
@@ -235,10 +203,7 @@ async function onSubmit() {
               />
             </UFormField>
 
-            <UFormField
-              label="New password"
-              name="next"
-            >
+            <UFormField label="New password" name="next">
               <UInput
                 v-model="passwords.next"
                 type="password"
@@ -248,10 +213,7 @@ async function onSubmit() {
               />
             </UFormField>
 
-            <UFormField
-              label="Confirm new password"
-              name="confirm"
-            >
+            <UFormField label="Confirm new password" name="confirm">
               <UInput
                 v-model="passwords.confirm"
                 type="password"
@@ -261,15 +223,8 @@ async function onSubmit() {
               />
             </UFormField>
 
-            <p
-              v-if="changeError"
-              class="flex items-center gap-2 text-support text-error"
-              role="alert"
-            >
-              <UIcon
-                name="i-lucide-triangle-alert"
-                class="size-4 shrink-0"
-              />
+            <p v-if="changeError" class="flex items-center gap-2 text-support text-error" role="alert">
+              <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
               {{ changeError }}
             </p>
 

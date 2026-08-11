@@ -1,11 +1,9 @@
 import { deleteObject, getDownloadURL, ref as storageObject, uploadBytes } from 'firebase/storage'
 
 /**
- * The cover images in Cloud Storage: putting one there, and taking one away.
- *
- * The browser uploads directly — the API never sees the bytes, only the download
- * URL that comes back. Which is why the path starts with the uploader's uid:
- * that is the ownership check `storage.rules` makes.
+ * Cover images in Cloud Storage. The browser uploads directly — the API only ever
+ * sees the resulting URL. The path starts with the uploader's uid because that is
+ * the ownership check `storage.rules` makes.
  */
 
 /** The sentences a caller prints. Storage's own errors are codes, not prose. */
@@ -38,13 +36,7 @@ export const useCovers = () => {
     }
   }
 
-  /**
-   * Drops a cover no item points at any more.
-   *
-   * Best effort, and deliberately quiet: it runs after the item is already
-   * saved, and a URL we did not upload — a crawler's, another bucket's — is
-   * simply not ours to delete.
-   */
+  /** Drops an orphaned cover. Quiet by design: a URL we did not upload is not ours to delete. */
   async function discard(url: string | null | undefined): Promise<void> {
     if (!url) {
       return

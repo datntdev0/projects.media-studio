@@ -2,12 +2,9 @@
 import type { LibraryItem } from '~/types/library'
 
 /**
- * The listing as a table: one row per item, the cover beside the title, and the
- * row's `…` menu at the end.
- *
- * Rows are inert — see `AppLibraryRowMenu`. The column widths are the mockup's
- * proportions, held by `table-fixed` so the two truncating columns have something
- * to truncate against.
+ * The listing as a table. Rows are inert — see `AppLibraryRowMenu`. Widths are
+ * held by `table-fixed` so the truncating columns have something to truncate
+ * against.
  */
 defineProps<{
   items: LibraryItem[]
@@ -56,11 +53,7 @@ const SKELETON_ROWS = 6
     </thead>
 
     <tbody v-if="loading">
-      <tr
-        v-for="row in SKELETON_ROWS"
-        :key="row"
-        class="border-b border-default"
-      >
+      <tr v-for="row in SKELETON_ROWS" :key="row" class="border-b border-default">
         <td class="px-2 py-3">
           <div class="flex items-center gap-3">
             <USkeleton class="w-10 aspect-3/4 shrink-0" />
@@ -72,11 +65,7 @@ const SKELETON_ROWS = 6
           </div>
         </td>
 
-        <td
-          v-for="cell in 5"
-          :key="cell"
-          class="px-2 py-3"
-        >
+        <td v-for="cell in 5" :key="cell" class="px-2 py-3">
           <USkeleton class="h-4 w-2/3" />
         </td>
 
@@ -85,11 +74,7 @@ const SKELETON_ROWS = 6
     </tbody>
 
     <tbody v-else>
-      <tr
-        v-for="item in items"
-        :key="item.id"
-        class="border-b border-default"
-      >
+      <tr v-for="item in items" :key="item.id" class="border-b border-default">
         <td class="px-2 py-3">
           <div class="flex items-center gap-3">
             <AppLibraryCover
@@ -99,14 +84,11 @@ const SKELETON_ROWS = 6
             />
 
             <div class="min-w-0">
-              <p class="font-heading [font-weight:var(--font-heading-weight)] text-h5 truncate">
+              <p class="heading text-h5 truncate">
                 {{ item.title }}
               </p>
 
-              <p
-                v-if="itemSummary(item)"
-                class="text-label text-muted truncate"
-              >
+              <p v-if="itemSummary(item)" class="text-label text-muted truncate">
                 {{ itemSummary(item) }}
               </p>
             </div>
@@ -150,11 +132,7 @@ const SKELETON_ROWS = 6
         </td>
 
         <td class="px-2 py-3 text-right">
-          <AppLibraryRowMenu
-            :item="item"
-            @edit="$emit('edit', item)"
-            @remove="$emit('remove', item)"
-          />
+          <AppLibraryRowMenu :item="item" @edit="$emit('edit', item)" @remove="$emit('remove', item)" />
         </td>
       </tr>
     </tbody>

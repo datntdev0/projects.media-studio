@@ -1,12 +1,7 @@
 /**
- * The library API's shapes, mirrored by hand.
- *
- * There is no package shared between the two workspaces yet, and `profile.vue`
- * already sets the precedent of declaring a response shape client-side. Names and
- * field order follow `backend/src/library/dto/` so a drift is easy to spot.
- *
- * `createdAt` is absent on purpose: the listing does not return it — see
- * `LibraryListItemDto` — and no screen in part 1 draws it.
+ * The library API's shapes, mirrored by hand — there is no shared package yet.
+ * Names and field order follow `backend/src/library/dto/` so drift is easy to spot.
+ * `createdAt` is absent on purpose: the listing does not return it.
  */
 
 /** What the item holds, and therefore what shape its `metadata` has. */

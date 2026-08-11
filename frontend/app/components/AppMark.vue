@@ -17,7 +17,7 @@ withDefaults(defineProps<{
 
 <template>
   <span
-    class="grid place-items-center flex-none size-6 leading-none font-heading [font-weight:var(--font-heading-weight)]"
+    class="grid place-items-center flex-none size-6 leading-none heading"
     :class="[
       shape === 'circle' ? 'rounded-full text-meta' : 'text-label',
       tone === 'tint'

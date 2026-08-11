@@ -36,12 +36,13 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 
 ## Instructions
 
-### Coding Style
+### Coding Style (DO NOT VIOLATE)
 
 - Do not write too long comments inside the code.
 - Do not write too complex code. Keep it simple and readable.
 - Do not write import in multiple lines. Use single line import.
 - Do not break the line if the line is not too long. Keep it in a single line.
+- Do not break a component open tag into multiple lines if it is not too long.
 - Prefer to use the tailwind classes instead of writing custom CSS.
 - Do not write `<style>` tag in the Nuxt component. Use the CSS file or tailwind classes.
 - Use `pnpm typecheck` to ensure TypeScript types are correct.

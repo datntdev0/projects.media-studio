@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import type { LibraryItem } from '~/types/library'
 
-/**
- * The confirmation before a delete. It names the item it is about to remove —
- * a dialog that only says "are you sure?" makes the reader trust their memory of
- * which row's menu they opened.
- *
- * Destructive, so the action is `--color-danger`, the one colour outside the mono
- * scheme.
- */
+/** The confirmation before a delete. Names the item, so the reader need not trust their memory of which row they opened. */
 const FALLBACK_ERROR = 'Could not delete the item. Try again.'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -58,26 +51,15 @@ async function onDelete() {
 </script>
 
 <template>
-  <UModal
-    v-model:open="open"
-    title="Delete item"
-    :ui="{ content: 'max-w-lg' }"
-  >
+  <UModal v-model:open="open" title="Delete item" :ui="{ content: 'max-w-lg' }">
     <template #body>
       <p class="text-body text-pretty">
-        <strong class="font-heading [font-weight:var(--font-heading-weight)] text-h5">{{ item?.title }}</strong>
+        <strong class="heading text-h5">{{ item?.title }}</strong>
         and everything recorded about it are removed. This cannot be undone.
       </p>
 
-      <p
-        v-if="deleteError"
-        class="flex items-center gap-2 mt-4 text-support text-error"
-        role="alert"
-      >
-        <UIcon
-          name="i-lucide-triangle-alert"
-          class="size-4 shrink-0"
-        />
+      <p v-if="deleteError" class="flex items-center gap-2 mt-4 text-support text-error" role="alert">
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
         {{ deleteError }}
       </p>
     </template>

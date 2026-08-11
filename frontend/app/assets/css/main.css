@@ -7,6 +7,13 @@
 @import "./base.css";
 @import "./blueprint.css";
 
+/* Family and weight together: a heading always needs both, and Tailwind's
+   `font-heading` carries only the family. */
+@utility heading {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Primitives — the raw material of the system: tonal ramps, the type scale,
    the density scale. Theme-independent, and the only place a literal colour or

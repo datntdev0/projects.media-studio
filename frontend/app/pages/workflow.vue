@@ -1,6 +1,3 @@
 <template>
-  <AppPage
-    title="Workflow"
-    hint="Pipeline builder: sources, transforms and outputs."
-  />
+  <AppPage title="Workflow" hint="Pipeline builder: sources, transforms and outputs." />
 </template>

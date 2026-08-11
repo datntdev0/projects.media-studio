@@ -1,12 +1,7 @@
 /**
- * Turning a picked file into the cover that gets uploaded.
- *
- * The file is not sent as it came off the disk: it is centre-cropped to the 3:4
- * every cover is drawn at and re-encoded as WebP, so a phone photo reaches the
- * bucket as tens of kilobytes rather than several megabytes.
- *
- * Both halves come back — the blob to upload, and a preview to draw while the
- * item is still being filled in.
+ * Turns a picked file into the cover that gets uploaded: centre-cropped to 3:4 and
+ * re-encoded as WebP, so a phone photo lands as tens of kilobytes, not megabytes.
+ * Returns both the blob to upload and a preview to draw meanwhile.
  */
 
 /** What the picker offers and what a drop is checked against. */
@@ -33,12 +28,7 @@ export interface CoverDraft {
   preview: string
 }
 
-/**
- * Takes the picked file and hands back what to upload and what to show.
- *
- * Rejects with the sentence to print — the field shows it and keeps the cover
- * it already had.
- */
+/** Hands back what to upload and what to show. Rejects with the sentence to print. */
 export async function prepareCover(file: File): Promise<CoverDraft> {
   if (!file.type.startsWith('image/')) {
     throw new Error('That file is not an image.')

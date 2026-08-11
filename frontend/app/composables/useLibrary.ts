@@ -4,14 +4,10 @@ import type { CreateLibraryItem, LibraryItem, LibraryItemPage, ListLibraryItemsQ
 const LIBRARY = '/library'
 
 /**
- * The library endpoints, over `useApi()`.
+ * The library endpoints over `useApi()`. Thin on purpose — screens keep their own
+ * state and the rules live on the server.
  *
- * Thin on purpose: it turns four calls into four named methods and adds nothing
- * else. The screen keeps its own state — what a filter is, when to refetch — and
- * the rules live on the server, where a second client would meet them too.
- *
- * `replace` is a `PUT` of the whole writable representation, so a field left out
- * of `item` is cleared rather than kept.
+ * `replace` PUTs the whole writable representation, so an omitted field is cleared.
  */
 export const useLibrary = () => {
   const api = useApi()

@@ -2,11 +2,9 @@ import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryChoice, LibraryFilterOption, LibraryFilters, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, LibraryView, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
 
 /**
- * How a library item reads on screen — the labels, the tags and the one-line
- * summaries both views share.
- *
- * Auto-imported by Nuxt, and safe because `LibraryItem` is a discriminated union:
- * a size or a run time is only reachable on the types that carry one.
+ * How a library item reads on screen — the labels, tags and summaries both views
+ * share. Safe because `LibraryItem` is a discriminated union: a size or run time is
+ * only reachable on the types that carry one.
  */
 
 /** What a piece of content is called, per type. */

@@ -1,6 +1,3 @@
 <template>
-  <AppPage
-    title="Settings"
-    hint="Crawlers, storage, accounts and defaults."
-  />
+  <AppPage title="Settings" hint="Crawlers, storage, accounts and defaults." />
 </template>

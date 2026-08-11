@@ -1,10 +1,7 @@
 /**
- * `$fetch` against our API, carrying the signed-in user's ID token.
- *
- * The one place the base URL and the bearer header are written, so a screen asks
- * for a path and nothing else. The token is read per request rather than once:
- * `getIdToken()` hands back a refreshed one when the current has expired, which
- * is what keeps a long-lived tab working.
+ * `$fetch` against our API, carrying the user's ID token. The token is read per
+ * request, not once — `getIdToken()` refreshes an expired one, which is what keeps
+ * a long-lived tab working.
  */
 export const useApi = () => {
   const { apiBase } = useRuntimeConfig().public

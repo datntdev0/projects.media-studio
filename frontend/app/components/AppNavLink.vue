@@ -32,14 +32,8 @@ const active = computed(() => props.to === '/'
       :aria-current="active ? 'page' : undefined"
       :aria-label="collapsed ? label : undefined"
     >
-      <UIcon
-        :name="icon"
-        class="size-5 shrink-0"
-      />
-      <span
-        v-if="!collapsed"
-        class="truncate"
-      >{{ label }}</span>
+      <UIcon :name="icon" class="size-5 shrink-0" />
+      <span v-if="!collapsed" class="truncate">{{ label }}</span>
     </NuxtLink>
   </UTooltip>
 </template>

@@ -1,12 +1,8 @@
 <script setup lang="ts">
 /**
- * The frame for the screens you reach before you are signed in: a deep,
- * theme-invariant panel carrying the pitch, beside the form.
- *
- * The layout owns the split so the page stays thin, the same way `<AppPage>`
- * owns the navbar and the scrolling body. It deliberately does *not* call
- * `useNavigation()`: the `g-*` shortcuts have no business firing on a screen
- * that is mostly text inputs, and there is nowhere to navigate to yet.
+ * The frame for signed-out screens: a deep, theme-invariant panel beside the form.
+ * Deliberately does not call `useNavigation()` — the `g-*` shortcuts have no
+ * business firing on a screen that is mostly text inputs.
  */
 
 /* Placeholder figures. Real counts need an API this screen does not call. */
@@ -40,11 +36,8 @@ const stats = [
       </div>
 
       <div class="grid grid-cols-3 gap-6 text-support text-(--color-on-field-muted)">
-        <div
-          v-for="stat in stats"
-          :key="stat.label"
-        >
-          <span class="block font-heading [font-weight:var(--font-heading-weight)] text-h3 text-(--color-on-field)">{{ stat.figure }}</span>
+        <div v-for="stat in stats" :key="stat.label">
+          <span class="block heading text-h3 text-(--color-on-field)">{{ stat.figure }}</span>
           {{ stat.label }}
         </div>
       </div>

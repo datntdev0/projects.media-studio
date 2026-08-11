@@ -10,10 +10,7 @@ defineProps<{
 </script>
 
 <template>
-  <AppBlueprint
-    dashed
-    class="flex-1 grid place-items-center p-8 text-center"
-  >
+  <AppBlueprint dashed class="flex-1 grid place-items-center p-8 text-center">
     <div>
       <p class="text-meta tracking-widest uppercase text-primary">
         Page slot
@@ -23,10 +20,7 @@ defineProps<{
         {{ title }}
       </h3>
 
-      <p
-        v-if="hint"
-        class="max-w-sm text-support text-muted text-pretty"
-      >
+      <p v-if="hint" class="max-w-sm text-support text-muted text-pretty">
         {{ hint }}
       </p>
     </div>

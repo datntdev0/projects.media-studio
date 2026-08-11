@@ -1,10 +1,7 @@
 /**
- * The studio is behind a session: every route needs one except the sign-in
- * screen, which needs the opposite.
- *
- * `ready` is awaited rather than reading `user` straight away — with `ssr: false`
- * the SDK restores the session asynchronously after boot, so a page refresh
- * would otherwise look like a signed-out visit and bounce to the login screen.
+ * Every route needs a session except the sign-in screen. `ready` is awaited rather
+ * than reading `user` straight away: with `ssr: false` the SDK restores the session
+ * after boot, so a refresh would otherwise look signed-out and bounce.
  */
 export default defineNuxtRouteMiddleware(async (to) => {
   const { ready, user } = useAuth()

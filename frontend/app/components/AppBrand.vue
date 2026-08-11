@@ -19,9 +19,6 @@ const title = 'Media Studio'
   >
     <AppMark initials="MS" />
 
-    <span
-      v-if="!collapsed"
-      class="text-sm truncate"
-    >{{ title }}</span>
+    <span v-if="!collapsed" class="text-sm truncate">{{ title }}</span>
   </UButton>
 </template>

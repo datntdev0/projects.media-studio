@@ -1,13 +1,9 @@
 <script setup lang="ts">
 /**
- * The cover picker: the mockup's dashed plane, clicked or dropped onto.
+ * The cover picker. Picking is not uploading: the file is resized and held as a blob
+ * until the item is saved, so a cancelled dialog leaves nothing in the bucket.
  *
- * Picking is not uploading. The file is resized here and held as a blob until
- * the item is saved, so a cancelled dialog leaves nothing in the bucket and the
- * URL an item stores is only ever one that exists.
- *
- * `model` is that URL — the cover the item already has, or one a crawler found —
- * and while a picked file is waiting it is the preview of what will be uploaded.
+ * `model` is the cover URL, or the preview of a picked file still waiting.
  */
 const model = defineModel<string>({ required: true })
 
@@ -98,16 +94,9 @@ function clear() {
         class="absolute inset-0 size-full"
       />
 
-      <UIcon
-        v-if="reading"
-        name="i-lucide-loader-circle"
-        class="size-5 animate-spin text-primary"
-      />
+      <UIcon v-if="reading" name="i-lucide-loader-circle" class="size-5 animate-spin text-primary" />
 
-      <span
-        v-else-if="!model"
-        class="px-1.5 py-0.5 bg-default text-label text-muted"
-      >
+      <span v-else-if="!model" class="px-1.5 py-0.5 bg-default text-label text-muted">
         Upload cover
       </span>
     </AppBlueprint>
@@ -137,15 +126,8 @@ function clear() {
       />
     </div>
 
-    <p
-      v-if="error"
-      class="flex items-start gap-2 text-label text-error"
-      role="alert"
-    >
-      <UIcon
-        name="i-lucide-triangle-alert"
-        class="size-4 shrink-0 mt-0.5"
-      />
+    <p v-if="error" class="flex items-start gap-2 text-label text-error" role="alert">
+      <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
 
       {{ error }}
     </p>

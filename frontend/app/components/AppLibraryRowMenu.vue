@@ -4,9 +4,7 @@ import type { LibraryItem } from '~/types/library'
 
 /**
  * The `…` menu a row and a card both carry — and the only interactive element on
- * either. Nothing else about an item is clickable in part 1: the detail screen is
- * part 3, and a row that looks clickable and is not would be worse than one that
- * plainly is not.
+ * either, since the detail screen is part 3.
  */
 const props = defineProps<{
   item: LibraryItem
@@ -32,11 +30,7 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
 </script>
 
 <template>
-  <UDropdownMenu
-    :items="items"
-    :content="{ align: 'end', collisionPadding: 12 }"
-    :ui="{ content: 'w-40' }"
-  >
+  <UDropdownMenu :items="items" :content="{ align: 'end', collisionPadding: 12 }" :ui="{ content: 'w-40' }">
     <UButton
       icon="i-lucide-ellipsis-vertical"
       color="neutral"

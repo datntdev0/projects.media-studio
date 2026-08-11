@@ -1,14 +1,9 @@
 import type { CrawlerOption, CrawlerPreview, LibraryItemType } from '~/types/library'
 
 /**
- * The crawler registry and the URL check behind the dialog's second step —
- * mocked, all of it.
- *
- * Part 2 registers crawlers on the server and gives them a real endpoint to
- * validate against. What the screen needs before then is the shape of that
- * exchange: a list to pick from, a call that can fail, and a metadata block to
- * review. Everything here is derived from the URL, so the same URL always reads
- * back the same item and the wizard behaves the same way twice.
+ * The crawler registry and URL check behind the dialog's second step — all mocked
+ * until part 2 registers crawlers on the server. Results are derived from the URL,
+ * so the same URL always reads back the same item.
  */
 
 export const LIBRARY_CRAWLERS: CrawlerOption[] = [

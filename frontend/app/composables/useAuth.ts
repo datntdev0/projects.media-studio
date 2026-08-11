@@ -38,11 +38,7 @@ const _useAuth = () => {
     await signInWithEmailAndPassword(auth, email, password)
   }
 
-  /**
-   * Signs in again as the account already signed in, keeping the persistence
-   * chosen at sign-in. Used after a password change: the change does not renew
-   * the session it was made from.
-   */
+  /** Re-signs in the current account, keeping its persistence. Used after a password change, which does not renew the session. */
   async function reauthenticate(password: string): Promise<void> {
     const email = user.value?.email
 
@@ -74,10 +70,5 @@ const _useAuth = () => {
   }
 }
 
-/**
- * The signed-in user, and the three things you can do about it.
- *
- * Shared, so one `onIdTokenChanged` subscription serves every caller and they
- * all see the same `user` ref.
- */
+/** Shared, so one `onIdTokenChanged` subscription serves every caller off the same `user` ref. */
 export const useAuth = createSharedComposable(_useAuth)

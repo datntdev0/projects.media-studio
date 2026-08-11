@@ -60,19 +60,12 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
       class="gap-2 px-3 py-2 font-body font-normal data-[state=open]:bg-elevated"
       :class="collapsed ? 'justify-center' : 'justify-start'"
     >
-      <AppMark
-        :initials="initials"
-        shape="circle"
-        tone="tint"
-      />
+      <AppMark :initials="initials" shape="circle" tone="tint" />
 
       <template v-if="!collapsed">
         <span class="text-sm truncate">{{ name }}</span>
 
-        <UIcon
-          name="i-lucide-chevrons-up-down"
-          class="ms-auto size-4 shrink-0 text-dimmed"
-        />
+        <UIcon name="i-lucide-chevrons-up-down" class="ms-auto size-4 shrink-0 text-dimmed" />
       </template>
     </UButton>
   </UDropdownMenu>

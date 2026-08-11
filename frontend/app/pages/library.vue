@@ -3,14 +3,10 @@ import { refDebounced } from '@vueuse/core'
 import type { LibraryFilters, LibraryItem, LibraryView, ListLibraryItemsQuery } from '~/types/library'
 
 /**
- * Library — `/library`.
+ * The catalogue. Owns the filter state, fetches a page through it, and hosts the two
+ * dialogs; how an item reads is in `AppLibrary*` and `utils/library`.
  *
- * The catalogue: novels, image sets and video sets. This screen owns the filter
- * state, fetches a page of the listing through it, and hosts the two dialogs;
- * everything else about how an item reads is in `AppLibrary*` and `utils/library`.
- *
- * Rows and cards are inert on purpose — the detail screens are part 3, so the
- * only thing a row does is open its `…` menu.
+ * Rows and cards are inert on purpose — the detail screens are part 3.
  */
 const PAGE_SIZE = 20
 
@@ -126,16 +122,9 @@ async function onDeleted() {
 </script>
 
 <template>
-  <AppPage
-    title="Library"
-    flush
-  >
+  <AppPage title="Library" flush>
     <template #trailing>
-      <UBadge
-        :label="totalLabel"
-        color="neutral"
-        variant="outline"
-      />
+      <UBadge :label="totalLabel" color="neutral" variant="outline" />
     </template>
 
     <template #actions>
@@ -149,11 +138,7 @@ async function onDeleted() {
         class="font-body font-normal"
       />
 
-      <UButton
-        icon="i-lucide-plus"
-        label="New item"
-        @click="onNew"
-      />
+      <UButton icon="i-lucide-plus" label="New item" @click="onNew" />
     </template>
 
     <!--
@@ -174,15 +159,8 @@ async function onDeleted() {
       </div>
 
       <div class="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto p-6">
-        <div
-          v-if="listError"
-          class="flex items-center gap-2 text-support text-error"
-          role="alert"
-        >
-          <UIcon
-            name="i-lucide-triangle-alert"
-            class="size-4 shrink-0"
-          />
+        <div v-if="listError" class="flex items-center gap-2 text-support text-error" role="alert">
+          <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
 
           Could not load the library.
 
@@ -221,11 +199,7 @@ async function onDeleted() {
           />
         </template>
 
-        <AppBlueprint
-          v-else
-          dashed
-          class="grid place-items-center p-8 text-center"
-        >
+        <AppBlueprint v-else dashed class="grid place-items-center p-8 text-center">
           <div>
             <p class="text-meta tracking-widest uppercase text-primary">
               {{ narrowed ? 'No matches' : 'Empty library' }}
@@ -262,16 +236,8 @@ async function onDeleted() {
       </div>
     </div>
 
-    <AppLibraryFormDialog
-      v-model:open="formOpen"
-      :item="editing"
-      @saved="onSaved"
-    />
+    <AppLibraryFormDialog v-model:open="formOpen" :item="editing" @saved="onSaved" />
 
-    <AppLibraryDeleteDialog
-      v-model:open="deleteOpen"
-      :item="deleting"
-      @deleted="onDeleted"
-    />
+    <AppLibraryDeleteDialog v-model:open="deleteOpen" :item="deleting" @deleted="onDeleted" />
   </AppPage>
 </template>
