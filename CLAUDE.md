@@ -11,7 +11,7 @@ pnpm install          # single lockfile wires up all three packages
 pnpm dev              # backend + frontend in parallel
 pnpm dev:backend      # NestJS on :3001 (override with PORT)
 pnpm dev:frontend     # Nuxt on :3000
-pnpm dev:firebase     # Auth emulator on :9099, Firestore on :8080, Emulator UI on :4000
+pnpm dev:firebase     # Auth on :9099, Firestore on :8080, Storage on :9199, Emulator UI on :4000
 pnpm seed:firebase    # put admin@datntdev.com / StrongPassword123! into the emulator
 pnpm lint             # every package (pnpm lint:fix to autofix)
 pnpm typecheck        # every package

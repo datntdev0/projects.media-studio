@@ -52,11 +52,13 @@ pnpm --filter @media-studio/backend run test
 Sign-in is Firebase Authentication: the browser exchanges credentials with Firebase directly, and the API only ever verifies the ID token it is handed. Locally that runs against the [Auth emulator](https://firebase.google.com/docs/emulator-suite), so no Firebase project or network access is needed.
 
 ```bash
-pnpm dev:firebase     # Auth on :9099, Firestore on :8080, Emulator UI on :4000
+pnpm dev:firebase     # Auth on :9099, Firestore on :8080, Storage on :9199, Emulator UI on :4000
 pnpm seed:firebase    # creates admin@datntdev.com / StrongPassword123!
 ```
 
-The same command starts the Firestore emulator, which is where everything the API stores itself lives. Leave both running in their own terminal and start the app as usual. They keep nothing between runs, so re-run `pnpm seed:firebase` after each restart.
+The same command starts the Firestore emulator, which is where everything the API stores itself lives, and the Storage emulator, which holds the media files — cover images today. Leave them running in their own terminal and start the app as usual. They keep nothing between runs, so re-run `pnpm seed:firebase` after each restart.
+
+Storage is the one thing the browser talks to directly: a cover image is uploaded from the picker to the bucket, and only the download URL it comes back with is sent to the API. [`storage.rules`](./storage.rules) is therefore the whole guard on that path — a file lives under the uid that wrote it.
 
 Both packages read their Firebase settings from a gitignored `.env` — copy each package's `.env.example` to get the emulator defaults. See [`_docs/plan/[auth]-google_firebase_authentication_integration.md`](./_docs/plan/%5Bauth%5D-google_firebase_authentication_integration.md) for how the pieces fit together.
 

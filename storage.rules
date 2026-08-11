@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Unlike Firestore, Cloud Storage *is* reached from the browser: a cover image
+// goes from the picker straight into the bucket, and only the download URL it
+// comes back with travels through the API. So these rules are the whole guard
+// on that path, not a second line behind one.
+//
+// The path carries the ownership check — a file lives under the uid that wrote
+// it, so nobody can overwrite somebody else's cover by guessing a name.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /covers/{userId}/{file} {
+      allow read: if request.auth != null;
+
+      // Kept in step with COVER_MAX_MB in frontend/app/utils/covers.ts. The
+      // client resizes well under this; the cap is here for what skips it.
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      // Separate from the writes above, because a delete carries no
+      // `request.resource` to check a size or a type against.
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

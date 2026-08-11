@@ -27,12 +27,13 @@ export default defineNuxtConfig({
       apiBase: 'http://localhost:3001/api/v1',
 
       firebase: {
-        apiKey: '',
-        authDomain: '',
         projectId: '',
         appId: '',
-        /** Set to run against the Auth emulator; empty talks to Firebase itself. */
-        emulatorHost: ''
+        apiKey: '',
+        authDomain: '', // The domain of the Firebase Authentication instance, e.g. `my-project.firebaseapp.com`.
+        storageBucket: '', // The bucket name is the same as the project ID, but with `.appspot.com` appended.
+        emulatorAuthenticationHost: '', // The host of the Firebase Authentication emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_auth.
+        emulatorStorageHost: '' // The host of the Firebase Storage emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_storage.
       }
     }
   },
