@@ -80,6 +80,12 @@ export interface VideoSetItem extends LibraryItemBase {
  */
 export type LibraryItem = NovelItem | ImageSetItem | VideoSetItem
 
+/**
+ * One item as `GET /library/:id` answers with it. The listing deliberately omits
+ * `createdAt`; a detail screen has room to say when the item was started.
+ */
+export type LibraryItemDetail = LibraryItem & { createdAt: string }
+
 /** One page of the listing, and enough to draw the counts and the pager around it. */
 export interface LibraryItemPage {
   items: LibraryItem[]

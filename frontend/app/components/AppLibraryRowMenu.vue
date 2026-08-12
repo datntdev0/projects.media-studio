@@ -2,10 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { LibraryItem } from '~/types/library'
 
-/**
- * The `…` menu a row and a card both carry — and the only interactive element on
- * either, since the detail screen is part 3.
- */
+/** The `…` menu a row and a card both carry, beside the link that opens the item. */
 const props = defineProps<{
   item: LibraryItem
 }>()

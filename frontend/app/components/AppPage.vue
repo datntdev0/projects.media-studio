@@ -26,6 +26,15 @@ useHead({ title: () => props.title })
         </template>
 
         <!--
+          The title itself, for a screen that is somewhere rather than something —
+          a detail page draws its trail back here. `#leading` is the sidebar
+          toggle's and stays it.
+        -->
+        <template v-if="$slots.title" #title>
+          <slot name="title" />
+        </template>
+
+        <!--
           Beside the title: a count, a state, whatever the section is measured in.
           A passthrough, so a screen can add one without restyling the navbar.
         -->

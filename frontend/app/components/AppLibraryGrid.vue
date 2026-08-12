@@ -3,8 +3,10 @@ import type { LibraryItem } from '~/types/library'
 
 /**
  * The listing as a grid of blueprint cards. The cover sets the card height, which
- * keeps a row even however long the titles run. Cards are inert — the `…` menu is
- * the only thing that acts.
+ * keeps a row even however long the titles run.
+ *
+ * The title is a real link, so the card is reachable by keyboard; the card itself
+ * carries the click for the pointer, and the menu stops it.
  */
 defineProps<{
   items: LibraryItem[]
@@ -40,7 +42,8 @@ const SKELETON_CARDS = 8
         v-for="item in items"
         :key="item.id"
         as="article"
-        class="flex items-stretch"
+        class="flex items-stretch cursor-pointer hover:bg-(--color-row-hover)"
+        @click="navigateTo(`/library/${item.id}`)"
       >
         <div class="relative w-34 flex-none aspect-3/4 border-r border-default">
           <AppLibraryCover :url="item.coverUrl" :title="item.title" class="size-full" />
@@ -58,12 +61,14 @@ const SKELETON_CARDS = 8
         <div class="flex-1 min-w-0 flex flex-col gap-1 p-4">
           <div class="flex items-start gap-2">
             <h3 class="flex-1 min-w-0 text-h5 truncate">
-              {{ item.title }}
+              <NuxtLink :to="`/library/${item.id}`" class="block text-default truncate hover:text-default">
+                {{ item.title }}
+              </NuxtLink>
             </h3>
 
             <!-- Pulled up into the padding, so the menu does not open a gap the
                  stack beside it has to carry. -->
-            <div class="shrink-0 -mt-1 -me-2">
+            <div class="shrink-0 -mt-1 -me-2" @click.stop>
               <AppLibraryRowMenu :item="item" @edit="$emit('edit', item)" @remove="$emit('remove', item)" />
             </div>
           </div>

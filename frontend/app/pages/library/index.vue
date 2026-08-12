@@ -6,7 +6,7 @@ import type { LibraryFilters, LibraryItem, LibraryView, ListLibraryItemsQuery } 
  * The catalogue. Owns the filter state, fetches a page through it, and hosts the two
  * dialogs; how an item reads is in `AppLibrary*` and `utils/library`.
  *
- * Rows and cards are inert on purpose — the detail screens are part 3.
+ * A row or a card opens the item at `/library/:id`.
  */
 const PAGE_SIZE = 20
 

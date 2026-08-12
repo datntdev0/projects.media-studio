@@ -2,9 +2,11 @@
 import type { LibraryItem } from '~/types/library'
 
 /**
- * The listing as a table. Rows are inert — see `AppLibraryRowMenu`. Widths are
- * held by `table-fixed` so the truncating columns have something to truncate
- * against.
+ * The listing as a table. Widths are held by `table-fixed` so the truncating
+ * columns have something to truncate against.
+ *
+ * The title is a real link, so the row is reachable by keyboard; the row itself
+ * carries the click for the pointer, and the menu cell stops it.
  */
 defineProps<{
   items: LibraryItem[]
@@ -74,7 +76,12 @@ const SKELETON_ROWS = 6
     </tbody>
 
     <tbody v-else>
-      <tr v-for="item in items" :key="item.id" class="border-b border-default">
+      <tr
+        v-for="item in items"
+        :key="item.id"
+        class="border-b border-default cursor-pointer hover:bg-(--color-row-hover)"
+        @click="navigateTo(`/library/${item.id}`)"
+      >
         <td class="px-2 py-3">
           <div class="flex items-center gap-3">
             <AppLibraryCover
@@ -84,9 +91,9 @@ const SKELETON_ROWS = 6
             />
 
             <div class="min-w-0">
-              <p class="heading text-h5 truncate">
+              <NuxtLink :to="`/library/${item.id}`" class="block heading text-h5 text-default truncate hover:text-default">
                 {{ item.title }}
-              </p>
+              </NuxtLink>
 
               <p v-if="itemSummary(item)" class="text-label text-muted truncate">
                 {{ itemSummary(item) }}
@@ -131,7 +138,7 @@ const SKELETON_ROWS = 6
           {{ relativeUpdated(item.updatedAt) }}
         </td>
 
-        <td class="px-2 py-3 text-right">
+        <td class="px-2 py-3 text-right" @click.stop>
           <AppLibraryRowMenu :item="item" @edit="$emit('edit', item)" @remove="$emit('remove', item)" />
         </td>
       </tr>

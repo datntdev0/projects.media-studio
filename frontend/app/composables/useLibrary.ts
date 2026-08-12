@@ -1,4 +1,4 @@
-import type { CreateLibraryItem, LibraryItem, LibraryItemPage, ListLibraryItemsQuery, ReplaceLibraryItem } from '~/types/library'
+import type { CreateLibraryItem, LibraryItem, LibraryItemDetail, LibraryItemPage, ListLibraryItemsQuery, ReplaceLibraryItem } from '~/types/library'
 
 /** The one place a library path is written. */
 const LIBRARY = '/library'
@@ -14,6 +14,8 @@ export const useLibrary = () => {
 
   return {
     list: (query: ListLibraryItemsQuery) => api<LibraryItemPage>(LIBRARY, { query }),
+    /** The whole item, `createdAt` included — what the listing's rows leave out. */
+    get: (id: string) => api<LibraryItemDetail>(`${LIBRARY}/${id}`),
     create: (item: CreateLibraryItem) => api<LibraryItem>(LIBRARY, { method: 'POST', body: item }),
     replace: (id: string, item: ReplaceLibraryItem) => api<LibraryItem>(`${LIBRARY}/${id}`, { method: 'PUT', body: item }),
     /** A `204`, so there is nothing to hand back. */

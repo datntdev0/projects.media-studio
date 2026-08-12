@@ -1,0 +1,390 @@
+<script setup lang="ts">
+import { refDebounced } from '@vueuse/core'
+import type { ImageSetItem, LibraryItemDetail, NovelItem, VideoSetItem } from '~/types/library'
+import type { LibraryAsset, LibraryContent, NovelChapter } from '~/types/library-content'
+
+/**
+ * One library item, and what it holds. A novel gets its metadata column beside a
+ * chapters table; an image or video set gets a hero band over a grid of assets.
+ *
+ * The item's counters are the server's — they are refetched after every content
+ * change rather than adjusted here.
+ */
+const PAGE_SIZE = 200
+
+/** Long enough that typing a title does not fetch once per letter. */
+const SEARCH_DEBOUNCE = 300
+
+const route = useRoute()
+
+const library = useLibrary()
+
+const contents = useLibraryContents()
+
+const files = useContentFiles()
+
+const toast = useToast()
+
+const itemId = computed(() => String(route.params.id))
+
+const search = ref('')
+
+const debouncedSearch = refDebounced(search, SEARCH_DEBOUNCE)
+
+const { data: item, status: itemStatus, error: itemError, refresh: refreshItem } = useAsyncData(
+  () => `library-item-${itemId.value}`,
+  () => library.get(itemId.value),
+  { watch: [itemId] }
+)
+
+const { data: page, status: contentStatus, error: contentError, refresh: refreshContents } = useAsyncData(
+  () => `library-contents-${itemId.value}`,
+  () => contents.list(itemId.value, { search: debouncedSearch.value.trim() || undefined, pageSize: PAGE_SIZE }),
+  { lazy: true, watch: [itemId, debouncedSearch] }
+)
+
+const rows = computed<LibraryContent[]>(() => page.value?.items ?? [])
+
+const total = computed(() => page.value?.total ?? 0)
+
+const loading = computed(() => contentStatus.value === 'pending')
+
+/**
+ * The two panels want the item narrowed to its own shape. Split rather than cast:
+ * `type` is what decides which half of this screen renders at all.
+ */
+const novel = computed(() => item.value?.type === 'novel' ? item.value as LibraryItemDetail & NovelItem : null)
+
+const set = computed(() => item.value && item.value.type !== 'novel' ? item.value as LibraryItemDetail & (ImageSetItem | VideoSetItem) : null)
+
+const chapters = computed(() => rows.value.filter((row): row is NovelChapter => row.type === 'novel'))
+
+const assets = computed(() => rows.value.filter((row): row is LibraryAsset => row.type !== 'novel'))
+
+const failed = computed(() => rows.value.filter(row => row.status === 'failed').length)
+
+const selected = ref<string[]>([])
+
+/** The panel's Upload button opens the grid's picker — there is one, not two. */
+const grid = useTemplateRef<{ pick: () => void }>('grid')
+
+const uploading = ref(false)
+
+const formOpen = ref(false)
+
+const deleteItemOpen = ref(false)
+
+const chapterOpen = ref(false)
+
+const deleteContentOpen = ref(false)
+
+/** Null means the chapter dialog is adding rather than renaming. */
+const renaming = ref<NovelChapter | null>(null)
+
+const deleting = ref<LibraryContent[]>([])
+
+// A row that has gone cannot stay selected — deleting three and then acting on a
+// stale selection would send requests for rows that are not there.
+watch(rows, (loaded) => {
+  const alive = new Set(loaded.map(row => row.id))
+
+  selected.value = selected.value.filter(id => alive.has(id))
+})
+
+function onAddChapter() {
+  renaming.value = null
+  chapterOpen.value = true
+}
+
+function onRemoveContent(content: LibraryContent) {
+  deleting.value = [content]
+  deleteContentOpen.value = true
+}
+
+function onRemoveSelected() {
+  deleting.value = rows.value.filter(row => selected.value.includes(row.id))
+  deleteContentOpen.value = true
+}
+
+/** Both halves move together: the rows changed, and so did the item's counters. */
+async function refreshAll() {
+  await Promise.all([refreshContents(), refreshItem()])
+}
+
+async function onContentSaved() {
+  await refreshAll()
+
+  toast.add({ title: 'Chapter saved', icon: 'i-lucide-check', color: 'primary' })
+}
+
+async function onContentDeleted() {
+  await refreshAll()
+
+  toast.add({ title: 'Deleted', icon: 'i-lucide-check', color: 'primary' })
+}
+
+async function onItemSaved() {
+  await refreshItem()
+
+  toast.add({ title: 'Item saved', icon: 'i-lucide-check', color: 'primary' })
+}
+
+async function onItemDeleted() {
+  await navigateTo('/library')
+
+  toast.add({ title: `Deleted ${item.value?.title ?? 'the item'}`, icon: 'i-lucide-check', color: 'primary' })
+}
+
+/**
+ * Each file goes to Storage first, then becomes a row — the same order the cover
+ * picker saves in, and the reason a failed upload never leaves a row pointing at
+ * nothing.
+ */
+async function onUpload(picked: FileList | null) {
+  const chosen = Array.from(picked ?? [])
+  const type = set.value?.type
+
+  if (!chosen.length || !type || uploading.value) {
+    return
+  }
+
+  uploading.value = true
+
+  let added = 0
+
+  for (const file of chosen) {
+    let uploaded: string | null = null
+
+    try {
+      checkAsset(file, type)
+
+      uploaded = await files.uploadAsset(file)
+
+      await contents.create(itemId.value, { filename: file.name, filesize: file.size, contentUrl: uploaded })
+      added += 1
+    } catch (cause) {
+      // The row is what failed, so the object it would have pointed at goes —
+      // otherwise a retry leaves the first attempt orphaned in the bucket.
+      await files.discard(uploaded)
+
+      toast.add({ title: apiMessage(cause, `Could not upload ${file.name}.`), icon: 'i-lucide-triangle-alert', color: 'error' })
+    }
+  }
+
+  uploading.value = false
+
+  await refreshAll()
+
+  if (added) {
+    toast.add({ title: `Uploaded ${added} ${contentUnit(type, added)}`, icon: 'i-lucide-check', color: 'primary' })
+  }
+}
+</script>
+
+<template>
+  <AppPage :title="item?.title ?? 'Library'" flush>
+    <template #title>
+      <div class="flex items-center gap-2 min-w-0">
+        <UButton
+          to="/library"
+          icon="i-lucide-arrow-left"
+          label="Library"
+          color="neutral"
+          variant="ghost"
+          class="font-body font-normal shrink-0"
+        />
+
+        <span class="text-dimmed">/</span>
+
+        <span class="heading text-h4 truncate">{{ item?.title ?? '…' }}</span>
+      </div>
+    </template>
+
+    <template #actions>
+      <UButton
+        to="/scrapings"
+        label="Scrapings"
+        icon="i-lucide-download"
+        color="neutral"
+        variant="ghost"
+        class="font-body font-normal"
+      />
+    </template>
+
+    <div v-if="itemError" class="flex items-center gap-2 p-6 text-support text-error" role="alert">
+      <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
+
+      {{ itemError.statusCode === 404 ? 'There is no item under that id.' : 'Could not load the item.' }}
+
+      <UButton
+        to="/library"
+        label="Back to the library"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+      />
+    </div>
+
+    <div v-else-if="itemStatus === 'pending'" class="grid gap-3 p-6">
+      <USkeleton class="h-8 w-64" />
+      <USkeleton class="h-4 w-40" />
+    </div>
+
+    <!-- ── a novel: its metadata beside its chapters ── -->
+    <div v-else-if="novel" class="flex flex-1 min-h-0 overflow-hidden">
+      <AppLibraryNovelPanel
+        :item="novel"
+        :chapters="total"
+        @edit="formOpen = true"
+        @remove="deleteItemOpen = true"
+      />
+
+      <div class="flex flex-col flex-1 min-w-0">
+        <div class="flex-none flex flex-wrap items-center gap-3 px-6 py-2 border-b border-default">
+          <h4 class="text-h5">
+            Chapters
+          </h4>
+
+          <UBadge
+            :label="String(total)"
+            color="neutral"
+            variant="outline"
+            size="sm"
+          />
+
+          <UInput
+            v-model="search"
+            icon="i-lucide-search"
+            placeholder="Find chapter..."
+            class="w-52"
+          />
+
+          <div class="flex items-center gap-2 ms-auto">
+            <template v-if="selected.length">
+              <span class="text-label text-muted">{{ selected.length }} selected</span>
+
+              <UTooltip :text="SCRAPING_DEFERRED">
+                <span class="block">
+                  <UButton label="Scrape selected" size="sm" disabled />
+                </span>
+              </UTooltip>
+
+              <UButton
+                label="Delete selected"
+                color="error"
+                variant="ghost"
+                size="sm"
+                @click="onRemoveSelected"
+              />
+            </template>
+
+            <UTooltip :text="SCRAPING_DEFERRED">
+              <span class="block">
+                <UButton
+                  :label="`Retry failed (${failed})`"
+                  color="neutral"
+                  variant="subtle"
+                  size="sm"
+                  disabled
+                />
+              </span>
+            </UTooltip>
+
+            <UButton
+              icon="i-lucide-plus"
+              label="Add chapter"
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              @click="onAddChapter"
+            />
+          </div>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-y-auto">
+          <p v-if="contentError" class="flex items-center gap-2 p-6 text-support text-error" role="alert">
+            <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
+            Could not load the chapters.
+          </p>
+
+          <AppLibraryChapterTable
+            v-else-if="loading || chapters.length"
+            v-model:selected="selected"
+            :item-id="itemId"
+            :chapters="chapters"
+            :loading="loading"
+            @remove="onRemoveContent"
+          />
+
+          <AppBlueprint v-else dashed class="grid place-items-center m-6 p-8 text-center">
+            <div>
+              <p class="text-meta tracking-widest uppercase text-primary">
+                {{ search.trim() ? 'No matches' : 'No chapters' }}
+              </p>
+
+              <h3 class="mt-1 mb-2">
+                {{ search.trim() ? 'Nothing matches that search' : 'Nothing written yet' }}
+              </h3>
+
+              <UButton
+                v-if="!search.trim()"
+                icon="i-lucide-plus"
+                label="Add chapter"
+                class="mt-2"
+                @click="onAddChapter"
+              />
+            </div>
+          </AppBlueprint>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── a set: its stats over its assets ── -->
+    <div v-else-if="set" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <AppLibraryGalleryPanel
+        :item="set"
+        :assets="total"
+        :uploading="uploading"
+        @edit="formOpen = true"
+        @remove="deleteItemOpen = true"
+        @upload="grid?.pick()"
+      />
+
+      <div class="flex-1 min-h-0 overflow-y-auto p-6">
+        <p v-if="contentError" class="flex items-center gap-2 text-support text-error" role="alert">
+          <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
+          Could not load the assets.
+        </p>
+
+        <AppLibraryAssetGrid
+          v-else
+          ref="grid"
+          :type="set.type"
+          :assets="assets"
+          :loading="loading"
+          :uploading="uploading"
+          @pick="onUpload"
+          @remove="onRemoveContent"
+        />
+      </div>
+    </div>
+
+    <AppLibraryFormDialog v-model:open="formOpen" :item="item" @saved="onItemSaved" />
+
+    <AppLibraryDeleteDialog v-model:open="deleteItemOpen" :item="item" @deleted="onItemDeleted" />
+
+    <AppLibraryChapterDialog
+      v-model:open="chapterOpen"
+      :item-id="itemId"
+      :chapter="renaming"
+      @saved="onContentSaved"
+    />
+
+    <AppLibraryContentDeleteDialog
+      v-model:open="deleteContentOpen"
+      :item-id="itemId"
+      :contents="deleting"
+      @deleted="onContentDeleted"
+    />
+  </AppPage>
+</template>
