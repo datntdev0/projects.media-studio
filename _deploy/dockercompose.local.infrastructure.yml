@@ -1,0 +1,65 @@
+# Local infrastructure for media-studio: the Firebase emulators and FlareSolverr.
+# Start it from the repository root with `pnpm dev:infrastructure`.
+# Everything is published on 127.0.0.1 only, on the same ports the apps already expect.
+name: media-studio-local
+
+services:
+  firebase:
+    build:
+      context: ./firebase
+    container_name: media-studio-firebase
+    restart: unless-stopped
+    # Import the previous session only when an export exists, so the first run starts clean.
+    # Exports go to a subdirectory: firebase-tools clears the target by removing it, and a
+    # mount point cannot be removed.
+    command:
+      - sh
+      - -c
+      - test -f /data/emulators/firebase-export-metadata.json && IMPORT=--import=/data/emulators; exec firebase emulators:start --config /config/firebase.json --project demo-media-studio --only auth,firestore,storage --export-on-exit=/data/emulators $$IMPORT
+    environment:
+      GOOGLE_CLOUD_PROJECT: demo-media-studio
+    ports:
+      - '127.0.0.1:4000:4000' # Emulator UI
+      - '127.0.0.1:4400:4400' # Emulator hub (the UI talks to it)
+      - '127.0.0.1:4500:4500' # Emulator logging stream
+      - '127.0.0.1:8080:8080' # Firestore
+      - '127.0.0.1:9099:9099' # Authentication
+      - '127.0.0.1:9199:9199' # Storage
+    volumes:
+      - firebase-data:/data
+    # The hub answers well before the emulators do, so probe all three of them.
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://127.0.0.1:9099/ && curl -fsS -o /dev/null http://127.0.0.1:8080/ && curl -sS -o /dev/null http://127.0.0.1:9199/']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    # Give the emulators time to flush their export on shutdown.
+    stop_grace_period: 30s
+    networks: [media-studio]
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
+    container_name: media-studio-flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: 'false'
+      CAPTCHA_SOLVER: none
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - '127.0.0.1:8191:8191'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8191/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks: [media-studio]
+
+volumes:
+  firebase-data:
+
+networks:
+  media-studio:
+    driver: bridge

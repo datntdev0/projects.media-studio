@@ -5,7 +5,7 @@
  * dependency and no credentials. Idempotent — an account that is already there
  * is a success, so this is safe to re-run.
  *
- * Run the emulator first (`pnpm dev:firebase`), then `pnpm seed:firebase`.
+ * Run the emulator first (`pnpm dev:infrastructure`), then `pnpm seed:firebase`.
  */
 
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -36,7 +36,7 @@ async function waitForEmulator(attempts = 30) {
     await sleep(500)
   }
 
-  throw new Error(`No auth emulator on ${HOST}. Start it with \`pnpm dev:firebase\`.`)
+  throw new Error(`No auth emulator on ${HOST}. Start it with \`pnpm dev:infrastructure\`.`)
 }
 
 async function seed() {
