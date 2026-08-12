@@ -37,23 +37,31 @@ export abstract class FirestoreRepository<T extends FirestoreEntity> {
     await this.collection.doc(id).delete();
   }
 
-  /**
-   * A document as the domain sees it: the id it is filed under, and its data
-   * with every `Timestamp` flattened to an ISO string.
-   *
-   * The conversion is the point. A `Timestamp` is a Firestore type, and letting
-   * one past this line would put the driver in the DTOs, the specs and the JSON
-   * — where an ISO string is what everything already speaks.
-   */
   protected toEntity(snapshot: DocumentSnapshot): T | null {
-    const data = snapshot.data();
-
-    if (!data) {
-      return null;
-    }
-
-    return { id: snapshot.id, ...plain(data) } as T;
+    return entityFrom<T>(snapshot);
   }
+}
+
+/**
+ * A document as the domain sees it: the id it is filed under, and its data with
+ * every `Timestamp` flattened to an ISO string.
+ *
+ * The conversion is the point. A `Timestamp` is a Firestore type, and letting one
+ * past this line would put the driver in the DTOs, the specs and the JSON — where
+ * an ISO string is what everything already speaks.
+ *
+ * Free rather than only a method, because a subcollection is keyed by two ids and
+ * so cannot inherit the one-key `findById` and `delete` above. Such a repository
+ * still wants this mapping, and this is how it reaches it.
+ */
+export function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot): T | null {
+  const data = snapshot.data();
+
+  if (!data) {
+    return null;
+  }
+
+  return { id: snapshot.id, ...plain(data) } as T;
 }
 
 /** Recursive: timestamps nest inside maps and arrays as readily as at the root. */

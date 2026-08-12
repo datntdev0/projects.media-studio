@@ -35,6 +35,41 @@
       "collectionGroup": "libraryItems",
       "fieldPath": "updatedAt",
       "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "words",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "type",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contents",
+      "fieldPath": "updatedAt",
+      "indexes": []
     }
   ]
 }

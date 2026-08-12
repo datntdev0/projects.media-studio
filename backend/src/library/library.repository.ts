@@ -22,6 +22,14 @@ export interface LibraryItemFilter {
   sourceMode?: LibrarySourceMode;
 }
 
+/** What one pass over an item's content says about it. Server-owned, every one. */
+export interface LibraryItemCounters {
+  discoveredCount: number;
+  downloadedCount: number;
+  /** Only a set holds bytes — left out for a novel, whose metadata has no such field. */
+  downloadedSize?: number;
+}
+
 /** Distributes over the union, so `type` still narrows `metadata`. */
 type WithoutStamps<T> = T extends LibraryItem ? Omit<T, 'id' | 'createdAt' | 'updatedAt'> : never;
 
@@ -98,6 +106,30 @@ export class LibraryRepository extends FirestoreRepository<LibraryItem> {
     // Built from what was written rather than read back: the write is the
     // authority on its own result.
     return { ...draft, id: stored.id, createdAt: stored.createdAt, updatedAt: iso(updatedAt) };
+  }
+
+  /**
+   * What the item holds, after its content changed.
+   *
+   * Dotted paths rather than a whole `metadata` map, so the descriptive block a
+   * novel keeps beside its counters is left alone. `updatedAt` moves too: content
+   * arriving is the item changing, and the listing orders by it.
+   */
+  async updateCounters(itemId: string, counters: LibraryItemCounters): Promise<void> {
+    const now = Timestamp.now();
+
+    const fields: Record<string, unknown> = {
+      'metadata.discoveredCount': counters.discoveredCount,
+      'metadata.discoveredAt': now,
+      'metadata.downloadedCount': counters.downloadedCount,
+      updatedAt: now,
+    };
+
+    if (counters.downloadedSize !== undefined) {
+      fields['metadata.downloadedSize'] = counters.downloadedSize;
+    }
+
+    await this.collection.doc(itemId).update(fields);
   }
 }
 
