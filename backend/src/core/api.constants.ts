@@ -28,6 +28,9 @@ export const AUTH_PATH = 'auth';
 /** Versioned. `/api/v1/library/…` */
 export const LIBRARY_PATH = 'library';
 
+/** Under an item. `/api/v1/library/:itemId/contents/…` */
+export const LIBRARY_CONTENT_PATH = 'contents';
+
 /** The generated OpenAPI document. */
 export const OPENAPI_JSON_PATH = 'openapi.json';
 

@@ -8,6 +8,7 @@ import { CreateLibraryItemDto } from './dto/create-library-item.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/update-library-item.dto';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
+import { LibraryContentRepository } from './library-content.repository';
 import { LibraryManager } from './library.manager';
 import { LibraryItemDraft, LibraryItemFilter, LibraryRepository } from './library.repository';
 
@@ -52,8 +53,19 @@ class FakeRepository {
   }
 }
 
-function managerOver(repository: FakeRepository): LibraryManager {
-  return new LibraryManager(repository as unknown as LibraryRepository);
+/** Only the one method `LibraryManager` reaches for: the cascade behind a delete. */
+class FakeContentRepository {
+  cleared: string[] = [];
+
+  removeAll(itemId: string): Promise<void> {
+    this.cleared.push(itemId);
+
+    return Promise.resolve();
+  }
+}
+
+function managerOver(repository: FakeRepository, contents = new FakeContentRepository()): LibraryManager {
+  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
@@ -306,10 +318,20 @@ describe('LibraryManager.remove', () => {
     expect(repository.deleted).toEqual(['novel-1']);
   });
 
+  it('clears the content filed under it, since Firestore does not cascade', async () => {
+    const contents = new FakeContentRepository();
+
+    await managerOver(new FakeRepository([novel()]), contents).remove('novel-1');
+
+    expect(contents.cleared).toEqual(['novel-1']);
+  });
+
   it('is a 404 for an id that is not there, and deletes nothing', async () => {
     const repository = new FakeRepository();
+    const contents = new FakeContentRepository();
 
-    await expect(managerOver(repository).remove('missing')).rejects.toThrow(NotFoundException);
+    await expect(managerOver(repository, contents).remove('missing')).rejects.toThrow(NotFoundException);
     expect(repository.deleted).toEqual([]);
+    expect(contents.cleared).toEqual([]);
   });
 });

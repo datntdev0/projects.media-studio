@@ -24,6 +24,22 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // What a library item holds: an image, a clip, or the text of one chapter.
+    // Same path-as-ownership rule as covers above, and the same reason for it.
+    match /content/{userId}/{file} {
+      allow read: if request.auth != null;
+
+      // Kept in step with ASSET_MAX_MB in frontend/app/utils/library-content.ts.
+      // `text/plain` is here because a chapter body is an object too — the API
+      // stores its URL, never its words.
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 200 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|video/.*|text/plain.*');
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /{path=**} {
       allow read, write: if false;
     }

@@ -78,6 +78,16 @@ export class LibraryContentRepository {
     return entityFrom<LibraryContent>(await this.contentsOf(itemId).doc(contentId).get());
   }
 
+  /**
+   * The highest chapter number stored, or zero where none is — what the next one
+   * counts from. One document, read for one field, rather than the whole scan.
+   */
+  async highestIndex(itemId: string): Promise<number> {
+    const snapshot = await this.contentsOf(itemId).orderBy('index', 'desc').limit(1).get();
+
+    return (snapshot.docs[0]?.get('index') as number | undefined) ?? 0;
+  }
+
   async create(itemId: string, draft: LibraryContentDraft): Promise<LibraryContent> {
     const document = this.contentsOf(itemId).doc();
     const now = Timestamp.now();

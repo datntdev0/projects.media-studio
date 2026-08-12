@@ -66,7 +66,7 @@ export class LibraryController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an item' })
-  @ApiNoContentResponse({ description: 'Deleted. Its content is not — part 1 stores none.' })
+  @ApiNoContentResponse({ description: 'Deleted, and every chapter, image or clip filed under it with it.' })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: NOT_FOUND })
   remove(@Param('id') id: string): Promise<void> {

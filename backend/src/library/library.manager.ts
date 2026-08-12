@@ -6,6 +6,7 @@ import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto, WRITABLE_STATUSES } from './dto/update-library-item.dto';
 import { LibraryItemMetadataBase, NovelMetadata } from './entities/library-item-metadata.entity';
 import { LibraryItem, LibraryItemBase, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from './entities/library-item.entity';
+import { LibraryContentRepository } from './library-content.repository';
 import { LibraryItemDraft, LibraryRepository } from './library.repository';
 
 /** What a manual item's source is called — it is its own. */
@@ -29,7 +30,7 @@ type WritableNovelMetadata = Omit<NovelMetadata, keyof LibraryItemMetadataBase>;
  */
 @Injectable()
 export class LibraryManager {
-  constructor(private readonly repository: LibraryRepository) {}
+  constructor(private readonly repository: LibraryRepository, private readonly contents: LibraryContentRepository) {}
 
   /**
    * One page of the listing.
@@ -88,8 +89,10 @@ export class LibraryManager {
     return this.repository.replace(stored, nextDraft(stored, root, input.metadata));
   }
 
+  /** The item, and everything filed under it — Firestore does not cascade. */
   async remove(id: string): Promise<void> {
     await this.require(id);
+    await this.contents.removeAll(id);
     await this.repository.delete(id);
   }
 
