@@ -28,7 +28,8 @@ const facts = computed(() => [
 </script>
 
 <template>
-  <div class="w-80 flex-none overflow-y-auto border-r border-default p-6">
+  <!-- The width is the caller's, so this fills whatever column it is given. -->
+  <div class="size-full overflow-y-auto border-r border-default p-6">
     <AppBlueprint class="aspect-3/4 mb-6">
       <AppLibraryCover :url="item.coverUrl" :title="item.title" class="size-full" />
     </AppBlueprint>

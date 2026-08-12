@@ -5,8 +5,11 @@ import { deleteObject, getDownloadURL, ref as storageObject, uploadBytes } from 
  * the API only ever sees the resulting URL, the same bargain `useCovers.ts` makes
  * for a cover, and the reason a 200 MB clip never enters the API process.
  *
- * The path starts with the uploader's uid because that is the ownership check
- * `storage.rules` makes.
+ * Filed under the item rather than the uploader: `content/{itemId}/…`. A cover
+ * belongs to whoever picked it, but content belongs to the item it is content of —
+ * two people adding chapters to one novel are filling the same shelf, and the
+ * bucket should show that. It also means an item's objects can be found, and one
+ * day swept, from its id alone.
  */
 
 /** The sentences a caller prints. Storage's own errors are codes, not prose. */
@@ -24,13 +27,13 @@ export const useContentFiles = () => {
   const { user } = useAuth()
 
   /** Uploads a picked image or clip as it is, and hands back the URL to store on the row. */
-  function uploadAsset(file: File): Promise<string> {
-    return upload(file, file.type || 'application/octet-stream', extensionOf(file.name))
+  function uploadAsset(itemId: string, file: File): Promise<string> {
+    return upload(itemId, file, file.type || 'application/octet-stream', extensionOf(file.name))
   }
 
   /** Uploads a chapter body. The row keeps the URL; the words stay out of Firestore. */
-  function uploadText(text: string): Promise<string> {
-    return upload(new Blob([text], { type: TEXT_CONTENT_TYPE }), TEXT_CONTENT_TYPE, '.txt')
+  function uploadText(itemId: string, text: string): Promise<string> {
+    return upload(itemId, new Blob([text], { type: TEXT_CONTENT_TYPE }), TEXT_CONTENT_TYPE, '.txt')
   }
 
   /**
@@ -61,16 +64,16 @@ export const useContentFiles = () => {
     }
   }
 
-  async function upload(body: Blob, contentType: string, extension: string): Promise<string> {
-    const uid = user.value?.uid
-
-    if (!uid) {
+  async function upload(itemId: string, body: Blob, contentType: string, extension: string): Promise<string> {
+    // Still checked, even though the uid is no longer in the path: an upload with
+    // nobody behind it would be refused by the rules anyway, and this says why.
+    if (!user.value?.uid) {
       throw new Error(SIGNED_OUT)
     }
 
     // Named at random rather than after the row: the row may not exist yet, and a
     // body replaced mid-edit must not overwrite the one still being read.
-    const object = storageObject(storage, `content/${uid}/${crypto.randomUUID()}${extension}`)
+    const object = storageObject(storage, `content/${itemId}/${crypto.randomUUID()}${extension}`)
 
     try {
       await uploadBytes(object, body, { contentType })

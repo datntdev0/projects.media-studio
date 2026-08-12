@@ -112,6 +112,12 @@ async function onSaved() {
   toast.add({ title: added ? 'Item added' : 'Item saved', icon: 'i-lucide-check', color: 'primary' })
 }
 
+async function removeItem() {
+  if (deleting.value) {
+    await library.remove(deleting.value.id)
+  }
+}
+
 async function onDeleted() {
   const title = deleting.value?.title
 
@@ -238,6 +244,18 @@ async function onDeleted() {
 
     <AppLibraryFormDialog v-model:open="formOpen" :item="editing" @saved="onSaved" />
 
-    <AppLibraryDeleteDialog v-model:open="deleteOpen" :item="deleting" @deleted="onDeleted" />
+    <AppDialog
+      v-model:open="deleteOpen"
+      title="Delete item"
+      confirm-label="Delete item"
+      :action="removeItem"
+      error-fallback="Could not delete the item. Try again."
+      @confirmed="onDeleted"
+    >
+      <p class="text-body text-pretty">
+        <strong class="heading text-h5">{{ deleting?.title }}</strong>
+        and everything recorded about it are removed. This cannot be undone.
+      </p>
+    </AppDialog>
   </AppPage>
 </template>

@@ -74,6 +74,9 @@ const saving = ref(false)
 
 const saveError = ref<string | null>(null)
 
+/** The id of an item this dialog created, so a retried save finishes it rather than doubling it. */
+const added = ref<string | null>(null)
+
 const step = ref(1)
 
 /** What the crawler found, and the gate on step 3: no preview, no continuing. */
@@ -179,6 +182,7 @@ watch(open, (isOpen) => {
   }
 
   saveError.value = null
+  added.value = null
   step.value = 1
   clearPreview()
   Object.assign(form, props.item ? fromItem(props.item) : blank())
@@ -333,9 +337,9 @@ function onBack() {
 }
 
 /**
- * The save, and the only moment anything is uploaded: a picked cover goes to Storage
- * first, so the item is only written with a URL that resolves. The replaced cover is
- * dropped afterwards, so a failed save never points the item at a deleted file.
+ * The save, and the only moment anything is uploaded — a cancelled dialog still
+ * leaves the bucket untouched. The replaced cover is dropped afterwards, so a
+ * failed save never points the item at a deleted file.
  */
 async function save() {
   saveError.value = null
@@ -343,27 +347,14 @@ async function save() {
 
   const replaced = form.coverFile ? props.item?.coverUrl : null
 
-  let coverUrl: string | null
-
-  // Its own step: Storage answers with codes, so the sentence to print is the
-  // one `useCovers` threw, not the one the API would have sent.
-  try {
-    coverUrl = form.coverFile ? await covers.upload(form.coverFile) : form.coverUrl.trim() || null
-  } catch (cause) {
-    saveError.value = cause instanceof Error ? cause.message : FALLBACK_ERROR
-    saving.value = false
-
-    return
-  }
-
   try {
     if (props.item) {
-      await library.replace(props.item.id, { ...payload(coverUrl), status: form.status })
+      await write(props.item.id, form.status)
     } else {
-      await library.create(payload(coverUrl))
+      await add()
     }
   } catch (cause) {
-    saveError.value = apiMessage(cause, FALLBACK_ERROR)
+    saveError.value = saveMessage(cause)
 
     return
   } finally {
@@ -374,6 +365,44 @@ async function save() {
 
   open.value = false
   emit('saved')
+}
+
+/**
+ * A new item, then its cover — in that order, because a cover is filed under the
+ * item it is the cover of and there is no id until the item exists.
+ *
+ * `added` holds that id, so a cover step that fails and is retried finishes the
+ * item already made rather than making a second one.
+ */
+async function add() {
+  const linked = form.coverUrl.trim() || null
+
+  // Created without the cover when one is waiting to be uploaded — the URL it
+  // will get does not exist yet.
+  added.value ??= (await library.create(payload(form.coverFile ? null : linked))).id
+
+  if (form.coverFile) {
+    await write(added.value, form.status)
+  }
+}
+
+/** The item's whole writable representation, with the picked cover uploaded first. */
+async function write(id: string, status: WritableLibraryItemStatus) {
+  const coverUrl = form.coverFile ? await covers.upload(id, form.coverFile) : form.coverUrl.trim() || null
+
+  await library.replace(id, { ...payload(coverUrl), status })
+}
+
+/**
+ * Storage answers with codes, so a cover failure prints the sentence `useCovers`
+ * threw; an API failure carries its own under `data`.
+ */
+function saveMessage(cause: unknown): string {
+  if (cause instanceof Error && !(cause as { data?: unknown }).data) {
+    return cause.message
+  }
+
+  return apiMessage(cause, FALLBACK_ERROR)
 }
 
 /** A selected card takes the accent wash; a fixed one reads as disabled. */

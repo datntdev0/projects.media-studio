@@ -83,6 +83,11 @@ const renaming = ref<NovelChapter | null>(null)
 
 const deleting = ref<LibraryContent[]>([])
 
+/** One row is named; several are counted. */
+const deletingLabel = computed(() => deleting.value.length === 1 && deleting.value[0]
+  ? contentName(deleting.value[0])
+  : `${deleting.value.length} items`)
+
 // A row that has gone cannot stay selected — deleting three and then acting on a
 // stale selection would send requests for rows that are not there.
 watch(rows, (loaded) => {
@@ -135,6 +140,21 @@ async function onItemDeleted() {
   toast.add({ title: `Deleted ${item.value?.title ?? 'the item'}`, icon: 'i-lucide-check', color: 'primary' })
 }
 
+function removeItem() {
+  return library.remove(itemId.value)
+}
+
+/**
+ * One row at a time, so a partial failure leaves what it already removed removed
+ * and says which one stopped it — rather than pretending nothing happened.
+ */
+async function removeContent() {
+  for (const content of deleting.value) {
+    await contents.remove(itemId.value, content.id)
+    await files.discard(content.contentUrl)
+  }
+}
+
 /**
  * Each file goes to Storage first, then becomes a row — the same order the cover
  * picker saves in, and the reason a failed upload never leaves a row pointing at
@@ -158,7 +178,7 @@ async function onUpload(picked: FileList | null) {
     try {
       checkAsset(file, type)
 
-      uploaded = await files.uploadAsset(file)
+      uploaded = await files.uploadAsset(itemId.value, file)
 
       await contents.create(itemId.value, { filename: file.name, filesize: file.size, contentUrl: uploaded })
       added += 1
@@ -232,12 +252,14 @@ async function onUpload(picked: FileList | null) {
 
     <!-- ── a novel: its metadata beside its chapters ── -->
     <div v-else-if="novel" class="flex flex-1 min-h-0 overflow-hidden">
-      <AppLibraryNovelPanel
-        :item="novel"
-        :chapters="total"
-        @edit="formOpen = true"
-        @remove="deleteItemOpen = true"
-      />
+      <AppResizable storage-key="novel-panel" label="Resize the novel panel" :default-width="20">
+        <AppLibraryNovelPanel
+          :item="novel"
+          :chapters="total"
+          @edit="formOpen = true"
+          @remove="deleteItemOpen = true"
+        />
+      </AppResizable>
 
       <div class="flex flex-col flex-1 min-w-0">
         <div class="flex-none flex flex-wrap items-center gap-3 px-6 py-2 border-b border-default">
@@ -371,7 +393,19 @@ async function onUpload(picked: FileList | null) {
 
     <AppLibraryFormDialog v-model:open="formOpen" :item="item" @saved="onItemSaved" />
 
-    <AppLibraryDeleteDialog v-model:open="deleteItemOpen" :item="item" @deleted="onItemDeleted" />
+    <AppDialog
+      v-model:open="deleteItemOpen"
+      title="Delete item"
+      confirm-label="Delete item"
+      :action="removeItem"
+      error-fallback="Could not delete the item. Try again."
+      @confirmed="onItemDeleted"
+    >
+      <p class="text-body text-pretty">
+        <strong class="heading text-h5">{{ item?.title }}</strong>
+        and everything filed under it are removed. This cannot be undone.
+      </p>
+    </AppDialog>
 
     <AppLibraryChapterDialog
       v-model:open="chapterOpen"
@@ -380,11 +414,18 @@ async function onUpload(picked: FileList | null) {
       @saved="onContentSaved"
     />
 
-    <AppLibraryContentDeleteDialog
+    <AppDialog
       v-model:open="deleteContentOpen"
-      :item-id="itemId"
-      :contents="deleting"
-      @deleted="onContentDeleted"
-    />
+      title="Delete content"
+      :confirm-label="deleting.length > 1 ? `Delete ${deleting.length}` : 'Delete'"
+      :action="removeContent"
+      error-fallback="Could not delete. Try again."
+      @confirmed="onContentDeleted"
+    >
+      <p class="text-body text-pretty">
+        <strong class="heading text-h5">{{ deletingLabel }}</strong>
+        and the stored bytes go with it. This cannot be undone.
+      </p>
+    </AppDialog>
   </AppPage>
 </template>

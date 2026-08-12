@@ -260,19 +260,36 @@ states — Cloud Storage *is* reached from the browser, so these rules are the w
 path, not a second line behind one:
 
 ```
-match /content/{userId}/{file} {
+match /content/{itemId}/{file} {
   allow read: if request.auth != null;
   allow create, update: if request.auth != null
-    && request.auth.uid == userId
     && request.resource.size < 200 * 1024 * 1024
     && request.resource.contentType.matches('image/.*|video/.*|text/plain.*');
-  allow delete: if request.auth != null && request.auth.uid == userId;
+  allow delete: if request.auth != null;
 }
 ```
 
 200 MB is the mockup's own cap (*"JPG, PNG, WEBP, MP4 · max 200 MB"*), kept in step with
 `ASSET_MAX_MB` in `app/utils/library-content.ts` the way the cover cap is kept in step with
 `COVER_MAX_MB`. `text/plain` is there because a chapter body is an object too.
+
+**Keyed by the item, not the uploader** — and `covers/{userId}/` from part 1 is rekeyed to
+`covers/{itemId}/` to match. Files belong to the item they are files of, not to whoever
+happened to pick them: two people adding chapters to one novel are filling the same shelf,
+and an item's whole footprint should be one prefix under each of `covers/` and `content/`,
+findable from its id alone.
+
+The cost is that the path no longer carries an ownership check, so both rules are open to
+any signed-in user. That is not a loosening: a `LibraryItem` has no owner in Firestore
+either, and the API already lets any signed-in user edit any item. **If items ever gain an
+owner, both rules have to gain one too.**
+
+Rekeying the cover changes when it is uploaded. Part 1 held the picked file until the save
+and uploaded it before the `POST`; a cover filed under the item cannot be written before the
+item exists. So creating is now **create, then upload, then `PUT` the URL onto it**. Nothing
+is uploaded before the save either way, so a cancelled dialog still leaves the bucket
+untouched — and `AppLibraryFormDialog` remembers the id it just created, so a cover step that
+fails and is retried finishes that item rather than making a second one.
 
 ## Step 4 — The three screens
 
@@ -285,20 +302,21 @@ on every child route; no navigation change is needed.
 | File | What it is |
 | --- | --- |
 | `app/components/AppPage.vue` | One more passthrough: a `#title` slot over `UDashboardNavbar`'s, so a screen can draw the mockup's `← Library / {title}` breadcrumb without restyling the navbar. `#leading` is the sidebar collapse's and stays it. |
+| `app/components/AppDialog.vue` | One confirmation for the whole app. It owns the act: runs the `action` it is given, holds the spinner, prints the failure in place, and closes and emits only once it worked. What differs between a deleted item and a deleted chapter is a sentence and a verb, not behaviour — so there is one of these and no per-thing delete dialog. Replaces `AppLibraryDeleteDialog` and `AppLibraryContentDeleteDialog`. |
+| `app/components/AppResizable.vue` | A column the reader can widen, with `UDashboardResizeHandle` beside it. Width in rem, remembered per `storageKey`, clamped between a min and a max; double-click resets and the arrow keys move it, so the separator is not pointer-only. |
 | `app/pages/library/index.vue` | Moved. Rows and cards become openable, and the "inert on purpose" comment goes. |
 | `app/components/AppLibraryTable.vue` · `AppLibraryGrid.vue` | The title becomes a `NuxtLink` to the item — a real link, so it is keyboard-reachable — and the row or card carries a `@click` for the pointer, with the `…` menu cell stopping propagation. |
 | `app/composables/useLibrary.ts` | Add `get(id)` returning `LibraryItemDetail`. The backend has had `GET /:id` since part 1 and nothing called it. |
 | `app/composables/useLibraryContents.ts` | `list`, `get`, `create`, `replace`, `remove` over `/library/:itemId/contents`. The one place a content path is written. |
-| `app/composables/useContentFiles.ts` | Storage, mirroring `useCovers.ts`: `uploadAsset(file)` (an image or clip, as picked), `uploadText(text)` (a chapter body as `text/plain; charset=utf-8`), `readText(url)` and `discard(url)`. Path `content/${uid}/${crypto.randomUUID()}${extension}`, and the same prose-sentence errors rather than Storage's codes. |
+| `app/composables/useContentFiles.ts` | Storage, mirroring `useCovers.ts`: `uploadAsset(itemId, file)` (an image or clip, as picked), `uploadText(itemId, text)` (a chapter body as `text/plain; charset=utf-8`), `readText(url)` and `discard(url)`. Path `content/${itemId}/${crypto.randomUUID()}${extension}` — filed under the item, not the uploader — and the same prose-sentence errors rather than Storage's codes. |
 | `app/utils/library-content.ts` | Presentation helpers, auto-imported: `contentStatusTag` (Done / Queued / Failed over the mono badge scheme), `chapterLabel`, `assetMeta`, `wordCount(text)`, `ASSET_ACCEPT`, `ASSET_MAX_MB = 200`. |
-| `app/pages/library/[id]/index.vue` | Fetches the item through `useAsyncData` keyed on the route id, then branches: `type === 'novel'` renders the novel panes, anything else the gallery. Hosts the dialogs, and reuses `AppLibraryFormDialog` and `AppLibraryDeleteDialog` unchanged for "Edit metadata" and "Delete item" — after a delete it navigates back to `/library`. |
-| `app/components/AppLibraryNovelPanel.vue` | The 320px sidebar: the 3:4 cover in an `AppBlueprint`, title, author, genre badges, the `<dl>` (Status, Chapters, Mode, Crawler, Source, Language, Updated) and the action stack. The step-3 review block already in `AppLibraryFormDialog` is the worked example for the `<dl>`. |
+| `app/pages/library/[id]/index.vue` | Fetches the item through `useAsyncData` keyed on the route id, then branches: `type === 'novel'` renders the novel panes, anything else the gallery. Hosts the dialogs, reuses `AppLibraryFormDialog` unchanged for "Edit metadata", and gives `AppDialog` the delete actions — after an item delete it navigates back to `/library`. |
+| `app/components/AppLibraryNovelPanel.vue` | The left sidebar, 20rem by default and resizable: the 3:4 cover in an `AppBlueprint`, title, author, genre badges, the `<dl>` (Status, Chapters, Mode, Crawler, Source, Language, Updated) and the action stack. Its width is the caller's — `AppResizable` owns it. The step-3 review block already in `AppLibraryFormDialog` is the worked example for the `<dl>`. |
 | `app/components/AppLibraryChapterTable.vue` | The chapters table — checkbox, No., Title, Words, Status, Scraped, and the row's ghost **Open** / **Retry**. Hand-rolled `<table class="w-full table-fixed">` with `USkeleton` rows, as `AppLibraryTable` is. |
 | `app/components/AppLibraryChapterDialog.vue` | "Add chapter": a title, and an index defaulting to the next one. Also serves the rename, so the reader is not the only way to change a title. |
 | `app/components/AppLibraryGalleryPanel.vue` | The hero band: title, subtitle, the five uppercase stats (Assets · Mode · Crawler · Size · Updated) and the action cluster. |
 | `app/components/AppLibraryAssetGrid.vue` | The `minmax(180px,1fr)` grid: the dashed dropzone card first, then one square card per asset — wireframe thumb, the meta badge bottom-right, a `circle-play` overlay on a clip, filename, and a `…` menu whose one live item is Delete. |
-| `app/components/AppLibraryContentDeleteDialog.vue` | Names the chapter or asset, deletes the row, then `discard`s its Storage object. Destructive, so `color="error"`. |
-| `app/pages/library/[id]/[contentId].vue` | The chapter reader/editor: a 280px chapter navigator with the **All chapters** back link and the active row tinted, a 52px toolbar (`Chapter {index}` eyebrow, title, word count, a Read/Edit toggle, **Save**), and a `max-w-[45rem]` centred column — paragraphs when reading, a title field over a `UTextarea` when editing. |
+| `app/pages/library/[id]/[contentId].vue` | The chapter reader/editor: a resizable chapter navigator (17.5rem by default) with the **All chapters** back link and the active row tinted, a 52px toolbar (`Chapter {index}` eyebrow, title, word count, a Read/Edit toggle, **Save**), and a `max-w-180` centred column — paragraphs when reading, a title field over a `UTextarea` when editing. |
 
 Screen behaviour:
 
@@ -337,8 +355,10 @@ to bite.
 
 **Orphaned Storage objects.** A content row deleted through the UI discards its object, but an item
 deleted whole does not — the backend has no Storage access by design, and deleting N objects from the
-browser is not something to trust. Abandoned editor sessions leak too. A sweep job over `content/`
-reconciled against Firestore is the fix.
+browser is not something to trust. Abandoned editor sessions leak too. The fix is a sweep job, and
+filing everything under the item's id is what makes one cheap: an item's whole footprint is
+`covers/{itemId}/` plus `content/{itemId}/`, so a deleted item's files can be dropped by prefix
+without reconciling against Firestore at all.
 
 **`CONTENT_SCAN_LIMIT = 2000`, and search and paging happen in memory.** Correct while an item holds
 fewer rows than that, and wrong past it — silently, so the repository warns when a query fills the

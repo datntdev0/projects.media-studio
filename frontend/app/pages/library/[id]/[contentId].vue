@@ -125,7 +125,7 @@ async function save() {
   let uploaded: string | null = null
 
   try {
-    uploaded = text ? await files.uploadText(body.value) : null
+    uploaded = text ? await files.uploadText(itemId.value, body.value) : null
 
     await contents.replace(itemId.value, stored.id, {
       title: named,
@@ -186,30 +186,32 @@ async function save() {
 
     <div v-else class="flex flex-1 min-h-0 overflow-hidden">
       <!-- The navigator: the whole novel, so moving on never goes via the table. -->
-      <nav class="w-70 flex-none overflow-y-auto border-r border-default">
-        <div class="px-6 py-3 border-b border-default">
-          <UButton
-            :to="`/library/${itemId}`"
-            icon="i-lucide-arrow-left"
-            label="All chapters"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            class="font-body font-normal"
-          />
-        </div>
+      <AppResizable storage-key="chapter-nav" label="Resize the chapter list" :default-width="17.5">
+        <nav class="size-full overflow-y-auto border-r border-default">
+          <div class="px-6 py-3 border-b border-default">
+            <UButton
+              :to="`/library/${itemId}`"
+              icon="i-lucide-arrow-left"
+              label="All chapters"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              class="font-body font-normal"
+            />
+          </div>
 
-        <NuxtLink
-          v-for="sibling in siblings"
-          :key="sibling.id"
-          :to="`/library/${itemId}/${sibling.id}`"
-          class="flex gap-2.5 px-6 py-2 border-b border-default text-support text-default hover:text-default hover:bg-(--color-row-hover)"
-          :class="sibling.id === contentId ? 'bg-(--color-tint)' : ''"
-        >
-          <span class="w-6 shrink-0 text-label text-muted tabular-nums">{{ sibling.index }}</span>
-          <span class="min-w-0">{{ sibling.title }}</span>
-        </NuxtLink>
-      </nav>
+          <NuxtLink
+            v-for="sibling in siblings"
+            :key="sibling.id"
+            :to="`/library/${itemId}/${sibling.id}`"
+            class="flex gap-2.5 px-6 py-2 border-b border-default text-support text-default hover:text-default hover:bg-(--color-row-hover)"
+            :class="sibling.id === contentId ? 'bg-(--color-tint)' : ''"
+          >
+            <span class="w-6 shrink-0 text-label text-muted tabular-nums">{{ sibling.index }}</span>
+            <span class="min-w-0">{{ sibling.title }}</span>
+          </NuxtLink>
+        </nav>
+      </AppResizable>
 
       <div class="flex flex-col flex-1 min-w-0">
         <div class="flex-none flex items-center gap-3 px-6 py-2 border-b border-default">

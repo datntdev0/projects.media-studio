@@ -5,39 +5,42 @@ rules_version = '2';
 // comes back with travels through the API. So these rules are the whole guard
 // on that path, not a second line behind one.
 //
-// The path carries the ownership check — a file lives under the uid that wrote
-// it, so nobody can overwrite somebody else's cover by guessing a name.
+// Everything is filed under the library item it belongs to — `covers/{itemId}/`
+// beside `content/{itemId}/` — so an item's whole footprint is one prefix under
+// each, findable and sweepable from its id alone.
+//
+// That means the path carries no ownership check, and these writes are open to
+// any signed-in user. It is not a loosening: a library item has no owner in
+// Firestore either, and the API already lets any signed-in user edit any item.
+// If items ever gain an owner, both rules below have to gain one too.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /covers/{userId}/{file} {
+    match /covers/{itemId}/{file} {
       allow read: if request.auth != null;
 
       // Kept in step with COVER_MAX_MB in frontend/app/utils/covers.ts. The
       // client resizes well under this; the cap is here for what skips it.
       allow create, update: if request.auth != null
-        && request.auth.uid == userId
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
 
       // Separate from the writes above, because a delete carries no
       // `request.resource` to check a size or a type against.
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null;
     }
 
     // What a library item holds: an image, a clip, or the text of one chapter.
-    // Same path-as-ownership rule as covers above, and the same reason for it.
-    match /content/{userId}/{file} {
+    match /content/{itemId}/{file} {
       allow read: if request.auth != null;
 
       // Kept in step with ASSET_MAX_MB in frontend/app/utils/library-content.ts.
       // `text/plain` is here because a chapter body is an object too — the API
       // stores its URL, never its words.
       allow create, update: if request.auth != null
-        && request.auth.uid == userId
         && request.resource.size < 200 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|video/.*|text/plain.*');
 
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null;
     }
 
     match /{path=**} {
