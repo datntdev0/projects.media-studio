@@ -37,6 +37,20 @@ export interface FirebaseConfig {
   emulators: FirebaseEmulatorConfig;
 }
 
+/** Where the scraping service is, and how long it is given to answer. */
+export interface ScrapingConfig {
+  /** Root of the FastAPI service — see `scraping/README.md`. */
+  baseUrl: string;
+  /**
+   * How long one call may take. Generous on purpose: the service drives a real
+   * browser, and a first fetch that has to solve a Cloudflare turnstile is slow
+   * in a way an ordinary API is not.
+   */
+  timeoutMs: number;
+  /** How long a scraped answer stays good once cached. */
+  cacheTtlDays: number;
+}
+
 export interface AppConfig {
   nodeEnv: NodeEnv;
   port: number;
@@ -46,6 +60,7 @@ export interface AppConfig {
   /** Origins the browser app is served from. */
   corsOrigins: string[];
   firebase: FirebaseConfig;
+  scraping: ScrapingConfig;
 }
 
 const DEFAULT_PORT = 3001;
@@ -54,6 +69,10 @@ const DEFAULT_CORS_ORIGINS = 'http://localhost:3000';
 const DEFAULT_FIREBASE_PROJECT_ID = 'demo-media-studio';
 const DEFAULT_FIREBASE_API_KEY = 'demo-key';
 const DEFAULT_FIREBASE_STORAGE_BUCKET = 'demo-media-studio.firebasestorage.app';
+const DEFAULT_SCRAPING_BASE_URL = 'http://127.0.0.1:8000';
+/** The scraping service's own per-operation default, so ours does not cut its short. */
+const DEFAULT_SCRAPING_TIMEOUT_MS = 120_000;
+const DEFAULT_SCRAPING_CACHE_TTL_DAYS = 30;
 
 /**
  * Lifts the environment into a typed object, with a default for each setting.
@@ -88,6 +107,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         firestoreHost: env.FIREBASE_EMULATOR_FIRESTORE_HOST ?? '',
         storageHost: env.FIREBASE_EMULATOR_STORAGE_HOST ?? '',
       },
+    },
+    scraping: {
+      baseUrl: (env.SCRAPING_BASE_URL ?? DEFAULT_SCRAPING_BASE_URL).replace(/\/+$/, ''),
+      timeoutMs: Number(env.SCRAPING_TIMEOUT_MS) || DEFAULT_SCRAPING_TIMEOUT_MS,
+      cacheTtlDays: Number(env.SCRAPING_CACHE_TTL_DAYS) || DEFAULT_SCRAPING_CACHE_TTL_DAYS,
     },
   };
 }

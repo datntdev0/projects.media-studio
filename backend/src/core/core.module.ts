@@ -5,6 +5,7 @@ import { appConfig } from './config/configuration';
 import { FirebaseAdminService } from './firebase/firebase-admin.service';
 import { AppLogger } from './logging/app.logger';
 import { CacheProvider } from './providers/cache.provider';
+import { ScrapingProvider } from './providers/scraping.provider';
 
 /**
  * The cross-cutting layer: configuration, logging, the Firebase Admin app, and the
@@ -24,7 +25,7 @@ import { CacheProvider } from './providers/cache.provider';
       envFilePath: ['.env.local', '.env'],
     }),
   ],
-  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider],
-  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider],
+  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScrapingProvider],
+  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScrapingProvider],
 })
 export class CoreModule {}
