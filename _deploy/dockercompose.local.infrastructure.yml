@@ -1,4 +1,5 @@
-# Local infrastructure for media-studio: the Firebase emulators and the scraping API.
+# Local infrastructure for media-studio: the Firebase emulators, the scraping API,
+# and the Redis the job queues run on.
 # Start it from the repository root with `pnpm dev:infrastructure`.
 # Everything is published on 127.0.0.1 only, on the same ports the apps already expect.
 name: media-studio-local
@@ -60,9 +61,29 @@ services:
       start_period: 90s
     networks: [media-studio]
 
+  redis:
+    image: redis:8-alpine
+    container_name: media-studio-redis
+    restart: unless-stopped
+    # What BullMQ keeps its queues in. Append-only, because a job that was accepted
+    # and then lost to a restart is worse than a slow write.
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [media-studio]
+
 volumes:
   firebase-data:
   scraping-data:
+  redis-data:
 
 networks:
   media-studio:

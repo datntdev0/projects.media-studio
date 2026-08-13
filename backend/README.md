@@ -64,6 +64,8 @@ src/
     http/                  the global exception filter
     firebase/              the Admin SDK app, initialised once
     openapi/               document and Swagger UI
+    providers/             cache, schedule, and the scraping service
+    queues/                topics, the producer, the consumer base class
   auth/                    controller over manager, guard, token verification
   system/                  two controllers over one manager, no repository
 ```
@@ -101,6 +103,35 @@ Every variable is documented in [`.env.example`](.env.example) and lifted into a
 Providers read settings through `AppConfigService`, so `process.env` is interpreted in exactly one file. The single exception writes rather than reads: `FirebaseAdminService` copies the two `FIREBASE_EMULATOR_*_HOST` settings into `FIREBASE_AUTH_EMULATOR_HOST` and `FIRESTORE_EMULATOR_HOST`, because the Admin SDK offers no option for either and reads those variables itself.
 
 class-validator earns its place on request DTOs instead, where the global `ValidationPipe` uses it — see `src/auth/dto/`.
+
+## Queues
+
+BullMQ over Redis, started by `pnpm dev:infrastructure`. Work that outlives the request goes on a queue: a manager sends a topic and returns, and every consumer of that topic runs afterwards on its own.
+
+The pattern is one producer, many consumers. BullMQ hands a job to exactly one worker, so a topic two parts must both see needs a queue each — `QueueProducer` adds the same message to every queue listed for the topic, and each consumer then succeeds, retries and fails on its own without touching the others.
+
+`src/core/queues/` holds all three pieces: `queue.messages.ts` (the topics, their payloads, and `QUEUE_CONSUMERS` — the one place fan-out is configured), `queue.producer.ts`, and `queue.consumer.ts`. Every queue named in the registry is registered once by `CoreModule`, which is global, so a feature module only declares the consumer class.
+
+Producing, from any manager:
+
+```ts
+constructor(private readonly producer: QueueProducer) {}
+
+await this.producer.send(QueueTopic.SamplePinged, { note: 'started', sentBy: 'SystemManager' });
+```
+
+Consuming — add the queue name to `QUEUE_CONSUMERS[topic]`, then declare the class in the module that owns the work:
+
+```ts
+@Processor(SAMPLE_AUDIT_QUEUE, { concurrency: 5 })
+export class SampleAuditConsumer extends QueueConsumer<SamplePinged> {
+  protected handle(message: QueueMessage<SamplePinged>): Promise<void> { … }
+}
+```
+
+Throwing out of `handle` is how a consumer says the work did not happen: BullMQ retries on the `QUEUE_ATTEMPTS`/`QUEUE_BACKOFF_MS` schedule and, once the attempts are spent, leaves the job in the failed set. Swallowing would mark it done.
+
+`system/sample.handler.ts` is the worked example — two consumers over one topic, sent once per boot by `SystemManager`. It is there to be copied and deleted.
 
 ## Commands
 

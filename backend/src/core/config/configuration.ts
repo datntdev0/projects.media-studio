@@ -51,16 +51,33 @@ export interface ScrapingConfig {
   cacheTtlDays: number;
 }
 
+/** Where Redis is, and how a job behaves once it is on a queue. */
+export interface QueueConfig {
+  host: string;
+  port: number;
+  /** Empty for a local Redis, which asks for nothing. */
+  password: string;
+  /** Prefixes every key, so two deployments can share one Redis without meeting. */
+  prefix: string;
+  /** How many times a job is tried before it is left in the failed set. */
+  attempts: number;
+  /** The first retry's delay. Each further one doubles it. */
+  backoffMs: number;
+  /** How many finished jobs are kept — enough to look at, not enough to fill Redis. */
+  keepCompleted: number;
+  /** Failed jobs are kept longer: they are the ones worth reading. */
+  keepFailed: number;
+}
+
 export interface AppConfig {
   nodeEnv: NodeEnv;
   port: number;
   logLevel: LogLevelName;
-  /** Serve Swagger UI and the OpenAPI document. */
   docsEnabled: boolean;
-  /** Origins the browser app is served from. */
   corsOrigins: string[];
   firebase: FirebaseConfig;
   scraping: ScrapingConfig;
+  queue: QueueConfig;
 }
 
 const DEFAULT_PORT = 3001;
@@ -73,6 +90,14 @@ const DEFAULT_SCRAPING_BASE_URL = 'http://127.0.0.1:8000';
 /** The scraping service's own per-operation default, so ours does not cut its short. */
 const DEFAULT_SCRAPING_TIMEOUT_MS = 120_000;
 const DEFAULT_SCRAPING_CACHE_TTL_DAYS = 30;
+/** Where Redis is located by default. */
+const DEFAULT_REDIS_HOST = '127.0.0.1';
+const DEFAULT_REDIS_PORT = 6379;
+const DEFAULT_QUEUE_PREFIX = 'media-studio';
+const DEFAULT_QUEUE_ATTEMPTS = 3;
+const DEFAULT_QUEUE_BACKOFF_MS = 5_000;
+const DEFAULT_QUEUE_KEEP_COMPLETED = 100;
+const DEFAULT_QUEUE_KEEP_FAILED = 500;
 
 /**
  * Lifts the environment into a typed object, with a default for each setting.
@@ -112,6 +137,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       baseUrl: (env.SCRAPING_BASE_URL ?? DEFAULT_SCRAPING_BASE_URL).replace(/\/+$/, ''),
       timeoutMs: Number(env.SCRAPING_TIMEOUT_MS) || DEFAULT_SCRAPING_TIMEOUT_MS,
       cacheTtlDays: Number(env.SCRAPING_CACHE_TTL_DAYS) || DEFAULT_SCRAPING_CACHE_TTL_DAYS,
+    },
+    queue: {
+      host: env.REDIS_HOST ?? DEFAULT_REDIS_HOST,
+      port: Number(env.REDIS_PORT) || DEFAULT_REDIS_PORT,
+      password: env.REDIS_PASSWORD ?? '',
+      prefix: env.QUEUE_PREFIX ?? DEFAULT_QUEUE_PREFIX,
+      attempts: Number(env.QUEUE_ATTEMPTS) || DEFAULT_QUEUE_ATTEMPTS,
+      backoffMs: Number(env.QUEUE_BACKOFF_MS) || DEFAULT_QUEUE_BACKOFF_MS,
+      keepCompleted: Number(env.QUEUE_KEEP_COMPLETED) || DEFAULT_QUEUE_KEEP_COMPLETED,
+      keepFailed: Number(env.QUEUE_KEEP_FAILED) || DEFAULT_QUEUE_KEEP_FAILED,
     },
   };
 }

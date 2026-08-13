@@ -86,7 +86,7 @@ NSwag ships as a .NET tool, so `pnpm generate:api` needs the **.NET 9 runtime** 
 Sign-in is Firebase Authentication: the browser exchanges credentials with Firebase directly, and the API only ever verifies the ID token it is handed. Locally that runs against the [Auth emulator](https://firebase.google.com/docs/emulator-suite), so no Firebase project or network access is needed.
 
 ```bash
-pnpm dev:infrastructure   # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000
+pnpm dev:infrastructure   # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000, Redis :6379
 pnpm seed:firebase        # creates admin@datntdev.com / StrongPassword123!
 ```
 

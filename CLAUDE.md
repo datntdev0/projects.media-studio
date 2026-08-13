@@ -11,7 +11,7 @@ pnpm install          # single lockfile wires up all three packages
 pnpm dev              # backend + frontend in parallel
 pnpm dev:backend      # NestJS on :3001 (override with PORT)
 pnpm dev:frontend     # Nuxt on :3000
-pnpm dev:infrastructure # Docker: Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000
+pnpm dev:infrastructure # Docker: Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000, Redis :6379
 pnpm seed:firebase    # put admin@datntdev.com / StrongPassword123! into the emulator
 pnpm generate:api     # NSwag rewrites frontend/app/utils/api.clients.ts — needs a running backend and the .NET 9 runtime
 pnpm lint             # every package (pnpm lint:fix to autofix)

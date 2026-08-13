@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 // `import type`: a type in a decorated signature cannot be a value import while
 // isolatedModules and emitDecoratorMetadata are both on.
 import type { ConfigType } from '@nestjs/config';
-import { appConfig, FirebaseConfig, LogLevelName, NodeEnv, ScrapingConfig } from './configuration';
+import { appConfig, FirebaseConfig, LogLevelName, NodeEnv, QueueConfig, ScrapingConfig } from './configuration';
 
 /**
  * Typed reader for the environment.
@@ -44,6 +44,10 @@ export class AppConfigService {
 
   get scraping(): ScrapingConfig {
     return this.config.scraping;
+  }
+
+  get queue(): QueueConfig {
+    return this.config.queue;
   }
 
   get isProduction(): boolean {
