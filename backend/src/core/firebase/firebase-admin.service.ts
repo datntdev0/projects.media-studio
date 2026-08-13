@@ -2,14 +2,26 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { App, applicationDefault, cert, getApp, getApps, initializeApp, ServiceAccount } from 'firebase-admin/app';
 import { Auth, getAuth } from 'firebase-admin/auth';
 import { Firestore, getFirestore } from 'firebase-admin/firestore';
+import { getStorage, Storage } from 'firebase-admin/storage';
 import { AppConfigService } from '../config/app-config.service';
+
+/**
+ * `@google-cloud/storage`'s `Bucket`, reached through the SDK that returns one.
+ * That package is a dependency of `firebase-admin` rather than of this one, and
+ * importing from it directly would reach past our own manifest.
+ */
+type Bucket = ReturnType<Storage['bucket']>;
+
+/** Where an object is downloaded from, when it is not the emulator. */
+const STORAGE_HOST = 'https://firebasestorage.googleapis.com';
 
 /**
  * The Firebase Admin app, initialised once.
  *
- * Everything that needs to verify a token, read a user or touch a document goes
- * through `auth` and `firestore`, so the SDK is configured in one place and
- * nothing else has to know whether it is talking to the emulators or to Firebase.
+ * Everything that needs to verify a token, read a user, touch a document or write
+ * a file goes through `auth`, `firestore` and `bucket`, so the SDK is configured
+ * in one place and nothing else has to know whether it is talking to the
+ * emulators or to Firebase.
  */
 @Injectable()
 export class FirebaseAdminService implements OnModuleInit {
@@ -35,6 +47,10 @@ export class FirebaseAdminService implements OnModuleInit {
       process.env.FIRESTORE_EMULATOR_HOST = emulators.firestoreHost;
     }
 
+    if (emulators.storageHost) {
+      process.env.FIREBASE_STORAGE_EMULATOR_HOST = emulators.storageHost;
+    }
+
     // `getApp` rather than a second `initializeApp`, which would throw: a watch
     // reload can run this twice in one process.
     const initialised = getApps().length > 0;
@@ -55,6 +71,7 @@ export class FirebaseAdminService implements OnModuleInit {
 
     this.logger.log(emulators.authenticationHost ? `Firebase project ${projectId} via the auth emulator at ${emulators.authenticationHost}` : `Firebase project ${projectId}`);
     this.logger.log(emulators.firestoreHost ? `Firestore via the emulator at ${emulators.firestoreHost}` : 'Firestore in the cloud');
+    this.logger.log(emulators.storageHost ? `Storage via the emulator at ${emulators.storageHost}` : 'Storage in the cloud');
   }
 
   get auth(): Auth {
@@ -65,14 +82,40 @@ export class FirebaseAdminService implements OnModuleInit {
     return this.db;
   }
 
+  /** The one bucket this service writes to. Named rather than the project default, so the two cannot differ. */
+  get bucket(): Bucket {
+    return getStorage(this.app).bucket(this.config.firebase.storageBucket);
+  }
+
+  /**
+   * Where an object can be read from, as a URL.
+   *
+   * The same shape `getDownloadURL` returns, deliberately: an item's cover
+   * already carries one, and a second spelling of the same thing would be one
+   * more shape for anything reading these to recognise. Built here rather than
+   * with that function, which fetches the object's metadata to read back a token
+   * its caller has just written — a round trip for something already known.
+   *
+   * `token` is the object's `firebaseStorageDownloadTokens` metadata. Whoever
+   * holds the URL can read the object, which is what makes it usable from an
+   * `<img>`, and why one is only made for something a signed-in user may read.
+   */
+  downloadUrl(objectPath: string, token: string): string {
+    const { storageBucket, emulators } = this.config.firebase;
+    const host = emulators.storageHost ? `http://${emulators.storageHost}` : STORAGE_HOST;
+
+    return `${host}/v0/b/${storageBucket}/o/${encodeURIComponent(objectPath)}?alt=media&token=${token}`;
+  }
+
   /**
    * No credential against the emulators: they issue unsigned tokens and accept
-   * unauthenticated calls, so there is nothing to sign with.
+   * unauthenticated calls, so there is nothing to sign with. All three, because a
+   * service pointing at the real Firebase needs one whatever its neighbours do.
    */
   private credential(): { credential?: ReturnType<typeof applicationDefault> } {
     const { emulators, serviceAccountJson } = this.config.firebase;
 
-    if (emulators.authenticationHost && emulators.firestoreHost) {
+    if (emulators.authenticationHost && emulators.firestoreHost && emulators.storageHost) {
       return {};
     }
 

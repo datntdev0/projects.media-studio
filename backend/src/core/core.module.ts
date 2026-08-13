@@ -4,9 +4,11 @@ import { AppConfigService } from './config/app-config.service';
 import { appConfig } from './config/configuration';
 import { FirebaseAdminService } from './firebase/firebase-admin.service';
 import { AppLogger } from './logging/app.logger';
+import { CacheProvider } from './providers/cache.provider';
 
 /**
- * The cross-cutting layer: configuration, logging and the Firebase Admin app.
+ * The cross-cutting layer: configuration, logging, the Firebase Admin app, and the
+ * providers over the infrastructure behind it.
  *
  * Global, because every feature module needs these and threading the import
  * through each one buys nothing. Feature modules are imported explicitly by
@@ -22,7 +24,7 @@ import { AppLogger } from './logging/app.logger';
       envFilePath: ['.env.local', '.env'],
     }),
   ],
-  providers: [AppConfigService, AppLogger, FirebaseAdminService],
-  exports: [AppConfigService, AppLogger, FirebaseAdminService],
+  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider],
+  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider],
 })
 export class CoreModule {}

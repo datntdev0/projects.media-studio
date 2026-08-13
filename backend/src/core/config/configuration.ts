@@ -21,6 +21,8 @@ export interface FirebaseEmulatorConfig {
   authenticationHost: string;
   /** `host:port` of the Firestore emulator. Set locally, empty everywhere else. */
   firestoreHost: string;
+  /** `host:port` of the Storage emulator. Set locally, empty everywhere else. */
+  storageHost: string;
 }
 
 export interface FirebaseConfig {
@@ -30,6 +32,8 @@ export interface FirebaseConfig {
   apiKey: string;
   /** A service account, as inline JSON. Empty falls back to application default credentials. */
   serviceAccountJson: string;
+  /** The bucket cached files are written to — the one the browser already uploads covers to. */
+  storageBucket: string;
   emulators: FirebaseEmulatorConfig;
 }
 
@@ -49,6 +53,7 @@ const DEFAULT_LOG_LEVEL: LogLevelName = 'log';
 const DEFAULT_CORS_ORIGINS = 'http://localhost:3000';
 const DEFAULT_FIREBASE_PROJECT_ID = 'demo-media-studio';
 const DEFAULT_FIREBASE_API_KEY = 'demo-key';
+const DEFAULT_FIREBASE_STORAGE_BUCKET = 'demo-media-studio.firebasestorage.app';
 
 /**
  * Lifts the environment into a typed object, with a default for each setting.
@@ -74,12 +79,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       projectId: env.FIREBASE_PROJECT_ID ?? DEFAULT_FIREBASE_PROJECT_ID,
       apiKey: env.FIREBASE_API_KEY ?? DEFAULT_FIREBASE_API_KEY,
       serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT ?? '',
+      storageBucket: env.FIREBASE_STORAGE_BUCKET ?? DEFAULT_FIREBASE_STORAGE_BUCKET,
       // Named for the service each one stands in for, rather than after the
       // variables the Admin SDK reads — those are its business, and
       // `FirebaseAdminService` is where ours are handed over to them.
       emulators: {
         authenticationHost: env.FIREBASE_EMULATOR_AUTHENTICATION_HOST ?? '',
         firestoreHost: env.FIREBASE_EMULATOR_FIRESTORE_HOST ?? '',
+        storageHost: env.FIREBASE_EMULATOR_STORAGE_HOST ?? '',
       },
     },
   };

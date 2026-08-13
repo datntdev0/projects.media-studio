@@ -11,3 +11,6 @@ export const LIBRARY_COLLECTION = 'libraryItems';
 
 /** Under a library item: one document per chapter, image or clip it holds. */
 export const CONTENT_SUBCOLLECTION = 'contents';
+
+/** One document per cached answer: where its file is, and when it expires. */
+export const SYSTEM_CACHE_COLLECTION = 'systemCaches';
