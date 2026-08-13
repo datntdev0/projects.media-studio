@@ -1,4 +1,4 @@
-import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
+import { ApiExtraModels, ApiProperty, OmitType, PartialType, getSchemaPath } from '@nestjs/swagger';
 import { ImageSetMetadata, LibraryItemMetadataBase, NovelMetadata, VideoSetMetadata } from '../entities/library-item-metadata.entity';
 import type { LibraryItemMetadata } from '../entities/library-item-metadata.entity';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from '../entities/library-item.entity';
@@ -9,7 +9,8 @@ import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } fr
  * its own.
  *
  * Each `implements` its entity, so a field added to one and forgotten here is a
- * compile error.
+ * compile error. The editable half of each shape is derived from it at the bottom
+ * of this file, so a request body never restates a field either.
  */
 
 /** The counts every type carries. Server-owned: nothing here is writable in part 1. */
@@ -56,6 +57,29 @@ export class VideoSetMetadataDto extends LibraryItemMetadataBaseDto implements V
   @ApiProperty({ description: 'Seconds held.', example: 7412 })
   downloadedDuration!: number;
 }
+
+/**
+ * The editable half of each shape above, for the creation and the update body:
+ * the same class, minus what the job runner owns, with everything optional.
+ *
+ * Derived rather than written out, so each field has one home. `OmitType` drops the
+ * downloaded counters — they say what is actually stored here, and a client that
+ * could set one would be claiming content that does not exist. `PartialType` makes
+ * the rest optional, which is also what registers them with the validation pipe:
+ * the pipe rejects a body whole when it reaches a class it knows nothing about.
+ *
+ * What this does not do is check types or lengths inside `metadata` — the response
+ * classes carry no validation rules to inherit. The manager still refuses the
+ * fields a type has no room for.
+ */
+export class NovelMetadataInputDto extends PartialType(OmitType(NovelMetadataDto, ['downloadedCount'] as const)) {}
+
+export class ImageSetMetadataInputDto extends PartialType(OmitType(ImageSetMetadataDto, ['downloadedCount', 'downloadedSize'] as const)) {}
+
+export class VideoSetMetadataInputDto extends PartialType(OmitType(VideoSetMetadataDto, ['downloadedCount', 'downloadedSize', 'downloadedDuration'] as const)) {}
+
+/** Which shape a body carries follows from its `type`, never from the object itself. */
+export type LibraryItemMetadataInputDto = NovelMetadataInputDto | ImageSetMetadataInputDto | VideoSetMetadataInputDto;
 
 /**
  * One item, whole, as `GET /:id`, `POST` and `PUT` answer with it.

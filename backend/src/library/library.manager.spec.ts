@@ -4,9 +4,9 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { CreateLibraryItemDto } from './dto/create-library-item.dto';
+import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
-import { UpdateLibraryItemDto } from './dto/update-library-item.dto';
+import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
 import { LibraryContentRepository } from './library-content.repository';
 import { LibraryManager } from './library.manager';
@@ -156,6 +156,20 @@ describe('LibraryManager.create', () => {
     expect(created.metadata).toMatchObject({ author: 'Lin Wei', genres: ['xianxia'], language: '' });
   });
 
+  it('keeps the inventory a client stated', async () => {
+    const created = await managerOver(new FakeRepository()).create({ ...manual, metadata: { discoveredCount: 640, discoveredAt: EARLIER } });
+
+    expect(created.metadata).toMatchObject({ discoveredCount: 640, discoveredAt: EARLIER, downloadedCount: 0 });
+  });
+
+  it('lets a set state its inventory, which every type has', async () => {
+    const input: CreateLibraryItemDto = { type: LibraryItemType.Image, title: 'Night Market Textures', sourceMode: LibrarySourceMode.Manual, metadata: { discoveredCount: 36 } };
+
+    const created = await managerOver(new FakeRepository()).create(input);
+
+    expect(created.metadata).toMatchObject({ discoveredCount: 36, discoveredAt: null, downloadedCount: 0, downloadedSize: 0 });
+  });
+
   it('zeroes the size a set has not downloaded', async () => {
     const created = await managerOver(new FakeRepository()).create({ type: LibraryItemType.Video, title: 'B-roll — Coastal Cities', sourceMode: LibrarySourceMode.Manual });
 
@@ -180,7 +194,7 @@ describe('LibraryManager.create', () => {
     await expect(managerOver(new FakeRepository()).create(input)).rejects.toThrow(BadRequestException);
   });
 
-  it('refuses metadata on an image item, which has none writable', async () => {
+  it('refuses a novel-only field on an image item, which has nothing to say about a work', async () => {
     const input: CreateLibraryItemDto = { type: LibraryItemType.Image, title: 'Night Market Textures', sourceMode: LibrarySourceMode.Manual, metadata: { author: 'Lin Wei' } };
 
     await expect(managerOver(new FakeRepository()).create(input)).rejects.toThrow(BadRequestException);
@@ -188,15 +202,15 @@ describe('LibraryManager.create', () => {
 });
 
 describe('LibraryManager.replace', () => {
-  it('carries the counters over and clears what the body left out', async () => {
+  it('carries over what is downloaded and clears what the body left out', async () => {
     const stored = novel();
     const manager = managerOver(new FakeRepository([stored]));
 
     const replaced = await manager.replace(stored.id, bodyOf(stored, { metadata: { author: 'Nguyen Van B' } }));
 
     expect(replaced.metadata).toEqual({
-      discoveredCount: 640,
-      discoveredAt: EARLIER,
+      discoveredCount: 0,
+      discoveredAt: null,
       downloadedCount: 412,
       status: NovelStatus.Ongoing,
       author: 'Nguyen Van B',
@@ -206,14 +220,33 @@ describe('LibraryManager.replace', () => {
     });
   });
 
-  it('leaves a set\'s metadata exactly as it was found', async () => {
-    const stored = imageSet();
+  it('keeps the inventory a body sends back', async () => {
+    const stored = novel();
     const manager = managerOver(new FakeRepository([stored]));
 
-    const replaced = await manager.replace(stored.id, bodyOf(stored, { title: 'Character Sheets — Vol. 2' }));
+    const replaced = await manager.replace(stored.id, bodyOf(stored, { metadata: { discoveredCount: 641, discoveredAt: NOW } }));
+
+    expect(replaced.metadata).toMatchObject({ discoveredCount: 641, discoveredAt: NOW, downloadedCount: 412 });
+  });
+
+  it('leaves a set\'s metadata as it was found when the body sends it back', async () => {
+    const stored = imageSet();
+    const manager = managerOver(new FakeRepository([stored]));
+    const sameInventory = { discoveredCount: stored.metadata.discoveredCount, discoveredAt: stored.metadata.discoveredAt };
+
+    const replaced = await manager.replace(stored.id, bodyOf(stored, { title: 'Character Sheets — Vol. 2', metadata: sameInventory }));
 
     expect(replaced.metadata).toEqual(stored.metadata);
     expect(replaced.title).toBe('Character Sheets — Vol. 2');
+  });
+
+  it('clears a set\'s inventory the body left out, and keeps what it holds', async () => {
+    const stored = imageSet();
+    const manager = managerOver(new FakeRepository([stored]));
+
+    const replaced = await manager.replace(stored.id, bodyOf(stored));
+
+    expect(replaced.metadata).toEqual({ discoveredCount: 0, discoveredAt: null, downloadedCount: 36, downloadedSize: 12_800 });
   });
 
   it('keeps createdAt and stamps updatedAt', async () => {

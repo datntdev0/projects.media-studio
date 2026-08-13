@@ -1056,13 +1056,31 @@ export interface LibraryItemDto {
     updatedAt: string;
 }
 
-export interface LibraryItemMetadataDto {
-    /** The work's own status, not the item's pipeline status. */
+export interface NovelMetadataInputDto {
+    /** Pieces the source is known to have. */
+    discoveredCount?: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt?: string | null;
+    /** The work's own status, as its source publishes it. */
     status?: NovelStatus;
     author?: string;
     language?: string;
     genres?: string[];
     description?: string;
+}
+
+export interface ImageSetMetadataInputDto {
+    /** Pieces the source is known to have. */
+    discoveredCount?: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt?: string | null;
+}
+
+export interface VideoSetMetadataInputDto {
+    /** Pieces the source is known to have. */
+    discoveredCount?: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt?: string | null;
 }
 
 export interface CreateLibraryItemDto {
@@ -1077,29 +1095,29 @@ export interface CreateLibraryItemDto {
     sourceName?: string;
     /** What the crawler reads. Required of a crawler item, and refused of a manual one. */
     sourceUrl?: string | null;
-    /** A novel item only. An image or video item has nothing writable here. */
-    metadata?: LibraryItemMetadataDto;
+    /** The editable fields for this `type`. Every type may state the inventory; only a novel has anything else to say. */
+    metadata?: NovelMetadataInputDto;
 }
 
 /** Defaults to `draft` when left out, like every other omitted field. */
 export type WritableLibraryItemStatus = "draft" | "ready";
 
 export interface UpdateLibraryItemDto {
-    /** Immutable after creation — it decides the shape of `metadata`. */
+    /** Immutable — a value other than the stored one is refused. */
     type: LibraryItemType;
     title: string;
-    /** A link to a cover image. Null, or left out, for the placeholder. */
+    /** A link to a cover image. Null, or left out, clears the one it has. */
     coverUrl?: string | null;
-    /** Immutable after creation — it decides how content arrives. */
+    /** Immutable — a value other than the stored one is refused. */
     sourceMode: LibrarySourceMode;
     /** Which crawler, for a crawler item — required of one. A manual item is `Manual`, whatever is sent. */
     sourceName?: string;
     /** What the crawler reads. Required of a crawler item, and refused of a manual one. */
     sourceUrl?: string | null;
-    /** A novel item only. An image or video item has nothing writable here. */
-    metadata?: LibraryItemMetadataDto;
     /** Defaults to `draft` when left out, like every other omitted field. */
     status?: WritableLibraryItemStatus;
+    /** The editable fields for this `type`. Every type may state the inventory; only a novel has anything else to say. */
+    metadata?: NovelMetadataInputDto;
 }
 
 export interface LibraryContentPageDto {

@@ -118,11 +118,88 @@ publishes it. Only the first appears in the list's status filter.
 `Failed` belong to the job runner, and part 1 has no way to reach them honestly, so the write DTO
 rejects them. The list filter still accepts all four — a filter reads data it does not write.
 
-Every counter (`discoveredCount`, `discoveredAt`, `downloadedCount`, `downloadedSize`,
-`downloadedDuration`) is server-owned and absent from the write DTOs, for the same reason: a
-client that could set `412 / 640` would be claiming content that does not exist. What that leaves
-writable inside `metadata` is the novel's descriptive block — `status`, `author`, `language`,
-`genres`, `description`. **Image and video items have no writable metadata in part 1.**
+The counters split by ownership, and the line is what the source *has* against what *we* hold.
+`discoveredCount` and `discoveredAt` are the inventory — a client is describing a source it may
+well have read, so both are editable, on every type. `downloadedCount`, `downloadedSize` and
+`downloadedDuration` say what is actually stored here; they are the job runner's alone and absent
+from the write DTOs, because a client that could set them would be claiming content that does not
+exist. What that leaves editable inside `metadata` is the inventory for any type, plus the novel's
+descriptive block — `status`, `author`, `language`, `genres`, `description`. **Image and video
+items have nothing to say about a work, so those five are refused on them.**
+
+**Entity class diagram**
+
+```mermaid
+classDiagram
+    direction LR
+
+    class LibraryItemBase {
+        <<interface>>
+        +string id
+        +string title
+        +string|null coverUrl
+        +LibrarySourceMode sourceMode
+        +string sourceName
+        +string|null sourceUrl
+        +LibraryItemStatus status
+        +string createdAt
+        +string updatedAt
+    }
+
+    class NovelItem {
+        <<interface>>
+        +LibraryItemType.Novel type
+        +NovelMetadata metadata
+    }
+    class ImageSetItem {
+        <<interface>>
+        +LibraryItemType.Image type
+        +ImageSetMetadata metadata
+    }
+    class VideoSetItem {
+        <<interface>>
+        +LibraryItemType.Video type
+        +VideoSetMetadata metadata
+    }
+
+    class LibraryItemMetadataBase {
+        <<interface>>
+        +number discoveredCount
+        +string|null discoveredAt
+        +number downloadedCount
+    }
+    class NovelMetadata {
+        <<interface>>
+        +NovelStatus status
+        +string author
+        +string language
+        +string[] genres
+        +string description
+    }
+    class ImageSetMetadata {
+        <<interface>>
+        +number downloadedSize
+    }
+    class VideoSetMetadata {
+        <<interface>>
+        +number downloadedSize
+        +number downloadedDuration
+    }
+
+    LibraryItemBase <|-- NovelItem
+    LibraryItemBase <|-- ImageSetItem
+    LibraryItemBase <|-- VideoSetItem
+
+    LibraryItemMetadataBase <|-- NovelMetadata
+    LibraryItemMetadataBase <|-- ImageSetMetadata
+    LibraryItemMetadataBase <|-- VideoSetMetadata
+
+    NovelItem *-- NovelMetadata
+    ImageSetItem *-- ImageSetMetadata
+    VideoSetItem *-- VideoSetMetadata
+
+    note for LibraryItemBase "LibraryItem = NovelItem | ImageSetItem | VideoSetItem,<br/>discriminated on `type`"
+```
 
 ### Endpoints
 
@@ -159,24 +236,155 @@ after an edit.
 | `LibraryItemDto` | out | The whole entity, dates as ISO strings. `metadata` documented as `oneOf` the three metadata DTOs. |
 | `NovelMetadataDto` · `ImageSetMetadataDto` · `VideoSetMetadataDto` | out | One per shape, so the OpenAPI document describes what each type actually returns. |
 | `LibraryItemPageDto` | out | `items: LibraryItemDto[]`, `total` (matching the filter), `page`, `pageSize`. |
-| `CreateLibraryItemDto` | in | `type`, `title`, `coverUrl?`, `sourceMode`, `sourceName?`, `sourceUrl?`, `metadata?`. |
-| `ReplaceLibraryItemDto` | in | The `PUT` body: everything `CreateLibraryItemDto` has, plus `status?` (`Draft` \| `Ready`). |
-| `LibraryItemMetadataDto` | in | The writable metadata, all optional: `status?` (`NovelStatus`), `author?`, `language?`, `genres?`, `description?`. |
+| `CreateLibraryItemDto` | in | `type`, `title`, `coverUrl?`, `sourceMode`, `sourceName?`, `sourceUrl?`, `metadata?` documented as `oneOf` the three create-metadata DTOs. |
+| `UpdateLibraryItemDto` | in | The `PUT` body, a class of its own: every field `CreateLibraryItemDto` has, plus `status?` (`Draft` \| `Ready`). |
+| `NovelMetadataInputDto` · `ImageSetMetadataInputDto` · `VideoSetMetadataInputDto` | in | The editable half of each response shape, derived from it: `PartialType(OmitType(…))` drops the downloaded counters and makes the rest optional. Both request bodies use these — nothing restates a metadata field. |
 | `ListLibraryItemsQueryDto` | in | `type?`, `status?`, `sourceMode?`, `search?`, `page = 1`, `pageSize = 20` (max 100). |
 
 Validation lives in two places, on purpose:
 
-- **The pipe** checks shapes — `@IsEnum`, `@IsString`, `@MaxLength`, `@IsUrl` on the two URLs,
-  `@IsArray` + `@IsString({ each: true })` on genres, `@ValidateNested` + `@Type` on `metadata`,
-  and `@Type(() => Number)` on the query's numbers, since query strings arrive as text and the
-  global `ValidationPipe` runs with `transform: true`.
-- **The manager** checks meaning — that `metadata` is empty for an image or video item, that a
-  crawler item carries a URL, that `type` and `sourceMode` match what is stored. One
-  `LibraryItemMetadataDto` rather than a per-type discriminated body keeps the request surface at
-  one shape; the rule that narrows it belongs with the other rules.
+- **The pipe** checks shapes — `@IsEnum`, `@IsString`, `@MaxLength`, `@IsUrl` on the two URLs at the
+  root of the body, `@ValidateNested` + `@Type` on `metadata`, and `@Type(() => Number)` on the
+  query's numbers, since query strings arrive as text and the global `ValidationPipe` runs with
+  `transform: true`.
+- **The manager** checks meaning — that an image or video item carries none of the novel-only
+  fields, that a crawler item carries a URL, that `type` and `sourceMode` match what is stored. The
+  document describes `metadata` per type, but the pipe validates every body against
+  `NovelMetadataInputDto`, the widest of the three: which type may carry what is a rule about
+  meaning, so it sits with the others rather than in a discriminator the body does not carry.
 
-`ReplaceLibraryItemDto` is built with `IntersectionType(CreateLibraryItemDto, …)` from
-`@nestjs/swagger`, already a dependency, so the OpenAPI document keeps the property metadata.
+Inside `metadata` the pipe checks membership and nothing else. The input classes are derived from
+the response ones, which carry no `class-validator` rules to inherit, so an unknown key is still
+refused — that is what `PartialType` registers — but a `description` of any length or a
+`discoveredCount` that is a string is not. Nothing reaches Firestore unchecked even so: the manager
+builds stored `metadata` field by field rather than spreading what arrived. Restoring the length
+and type rules means decorating the response classes, which the derived ones would then inherit.
+
+`UpdateLibraryItemDto` spells every field out rather than composing itself from the creation body.
+The two are the same shape today, but they are not the same request: this one describes an item
+that already exists, so `type` and `sourceMode` document that a value other than the stored one is
+refused, and `status` exists here and nowhere else — a new item is always a draft. The field
+limits both bodies check live in `library-item.constants.ts`, which is what keeps the two from
+drifting apart now that neither is derived from the other.
+
+The inventory is among those fields, and `PUT` treats it like every other editable one: a body
+that leaves it out clears it. What is downloaded is still carried over from the stored item.
+
+The two request files are named after what they describe rather than what they do —
+`library-item-create.dto.ts`, `library-item-update.dto.ts` — so everything about one entity sorts
+together in the folder.
+
+**DTO class diagram**
+
+```mermaid
+classDiagram
+    direction LR
+
+    class LibraryItemDto {
+        +string id
+        +LibraryItemType type
+        +string title
+        +string|null coverUrl
+        +LibrarySourceMode sourceMode
+        +string sourceName
+        +string|null sourceUrl
+        +LibraryItemStatus status
+        +LibraryItemMetadataDto metadata
+        +string createdAt
+        +string updatedAt
+    }
+    class LibraryItemMetadataBaseDto {
+        +number discoveredCount
+        +string|null discoveredAt
+        +number downloadedCount
+    }
+    class NovelMetadataDto {
+        +NovelStatus status
+        +string author
+        +string language
+        +string[] genres
+        +string description
+    }
+    class ImageSetMetadataDto {
+        +number downloadedSize
+    }
+    class VideoSetMetadataDto {
+        +number downloadedSize
+        +number downloadedDuration
+    }
+    class LibraryItemPageDto {
+        +LibraryItemDto[] items
+        +number total
+        +number page
+        +number pageSize
+    }
+
+    class CreateLibraryItemDto {
+        +LibraryItemType type
+        +string title
+        +string|null coverUrl?
+        +LibrarySourceMode sourceMode
+        +string sourceName?
+        +string|null sourceUrl?
+        +LibraryItemMetadataInputDto metadata?
+    }
+    class UpdateLibraryItemDto {
+        +LibraryItemType type
+        +string title
+        +string|null coverUrl?
+        +LibrarySourceMode sourceMode
+        +string sourceName?
+        +string|null sourceUrl?
+        +LibraryItemStatus status?
+        +LibraryItemMetadataInputDto metadata?
+    }
+    class NovelMetadataInputDto {
+        <<PartialType(OmitType)>>
+        +number discoveredCount?
+        +string|null discoveredAt?
+        +NovelStatus status?
+        +string author?
+        +string language?
+        +string[] genres?
+        +string description?
+    }
+    class ImageSetMetadataInputDto {
+        <<PartialType(OmitType)>>
+        +number discoveredCount?
+        +string|null discoveredAt?
+    }
+    class VideoSetMetadataInputDto {
+        <<PartialType(OmitType)>>
+        +number discoveredCount?
+        +string|null discoveredAt?
+    }
+
+    LibraryItemMetadataBaseDto <|-- NovelMetadataDto
+    LibraryItemMetadataBaseDto <|-- ImageSetMetadataDto
+    LibraryItemMetadataBaseDto <|-- VideoSetMetadataDto
+
+    LibraryItemDto o-- NovelMetadataDto
+    LibraryItemDto o-- ImageSetMetadataDto
+    LibraryItemDto o-- VideoSetMetadataDto
+    LibraryItemPageDto *-- LibraryItemDto
+
+    NovelMetadataDto <|.. NovelMetadataInputDto
+    ImageSetMetadataDto <|.. ImageSetMetadataInputDto
+    VideoSetMetadataDto <|.. VideoSetMetadataInputDto
+
+    CreateLibraryItemDto o-- NovelMetadataInputDto
+    CreateLibraryItemDto o-- ImageSetMetadataInputDto
+    CreateLibraryItemDto o-- VideoSetMetadataInputDto
+
+    UpdateLibraryItemDto o-- NovelMetadataInputDto
+    UpdateLibraryItemDto o-- ImageSetMetadataInputDto
+    UpdateLibraryItemDto o-- VideoSetMetadataInputDto
+
+    note for LibraryItemDto "out: `metadata` is oneOf the three response shapes"
+    note for NovelMetadataInputDto "Derived from the response class: the downloaded counters\nomitted, everything left optional. No field is restated."
+    note for CreateLibraryItemDto "in: `metadata` is oneOf the three input shapes,\nwhich one following from `type`"
+    note for UpdateLibraryItemDto "in: a class of its own, not composed from the creation body,\nbut carrying the same three metadata shapes."
+```
 
 **Backend — `backend/src/system/dto/`**
 

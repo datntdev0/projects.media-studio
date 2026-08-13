@@ -94,8 +94,13 @@ export interface LibraryItemPage {
   pageSize: number
 }
 
-/** The writable half of `metadata`: a novel's descriptive block, and nothing else. */
+/**
+ * The editable half of `metadata`: the inventory any type may state, plus a novel's
+ * descriptive block. What is downloaded is the server's and appears nowhere here.
+ */
 export interface LibraryItemMetadataInput {
+  discoveredCount?: number
+  discoveredAt?: string | null
   status?: NovelStatus
   author?: string
   language?: string

@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateLibraryItemDto, LibraryItemMetadataDto } from './dto/create-library-item.dto';
-import { LibraryItemDto } from './dto/library-item.dto';
-import { LibraryItemPageDto, LibraryListItemDto } from './dto/library-list-item.dto';
+import { CreateLibraryItemDto } from './dto/library-item-create.dto';
+import { LibraryItemDto, LibraryItemMetadataInputDto, NovelMetadataInputDto } from './dto/library-item.dto';
+import { LibraryItemPageDto, LibraryListItemDto } from './dto/library-item-list.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
-import { UpdateLibraryItemDto, WRITABLE_STATUSES } from './dto/update-library-item.dto';
+import { UpdateLibraryItemDto, WRITABLE_STATUSES } from './dto/library-item-update.dto';
 import { LibraryItemMetadataBase, NovelMetadata } from './entities/library-item-metadata.entity';
 import { LibraryItem, LibraryItemBase, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from './entities/library-item.entity';
 import { LibraryContentRepository } from './library-content.repository';
@@ -12,8 +12,8 @@ import { LibraryItemDraft, LibraryRepository } from './library.repository';
 /** What a manual item's source is called — it is its own. */
 const MANUAL_SOURCE = 'Manual';
 
-/** A new item holds nothing, and part 1 has nothing that would fetch anything. */
-const NOTHING_FETCHED: LibraryItemMetadataBase = { discoveredCount: 0, discoveredAt: null, downloadedCount: 0 };
+/** The novel-only fields — what a set's metadata has no room for. */
+const NOVEL_ONLY_FIELDS = ['status', 'author', 'language', 'genres', 'description'] as const;
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
 type LibraryItemRoot = Omit<LibraryItemBase, 'id' | 'createdAt' | 'updatedAt'>;
@@ -108,38 +108,53 @@ export class LibraryManager {
   }
 }
 
-/** A brand new item's metadata: the writable block, over nothing fetched. */
-function newDraft(type: LibraryItemType, root: LibraryItemRoot, writable?: LibraryItemMetadataDto): LibraryItemDraft {
+/**
+ * A brand new item's metadata: the editable block, over nothing downloaded. Part 1
+ * has nothing that would fetch anything, so every downloaded counter starts at 0.
+ */
+function newDraft(type: LibraryItemType, root: LibraryItemRoot, writable?: LibraryItemMetadataInputDto): LibraryItemDraft {
+  const found = { ...inventory(writable), downloadedCount: 0 };
+
   switch (type) {
     case LibraryItemType.Novel:
-      return { ...root, type, metadata: { ...NOTHING_FETCHED, ...novelBlock(writable) } };
+      return { ...root, type, metadata: { ...found, ...novelBlock(writable) } };
     case LibraryItemType.Image:
-      return { ...root, type, metadata: { ...NOTHING_FETCHED, downloadedSize: 0 } };
+      return { ...root, type, metadata: { ...found, downloadedSize: 0 } };
     case LibraryItemType.Video:
-      return { ...root, type, metadata: { ...NOTHING_FETCHED, downloadedSize: 0, downloadedDuration: 0 } };
+      return { ...root, type, metadata: { ...found, downloadedSize: 0, downloadedDuration: 0 } };
   }
 }
 
+/** What the source is said to hold — a client may state it; what we hold, it may not. */
+function inventory(writable?: LibraryItemMetadataInputDto): Pick<LibraryItemMetadataBase, 'discoveredCount' | 'discoveredAt'> {
+  return { discoveredCount: writable?.discoveredCount ?? 0, discoveredAt: writable?.discoveredAt ?? null };
+}
+
 /**
- * The stored item, rewritten. Its counters are carried over rather than read from
- * the request: they say what was actually fetched, and an update able to zero them
- * would let a client erase that.
+ * The stored item, rewritten. What we hold is carried over rather than read from
+ * the request — `downloadedCount` and the two sizes say what is actually stored
+ * here, and an update able to zero them would let a client erase that.
+ *
+ * The inventory is not: it is editable, so `PUT` treats it like every other
+ * editable field and a body that leaves it out clears it.
  */
-function nextDraft(stored: LibraryItem, root: LibraryItemRoot, writable?: LibraryItemMetadataDto): LibraryItemDraft {
+function nextDraft(stored: LibraryItem, root: LibraryItemRoot, writable?: LibraryItemMetadataInputDto): LibraryItemDraft {
+  const found = inventory(writable);
+
   switch (stored.type) {
     case LibraryItemType.Novel:
-      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...novelBlock(writable) } };
+      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found, ...novelBlock(writable) } };
     // The two set cases have one body and stay two, because each narrows
     // `stored.metadata` to the shape its type carries; merged, neither would.
     case LibraryItemType.Image:
-      return { ...root, type: stored.type, metadata: stored.metadata };
+      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found } };
     case LibraryItemType.Video:
-      return { ...root, type: stored.type, metadata: stored.metadata };
+      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found } };
   }
 }
 
 /** Each field cleared where the request left it out — that is what `PUT` promises. */
-function novelBlock(writable?: LibraryItemMetadataDto): WritableNovelMetadata {
+function novelBlock(writable?: NovelMetadataInputDto): WritableNovelMetadata {
   return {
     status: writable?.status ?? NovelStatus.Ongoing,
     author: writable?.author ?? '',
@@ -179,16 +194,20 @@ function source(input: CreateLibraryItemDto): Pick<LibraryItemRoot, 'sourceMode'
 }
 
 /**
- * Only a novel has a writable `metadata`. A set's whole metadata is counters, and
- * those are the job runner's — so a body carrying any is a mistake worth saying
- * out loud rather than ignoring.
+ * Every type may state its inventory. What only a novel has is what its source
+ * says about the work — a set carrying any of that is a mistake worth saying out
+ * loud rather than ignoring.
  */
-function checkWritableMetadata(type: LibraryItemType, writable?: LibraryItemMetadataDto): void {
-  if (type === LibraryItemType.Novel || !writable || Object.keys(writable).length === 0) {
+function checkWritableMetadata(type: LibraryItemType, writable?: LibraryItemMetadataInputDto): void {
+  if (type === LibraryItemType.Novel || !writable) {
     return;
   }
 
-  throw new BadRequestException(`An item of type \`${type}\` has nothing writable under metadata`);
+  const wrong = NOVEL_ONLY_FIELDS.filter((field) => field in writable);
+
+  if (wrong.length > 0) {
+    throw new BadRequestException(`An item of type \`${type}\` has no ${wrong.join(', ')} under metadata`);
+  }
 }
 
 /** The DTO already refuses the runner's statuses; the rule itself belongs here. */

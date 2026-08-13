@@ -3,14 +3,14 @@ import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiExtraModel
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { LIBRARY_CONTENT_PATH, LIBRARY_PATH } from '../core/api.constants';
 import { CreateLibraryContentDto } from './dto/create-library-content.dto';
-import { CreateLibraryItemDto } from './dto/create-library-item.dto';
+import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { CONTENT_ONE_OF, ImageAssetDto, LibraryContentPageDto, NovelChapterDto, VideoAssetDto } from './dto/library-content.dto';
 import { LibraryItemDto } from './dto/library-item.dto';
-import { LibraryItemPageDto } from './dto/library-list-item.dto';
+import { LibraryItemPageDto } from './dto/library-item-list.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryContentDto } from './dto/update-library-content.dto';
-import { UpdateLibraryItemDto } from './dto/update-library-item.dto';
+import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { LibraryContent } from './entities/library-content.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryManager } from './library.manager';

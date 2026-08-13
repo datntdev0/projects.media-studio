@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
-import type { CrawlerPreview, CreateLibraryItem, LibraryItem, LibraryItemType, LibrarySourceMode, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
+import type { CrawlerPreview, CreateLibraryItem, LibraryItem, LibraryItemMetadataInput, LibraryItemType, LibrarySourceMode, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
 
 /**
  * One dialog for both creating and editing an item.
@@ -320,7 +320,7 @@ async function applyPreview(read: CrawlerPreview) {
   }
 }
 
-/** What is sent. A manual item carries no URL, and only a novel has writable metadata. */
+/** What is sent. A manual item carries no URL, and only a novel has a descriptive block. */
 function payload(coverUrl: string | null): CreateLibraryItem {
   return {
     type: form.type,
@@ -331,16 +331,43 @@ function payload(coverUrl: string | null): CreateLibraryItem {
     // The URL the source answered with, where one was read: two spellings of the
     // same book normalise to one, and the item stores what was actually crawled.
     sourceUrl: isCrawler.value ? (found.value?.sourceUrl ?? form.sourceUrl.trim()) : null,
-    metadata: isNovel.value
-      ? {
-          status: form.novelStatus,
-          author: form.author.trim(),
-          language: form.language.trim(),
-          genres: form.genres.split(',').map(genre => genre.trim()).filter(Boolean),
-          description: form.description.trim()
-        }
-      : undefined
+    metadata: metadataPayload()
   }
+}
+
+/** The editable metadata: the inventory whatever the type, and a novel's own block. */
+function metadataPayload(): LibraryItemMetadataInput | undefined {
+  const found = inventory()
+
+  if (!isNovel.value) {
+    return found
+  }
+
+  return {
+    ...found,
+    status: form.novelStatus,
+    author: form.author.trim(),
+    language: form.language.trim(),
+    genres: form.genres.split(',').map(genre => genre.trim()).filter(Boolean),
+    description: form.description.trim()
+  }
+}
+
+/**
+ * What the source is said to hold. A crawler that just read it knows: the count is
+ * the one step 3 draws from the same reading, stamped as of this request.
+ *
+ * Otherwise it is whatever the item already states — the form does not ask for the
+ * inventory, but it is editable, so a `PUT` leaving it out would clear it.
+ */
+function inventory(): Pick<LibraryItemMetadataInput, 'discoveredCount' | 'discoveredAt'> | undefined {
+  if (preview.value) {
+    return { discoveredCount: foundCount.value, discoveredAt: new Date().toISOString() }
+  }
+
+  const stored = props.item?.metadata
+
+  return stored ? { discoveredCount: stored.discoveredCount, discoveredAt: stored.discoveredAt } : undefined
 }
 
 /** The footer's primary action: one step on, or the save at the end of them. */

@@ -40,6 +40,7 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 ### Planning
 
 - Provide a simple and straightforward solution to the human request.
+- Do not provide an over engineered solution. Keep it simple and readable.
 
 ### Coding Style (DO NOT VIOLATE)
 
