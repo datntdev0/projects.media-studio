@@ -1,4 +1,4 @@
-# Local infrastructure for media-studio: the Firebase emulators and FlareSolverr.
+# Local infrastructure for media-studio: the Firebase emulators and the scraping API.
 # Start it from the repository root with `pnpm dev:infrastructure`.
 # Everything is published on 127.0.0.1 only, on the same ports the apps already expect.
 name: media-studio-local
@@ -30,35 +30,39 @@ services:
     # The hub answers well before the emulators do, so probe all three of them.
     healthcheck:
       test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://127.0.0.1:9099/ && curl -fsS -o /dev/null http://127.0.0.1:8080/ && curl -sS -o /dev/null http://127.0.0.1:9199/']
-      interval: 10s
+      interval: 60s
       timeout: 5s
-      retries: 20
+      retries: 3
       start_period: 90s
     # Give the emulators time to flush their export on shutdown.
     stop_grace_period: 30s
     networks: [media-studio]
 
-  flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
-    container_name: media-studio-flaresolverr
+  scraping:
+    build:
+      context: ../scraping
+    container_name: media-studio-scraping
     restart: unless-stopped
     environment:
-      LOG_LEVEL: info
-      LOG_HTML: 'false'
-      CAPTCHA_SOLVER: none
+      SCRAPER_MAX_PAGES: '4'
       TZ: Asia/Ho_Chi_Minh
     ports:
-      - '127.0.0.1:8191:8191'
+      - '127.0.0.1:8000:8000' # Scraping API (docs at /docs)
+    # The browser writes to /dev/shm; the 64MB default makes it crash on bigger pages.
+    shm_size: 1gb
+    volumes:
+      - scraping-data:/data
     healthcheck:
-      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8191/health']
-      interval: 30s
-      timeout: 10s
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health").read()']
+      interval: 60s
+      timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 90s
     networks: [media-studio]
 
 volumes:
   firebase-data:
+  scraping-data:
 
 networks:
   media-studio:

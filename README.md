@@ -52,11 +52,11 @@ pnpm --filter @media-studio/backend run test
 Sign-in is Firebase Authentication: the browser exchanges credentials with Firebase directly, and the API only ever verifies the ID token it is handed. Locally that runs against the [Auth emulator](https://firebase.google.com/docs/emulator-suite), so no Firebase project or network access is needed.
 
 ```bash
-pnpm dev:infrastructure   # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, FlareSolverr :8191
+pnpm dev:infrastructure   # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000
 pnpm seed:firebase        # creates admin@datntdev.com / StrongPassword123!
 ```
 
-The emulators run in Docker — [`_deploy/dockercompose.local.infrastructure.yml`](./_deploy/dockercompose.local.infrastructure.yml) — published on `127.0.0.1` on the ports each package's `.env` already points at. Leave the stack running in its own terminal and start the app as usual. Beside the emulators it runs [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr), the proxy the scraping work will send its requests through.
+The emulators run in Docker — [`_deploy/dockercompose.local.infrastructure.yml`](./_deploy/dockercompose.local.infrastructure.yml) — published on `127.0.0.1` on the ports each package's `.env` already points at. Leave the stack running in its own terminal and start the app as usual. Beside the emulators it runs the [scraping API](./scraping/README.md), which the scraping work sends its requests through.
 
 Firestore is where everything the API stores itself lives, and Storage holds the media files — cover images today. Both are exported to a Docker volume when the stack is stopped and read back when it starts, so the seeded account outlives a restart and `pnpm seed:firebase` is a one-off rather than something to repeat.
 
