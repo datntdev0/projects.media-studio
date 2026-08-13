@@ -28,17 +28,22 @@ export interface CoverDraft {
   preview: string
 }
 
-/** Hands back what to upload and what to show. Rejects with the sentence to print. */
-export async function prepareCover(file: File): Promise<CoverDraft> {
-  if (!file.type.startsWith('image/')) {
+/**
+ * Hands back what to upload and what to show. Rejects with the sentence to print.
+ *
+ * A `Blob` rather than a `File`, because a scraped cover arrives as one and every
+ * `File` is a `Blob` — the picker's callers are unchanged.
+ */
+export async function prepareCover(image: Blob): Promise<CoverDraft> {
+  if (!image.type.startsWith('image/')) {
     throw new Error('That file is not an image.')
   }
 
-  if (file.size > MAX_FILE_BYTES) {
+  if (image.size > MAX_FILE_BYTES) {
     throw new Error(`Covers are capped at ${COVER_MAX_MB} MB.`)
   }
 
-  const canvas = await resize(file)
+  const canvas = await resize(image)
 
   const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, COVER_CONTENT_TYPE, COVER_QUALITY))
 
@@ -49,9 +54,12 @@ export async function prepareCover(file: File): Promise<CoverDraft> {
   return { blob, preview: canvas.toDataURL(COVER_CONTENT_TYPE, COVER_QUALITY) }
 }
 
+/** The bytes behind a `data:` URI, as a blob that knows its own type. */
+export const blobFromDataUrl = (dataUrl: string): Promise<Blob> => fetch(dataUrl).then(response => response.blob())
+
 /** Centre-cropped to 3:4, the ratio every cover is drawn at. */
-async function resize(file: File): Promise<HTMLCanvasElement> {
-  const bitmap = await createImageBitmap(file).catch(() => null)
+async function resize(image: Blob): Promise<HTMLCanvasElement> {
+  const bitmap = await createImageBitmap(image).catch(() => null)
 
   if (!bitmap) {
     throw new Error('Could not read that image.')

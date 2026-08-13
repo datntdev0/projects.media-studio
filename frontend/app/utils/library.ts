@@ -14,6 +14,13 @@ const CONTENT_UNITS: Record<LibraryItemType, string> = {
   video: 'clips'
 }
 
+/** The same, spelled out — `412 / 640 ch.` is a table cell, `1,305 chapters` is a sentence. */
+const CONTENT_NOUNS: Record<LibraryItemType, string> = {
+  novel: 'chapters',
+  image: 'images',
+  video: 'clips'
+}
+
 const TYPE_LABELS: Record<LibraryItemType, string> = {
   novel: 'Novel',
   image: 'Image',
@@ -44,6 +51,8 @@ const DAY = 24 * HOUR
 const RELATIVE_DAYS = 30
 
 export const typeLabel = (type: LibraryItemType): string => TYPE_LABELS[type]
+
+export const contentNoun = (type: LibraryItemType): string => CONTENT_NOUNS[type]
 
 export const statusTag = (status: LibraryItemStatus) => STATUS_TAGS[status]
 

@@ -159,8 +159,9 @@ export interface LibraryChoice<Value> extends LibraryFilterOption<Value> {
 }
 
 /**
- * A crawler the dialog can offer. Part 2 registers these on the server; until
- * then `utils/crawlers.ts` holds a mocked list.
+ * A crawler the dialog can offer. Static here so the wizard can draw the choice
+ * without a round trip; `backend/src/scraping/crawlers.ts` is the authority, and
+ * validate refuses a name it does not hold.
  */
 export interface CrawlerOption {
   name: string
@@ -170,19 +171,55 @@ export interface CrawlerOption {
   healthy: boolean
 }
 
-/** What a crawler reports back about a URL, before anything is created. */
-export interface CrawlerPreview {
+/** What to read, and with what. The body of `POST /scraping/validate`. */
+export interface ValidateSource {
   crawler: string
+  sourceUrl: string
+}
+
+/** The novel as the source describes it, in our words. */
+export interface CrawlerPreviewMetadata {
+  /** The canonical book URL, which is what the item should store. */
+  sourceUrl: string
   title: string
-  coverUrl: string | null
   author: string
-  language: string
   status: NovelStatus
+  language: string
   genres: string[]
   description: string
-  /** How many pieces of content the source holds, and what they are called. */
-  discoveredCount: number
-  unit: string
-  /** The newest piece, as the source names it. */
+  /** The newest chapter, as the source names it. */
   latest: string
+  latestUrl: string
+  /** When the source last changed, in the source's own format. Shown, never compared. */
+  updatedAt: string
+  /** Where the cover lives on the source. Behind the same protection as the site, so not for an `<img>`. */
+  coverUrl: string | null
+}
+
+/** One chapter, as the source lists it. */
+export interface CrawlerPreviewChapter {
+  index: number
+  title: string
+  url: string
+}
+
+/** What a novel source holds. */
+export interface NovelCrawlerPreview {
+  metadata: CrawlerPreviewMetadata
+  /** Every chapter. The wizard draws a count from it; the job runner will draw content. */
+  chapters: CrawlerPreviewChapter[]
+  /** The cover as a data URI — the bytes and their type in one string. */
+  coverBinary: string | null
+}
+
+/**
+ * What a crawler reports back about a URL, before anything is created.
+ *
+ * An envelope, as the API sends it: `type` says what kind of source was read, and
+ * a crawler that reads image sets will add a `content` shape rather than reshape
+ * this one.
+ */
+export interface CrawlerPreview {
+  type: LibraryItemType
+  content: NovelCrawlerPreview
 }

@@ -49,6 +49,8 @@ const library = useLibrary()
 
 const covers = useCovers()
 
+const scraping = useScraping()
+
 /** A manual novel — the most common thing to add by hand. */
 function blank(): FormState {
   return {
@@ -107,9 +109,6 @@ const showDetails = computed(() => editing.value || (step.value === 2 && !isCraw
 
 const showReview = computed(() => !editing.value && step.value === 3)
 
-/** Editing a crawler item still types its source in — there is no re-validation flow. */
-const showSourceFields = computed(() => editing.value && isCrawler.value)
-
 const crawlers = computed(() => crawlersFor(form.type))
 
 const selectedCrawler = computed(() => crawlers.value.find(crawler => crawler.name === form.sourceName) ?? null)
@@ -146,7 +145,7 @@ const dialogHint = computed(() => {
   }
 
   return isCrawler.value
-    ? 'The crawler reads the metadata first; content follows once part 2 runs the job.'
+    ? 'The crawler reads the metadata now; the content follows when the job that fetches it exists.'
     : 'You will add chapters and files after the item is created.'
 })
 
@@ -160,16 +159,25 @@ const nextLabel = computed(() => {
 
 const backLabel = computed(() => editing.value || step.value === 1 ? 'Cancel' : 'Back')
 
+/** What the source said, once it has been read. */
+const found = computed(() => preview.value?.content.metadata ?? null)
+
+/** How many pieces the source holds — a count of what it listed, not a claim of its own. */
+const foundCount = computed(() => preview.value?.content.chapters.length ?? 0)
+
 /** The line under the reviewed title, from whatever the source gave us. */
 const previewByline = computed(() => {
-  if (!preview.value) {
+  if (!found.value) {
     return ''
   }
 
-  const status = NOVEL_STATUS_OPTIONS.find(option => option.value === preview.value?.status)?.label
+  const status = NOVEL_STATUS_OPTIONS.find(option => option.value === found.value?.status)?.label
 
-  return [preview.value.author, preview.value.language, isNovel.value ? status : null].filter(Boolean).join(' · ')
+  return [found.value.author, found.value.language, isNovel.value ? status : null].filter(Boolean).join(' · ')
 })
+
+/** The newest chapter and when the source last moved, as one line. */
+const previewLatest = computed(() => [found.value?.latest, found.value?.updatedAt].filter(Boolean).join(' · ') || '—')
 
 /** Said out loud, because saving is what moves the item out of that status. */
 const runnerStatus = computed(() => props.item && RUNNER_STATUSES.includes(props.item.status) ? props.item.status : null)
@@ -235,7 +243,9 @@ function validate(state: FormState): FormError[] {
   const errors: FormError[] = []
 
   if (showSource.value) {
-    if (!state.sourceUrl.trim()) {
+    if (!crawlers.value.length) {
+      errors.push({ name: 'sourceName', message: `Nothing here reads ${typeLabel(state.type).toLowerCase()} sets yet. Go back and add it manually.` })
+    } else if (!state.sourceUrl.trim()) {
       errors.push({ name: 'sourceUrl', message: 'Paste the URL the crawler should read.' })
     } else if (!preview.value) {
       errors.push({ name: 'sourceUrl', message: 'Validate the URL before continuing.' })
@@ -246,21 +256,14 @@ function validate(state: FormState): FormError[] {
     errors.push({ name: 'title', message: 'Give the item a title.' })
   }
 
-  if (showSourceFields.value) {
-    if (!state.sourceName.trim()) {
-      errors.push({ name: 'sourceName', message: 'Name the crawler that reads this source.' })
-    }
-
-    if (!state.sourceUrl.trim()) {
-      errors.push({ name: 'sourceUrl', message: 'A crawler item needs the URL to crawl.' })
-    }
-  }
-
   return errors
 }
 
-/** The mocked crawler read. What it finds fills the form, so the payload stays one shape. */
-async function onValidate() {
+/**
+ * The crawler read, on the server. Slow — a cold source is tens of seconds — and
+ * cached there, so `refresh` is what the review step's re-read asks for.
+ */
+async function onValidate(refresh = false) {
   const crawler = selectedCrawler.value
 
   if (!crawler) {
@@ -271,27 +274,54 @@ async function onValidate() {
   validateError.value = null
 
   try {
-    const found = await validateCrawlerSource(crawler, form.sourceUrl)
+    const read = await scraping.validate({ crawler: crawler.name, sourceUrl: form.sourceUrl.trim() }, refresh)
 
-    applyPreview(found)
-    preview.value = found
+    await applyPreview(read)
+    preview.value = read
   } catch (cause) {
-    validateError.value = cause instanceof Error ? cause.message : 'Could not read that URL.'
+    validateError.value = apiMessage(cause, 'Could not read that URL.')
   } finally {
     validating.value = false
   }
 }
 
-function applyPreview(found: CrawlerPreview) {
-  form.title = found.title
-  form.coverUrl = found.coverUrl ?? ''
-  // A crawler cover is already a URL, so whatever was picked by hand is dropped.
+/**
+ * What the source said, in the form — so the payload stays one shape whether a
+ * person typed it or a crawler read it.
+ *
+ * The cover is the exception: it arrives as bytes rather than a URL, because the
+ * source keeps it behind the same protection as the site and a browser asking for
+ * it directly is refused. It goes through the picker's own resize, which leaves it
+ * in `coverFile` for the save to upload — the same path a chosen file takes.
+ */
+async function applyPreview(read: CrawlerPreview) {
+  const { metadata, coverBinary } = read.content
+
+  // Not `form.sourceUrl`: writing it here would trip the watcher that drops a
+  // preview when the URL changes, throwing away the reading it belongs to. The
+  // canonical URL the source answered with is taken from the preview at save time.
+  form.title = metadata.title
+  form.novelStatus = metadata.status
+  form.author = metadata.author
+  form.language = metadata.language
+  form.genres = metadata.genres.join(', ')
+  form.description = metadata.description
+  form.coverUrl = ''
   form.coverFile = null
-  form.novelStatus = found.status
-  form.author = found.author
-  form.language = found.language
-  form.genres = found.genres.join(', ')
-  form.description = found.description
+
+  if (!coverBinary) {
+    return
+  }
+
+  try {
+    const draft = await prepareCover(await blobFromDataUrl(coverBinary))
+
+    form.coverFile = draft.blob
+    form.coverUrl = draft.preview
+  } catch {
+    // A cover we cannot read is not worth failing a validation for: everything
+    // else the source said is still good, and one can be picked by hand.
+  }
 }
 
 /** What is sent. A manual item carries no URL, and only a novel has writable metadata. */
@@ -302,7 +332,9 @@ function payload(coverUrl: string | null): CreateLibraryItem {
     coverUrl,
     sourceMode: form.sourceMode,
     sourceName: isCrawler.value ? form.sourceName.trim() : undefined,
-    sourceUrl: isCrawler.value ? form.sourceUrl.trim() : null,
+    // The URL the source answered with, where one was read: two spellings of the
+    // same book normalise to one, and the item stores what was actually crawled.
+    sourceUrl: isCrawler.value ? (found.value?.sourceUrl ?? form.sourceUrl.trim()) : null,
     metadata: isNovel.value
       ? {
           status: form.novelStatus,
@@ -503,12 +535,12 @@ function cardTone(selected: boolean, fixed = editing.value) {
 
         <!-- step 2, crawler: which crawler, which URL, and does it read it -->
         <template v-if="showSource">
-          <UFormField
-            label="Crawler"
-            name="sourceName"
-            help="A mocked registry until part 2 registers crawlers for real."
-          >
-            <div class="grid gap-3 sm:grid-cols-2">
+          <UFormField label="Crawler" name="sourceName">
+            <p v-if="!crawlers.length" class="text-support text-muted text-pretty">
+              No crawler reads {{ typeLabel(form.type).toLowerCase() }} sets yet — add the item manually and fill it in.
+            </p>
+
+            <div v-else class="grid gap-3 sm:grid-cols-2">
               <AppBlueprint
                 v-for="crawler in crawlers"
                 :key="crawler.name"
@@ -542,11 +574,16 @@ function cardTone(selected: boolean, fixed = editing.value) {
             </div>
           </UFormField>
 
-          <UFormField label="Resource URL" name="sourceUrl">
+          <UFormField
+            v-if="crawlers.length"
+            label="Resource URL"
+            name="sourceUrl"
+            help="Reading a source takes a moment — it is fetched through a real browser."
+          >
             <div class="flex gap-2">
               <UInput
                 v-model="form.sourceUrl"
-                placeholder="https://novelbin.net/n/silent-cartographer"
+                :placeholder="`https://${selectedCrawler?.domain ?? ''}/0413553971`"
                 class="flex-1"
               />
 
@@ -557,7 +594,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 class="flex-none"
                 :loading="validating"
                 :disabled="!form.sourceUrl.trim() || !selectedCrawler"
-                @click="onValidate"
+                @click="onValidate()"
               />
             </div>
           </UFormField>
@@ -565,7 +602,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
           <p v-if="preview" class="flex items-center gap-2 -mt-4 text-label text-primary">
             <UIcon name="i-lucide-check" class="size-4 shrink-0" />
 
-            URL matches {{ preview.crawler }} · {{ countLabel(preview.discoveredCount) }} {{ preview.unit }} detected
+            {{ form.sourceName }} read it · {{ countLabel(foundCount) }} {{ contentNoun(preview.type) }} detected
           </p>
 
           <p v-else-if="validateError" class="flex items-center gap-2 -mt-4 text-label text-error" role="alert">
@@ -609,20 +646,6 @@ function cardTone(selected: boolean, fixed = editing.value) {
               </UFormField>
             </div>
 
-            <div v-if="showSourceFields" class="grid gap-4 sm:grid-cols-2">
-              <UFormField label="Crawler" name="sourceName">
-                <UInput v-model="form.sourceName" placeholder="novelbin.crawler" class="w-full" />
-              </UFormField>
-
-              <UFormField label="Resource URL" name="sourceUrl">
-                <UInput
-                  v-model="form.sourceUrl"
-                  placeholder="https://novelbin.net/n/silent-cartographer"
-                  class="w-full"
-                />
-              </UFormField>
-            </div>
-
             <template v-if="isNovel">
               <UFormField label="Author" name="author">
                 <UInput v-model="form.author" placeholder="Nguyen Van A" class="w-full" />
@@ -656,27 +679,27 @@ function cardTone(selected: boolean, fixed = editing.value) {
         </div>
 
         <!-- step 3: what the crawler found, before anything is written -->
-        <div v-if="showReview && preview" class="flex gap-6">
+        <div v-if="showReview && found" class="flex gap-6">
           <AppBlueprint class="w-36 flex-none aspect-3/4">
-            <AppLibraryCover :url="preview.coverUrl" :title="preview.title" class="size-full" />
+            <AppLibraryCover :url="form.coverUrl" :title="found.title" class="size-full" />
           </AppBlueprint>
 
           <div class="flex-1 min-w-0">
             <p class="text-meta tracking-widest uppercase text-primary">
-              Fetched from {{ preview.crawler }}
+              Fetched from {{ form.sourceName }}
             </p>
 
             <h4 class="mt-1">
-              {{ preview.title }}
+              {{ found.title }}
             </h4>
 
             <p v-if="previewByline" class="text-support text-muted">
               {{ previewByline }}
             </p>
 
-            <div v-if="preview.genres.length" class="flex flex-wrap gap-1 mt-3">
+            <div v-if="found.genres.length" class="flex flex-wrap gap-1 mt-3">
               <UBadge
-                v-for="genre in preview.genres"
+                v-for="genre in found.genres"
                 :key="genre"
                 :label="genre"
                 color="neutral"
@@ -690,14 +713,14 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 Found
               </dt>
 
-              <dd>{{ countLabel(preview.discoveredCount) }} {{ preview.unit }}</dd>
+              <dd>{{ countLabel(foundCount) }} {{ contentNoun(form.type) }}</dd>
 
               <dt class="text-muted">
                 Latest
               </dt>
 
               <dd class="truncate">
-                {{ preview.latest }}
+                {{ previewLatest }}
               </dd>
 
               <dt class="text-muted">
@@ -705,16 +728,35 @@ function cardTone(selected: boolean, fixed = editing.value) {
               </dt>
 
               <dd class="truncate">
-                {{ displayUrl(form.sourceUrl) }}
+                {{ displayUrl(found.sourceUrl) }}
               </dd>
             </dl>
 
-            <p v-if="preview.description" class="mt-4 text-support text-muted text-pretty">
-              {{ preview.description }}
+            <p v-if="found.description" class="mt-4 text-support text-muted text-pretty">
+              {{ found.description }}
             </p>
 
-            <p class="mt-4 text-label text-muted">
-              The item is created as a draft — the scraping job that pulls this content is part 2.
+            <div class="flex flex-wrap items-center gap-3 mt-4">
+              <p class="text-label text-muted">
+                The item is created as a draft — the job that pulls this content comes later.
+              </p>
+
+              <UButton
+                label="Re-read source"
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="ms-auto"
+                :loading="validating"
+                @click="onValidate(true)"
+              />
+            </div>
+
+            <p v-if="validateError" class="flex items-center gap-2 mt-2 text-label text-error" role="alert">
+              <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
+
+              {{ validateError }}
             </p>
           </div>
         </div>
