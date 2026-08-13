@@ -15,9 +15,7 @@ const PAGE_SIZE = 200
 
 const route = useRoute()
 
-const library = useLibrary()
-
-const contents = useLibraryContents()
+const { libraryClient } = useApiClient()
 
 const files = useContentFiles()
 
@@ -27,19 +25,19 @@ const itemId = computed(() => String(route.params.id))
 
 const contentId = computed(() => String(route.params.contentId))
 
-const { data: item } = useAsyncData(() => `library-item-${itemId.value}`, () => library.get(itemId.value), { watch: [itemId] })
+const { data: item } = useAsyncData(() => `library-item-${itemId.value}`, () => libraryClient.get(itemId.value).then(asLibraryItem), { watch: [itemId] })
 
 // Its own key, not the detail screen's: that list is whatever the search box there
 // narrowed it to, and the navigator has to be the whole novel.
 const { data: page } = useAsyncData(
   () => `library-chapters-${itemId.value}`,
-  () => contents.list(itemId.value, { pageSize: PAGE_SIZE }),
+  () => libraryClient.listContents(itemId.value, undefined, undefined, undefined, PAGE_SIZE).then(asLibraryContentPage),
   { lazy: true, watch: [itemId] }
 )
 
 const { data: chapter, status: chapterStatus, error: chapterError, refresh: refreshChapter } = useAsyncData(
   () => `library-content-${contentId.value}`,
-  () => contents.get(itemId.value, contentId.value) as Promise<NovelChapter>,
+  () => libraryClient.getContent(itemId.value, contentId.value).then(row => asLibraryContent(row) as NovelChapter),
   { watch: [contentId] }
 )
 
@@ -127,7 +125,7 @@ async function save() {
   try {
     uploaded = text ? await files.uploadText(itemId.value, body.value) : null
 
-    await contents.replace(itemId.value, stored.id, {
+    await libraryClient.replaceContent(itemId.value, stored.id, {
       title: named,
       index: stored.index,
       language: stored.language,

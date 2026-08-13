@@ -13,6 +13,7 @@ pnpm dev:backend      # NestJS on :3001 (override with PORT)
 pnpm dev:frontend     # Nuxt on :3000
 pnpm dev:infrastructure # Docker: Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000
 pnpm seed:firebase    # put admin@datntdev.com / StrongPassword123! into the emulator
+pnpm generate:api     # NSwag rewrites frontend/app/utils/api.clients.ts — needs a running backend and the .NET 9 runtime
 pnpm lint             # every package (pnpm lint:fix to autofix)
 pnpm typecheck        # every package
 ```
@@ -36,6 +37,10 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 
 ## Instructions
 
+### Planning
+
+- Provide a simple and straightforward solution to the human request.
+
 ### Coding Style (DO NOT VIOLATE)
 
 - Do not write too long comments inside the code.
@@ -45,5 +50,7 @@ pnpm workspace monorepo, three packages (`pnpm-workspace.yaml`):
 - Do not break a component open tag into multiple lines if it is not too long.
 - Prefer to use the tailwind classes instead of writing custom CSS.
 - Do not write `<style>` tag in the Nuxt component. Use the CSS file or tailwind classes.
+- Do not hand-edit `frontend/app/utils/api.clients.ts`. It is NSwag's output — change the backend DTO and rerun `pnpm generate:api`.
+- Reach the API only through `useApiClient()` (`authClient`, `libraryClient`, `scrapingClient`). Do not add a hand-written `$fetch` wrapper beside it.
 - Use `pnpm typecheck` to ensure TypeScript types are correct.
 - Use `pnpm lint` and `pnpm lint:fix` to check and fix the linting issues.

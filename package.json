@@ -15,6 +15,7 @@
     "dev:frontend": "pnpm --filter @media-studio/frontend run dev",
     "dev:infrastructure": "docker compose -f _deploy/dockercompose.local.infrastructure.yml up --build",
     "seed:firebase": "node scripts/seed-firebase-auth.mjs",
+    "generate:api": "pnpm --filter @media-studio/frontend run generate:api",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "lint:fix": "pnpm -r run lint:fix",

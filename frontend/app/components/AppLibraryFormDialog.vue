@@ -45,11 +45,9 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const library = useLibrary()
+const { libraryClient, scrapingClient } = useApiClient()
 
 const covers = useCovers()
-
-const scraping = useScraping()
 
 /** A manual novel — the most common thing to add by hand. */
 function blank(): FormState {
@@ -247,8 +245,6 @@ function validate(state: FormState): FormError[] {
       errors.push({ name: 'sourceName', message: `Nothing here reads ${typeLabel(state.type).toLowerCase()} sets yet. Go back and add it manually.` })
     } else if (!state.sourceUrl.trim()) {
       errors.push({ name: 'sourceUrl', message: 'Paste the URL the crawler should read.' })
-    } else if (!preview.value) {
-      errors.push({ name: 'sourceUrl', message: 'Validate the URL before continuing.' })
     }
   }
 
@@ -274,7 +270,7 @@ async function onValidate(refresh = false) {
   validateError.value = null
 
   try {
-    const read = await scraping.validate({ crawler: crawler.name, sourceUrl: form.sourceUrl.trim() }, refresh)
+    const read = await scrapingClient.validate({ crawler: crawler.name, sourceUrl: form.sourceUrl.trim() }, refresh)
 
     await applyPreview(read)
     preview.value = read
@@ -349,6 +345,10 @@ function payload(coverUrl: string | null): CreateLibraryItem {
 
 /** The footer's primary action: one step on, or the save at the end of them. */
 async function onAdvance() {
+  if (showSource.value && !preview.value) {
+    return
+  }
+
   if (!onLastStep.value) {
     step.value += 1
 
@@ -411,7 +411,7 @@ async function add() {
 
   // Created without the cover when one is waiting to be uploaded — the URL it
   // will get does not exist yet.
-  added.value ??= (await library.create(payload(form.coverFile ? null : linked))).id
+  added.value ??= (await libraryClient.create(payload(form.coverFile ? null : linked))).id
 
   if (form.coverFile) {
     await write(added.value, form.status)
@@ -422,15 +422,17 @@ async function add() {
 async function write(id: string, status: WritableLibraryItemStatus) {
   const coverUrl = form.coverFile ? await covers.upload(id, form.coverFile) : form.coverUrl.trim() || null
 
-  await library.replace(id, { ...payload(coverUrl), status })
+  await libraryClient.replace(id, { ...payload(coverUrl), status })
 }
 
 /**
  * Storage answers with codes, so a cover failure prints the sentence `useCovers`
- * threw; an API failure carries its own under `data`.
+ * threw. An API failure is an `ApiException`, whose own `message` is the
+ * operation's documented description — `apiMessage` digs out the sentence the
+ * server sent about this request instead.
  */
 function saveMessage(cause: unknown): string {
-  if (cause instanceof Error && !(cause as { data?: unknown }).data) {
+  if (cause instanceof Error && !(cause instanceof ApiException)) {
     return cause.message
   }
 
@@ -584,6 +586,7 @@ function cardTone(selected: boolean, fixed = editing.value) {
               <UInput
                 v-model="form.sourceUrl"
                 :placeholder="`https://${selectedCrawler?.domain ?? ''}/0413553971`"
+                help="The URL the crawler should read. It is validated before continuing."
                 class="flex-1"
               />
 

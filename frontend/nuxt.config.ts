@@ -23,8 +23,8 @@ export default defineNuxtConfig({
   // matching NUXT_PUBLIC_* variables — see .env.example.
   runtimeConfig: {
     public: {
-      /** The backend, version prefix included. */
-      apiBase: 'http://localhost:3001/api/v1',
+      /** The backend's origin. The `/api/v1` prefix belongs to the paths, which the generated client already carries. */
+      apiBase: 'http://localhost:3001',
 
       firebase: {
         projectId: '',

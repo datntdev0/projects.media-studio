@@ -1,7 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import { CollectionReference, DocumentReference, Timestamp } from 'firebase-admin/firestore';
-import { SYSTEM_CACHE_COLLECTION } from '../firebase/collections';
 import { FirebaseAdminService } from '../firebase/firebase-admin.service';
 
 /**
@@ -17,25 +14,33 @@ const CACHE_PREFIX = 'caches';
 
 const CONTENT_TYPE = 'application/json';
 
+/** What one object holds: when it dies, and what was cached. */
+interface CacheEnvelope<T> {
+  /** Epoch milliseconds. Read on the way out — nothing expires an entry on its own. */
+  expiredAt: number;
+  value: T;
+}
+
 /**
  * Answers that are slow to come by, kept until they expire.
  *
- * The value goes to Cloud Storage as JSON under `caches/`, and Firestore holds
- * where to read it and when it dies — so an entry is not bounded by a document's
- * 1 MB, and what was cached can be opened in a browser when it needs explaining.
+ * One object per entry in Cloud Storage, under `caches/{type}/`, holding both the
+ * value and when it dies. No Firestore: a pointer document would only say where
+ * the file is and when it expires, and both fit in the file — one store means no
+ * write ordering to get right, no entry that can outlive its file, and nothing to
+ * reconcile when one of the two writes fails.
  *
  * JSON is the only format. Anything binary is a base64 string inside the value the
- * caller is already storing, which is why there is no data type to carry, no bytes
- * to hand over, and one pair of methods rather than two.
+ * caller is already storing, which is why there is no data type to carry and no
+ * bytes to hand over.
  *
  * Nothing here knows what an entry means, and `T` is the caller's word rather than
  * a checked one: a shape that changes reads back as the shape that was stored,
  * which is what the TTL is for.
  *
- * One constraint comes with the file: an object is named after its key alone, so a
- * key has to be unique across cache types, not merely within one. The Firestore
- * document is keyed by both, and the two would otherwise disagree about who owns
- * the file.
+ * Expiry is enforced on read. A bucket lifecycle rule on the prefix is what would
+ * reclaim an entry nobody asks for again, and in production it should — but an
+ * entry past its TTL never answers, whether or not anything has swept it.
  *
  * In core rather than in a feature module, because a TTL cache is not a domain
  * concept and the next thing that wants one will not be the scraping module.
@@ -52,100 +57,77 @@ export class CacheProvider {
    * costs a re-fetch rather than a 500.
    */
   async get<T>(cacheKey: string, cacheType: CacheType): Promise<T | null> {
-    const data = (await this.documentFor(cacheKey, cacheType).get()).data();
+    const envelope = await this.read<T>(cacheKey, cacheType);
 
-    if (!data) {
+    if (!envelope) {
       return null;
     }
 
-    const expiredAt = data.expiredAt as Timestamp | undefined;
-
-    if (!expiredAt || expiredAt.toMillis() <= Date.now()) {
-      // Dropped as it is found. Firestore can expire the document itself with a
-      // TTL policy on `expiredAt`, and in production it should — but nothing but
-      // this deletes the file with it, and the emulator has no such policy at all.
-      await this.remove(cacheKey, cacheType).catch((cause: unknown) => this.logger.warn(`Could not drop the expired entry ${cacheType}:${cacheKey}`, cause));
+    if (envelope.expiredAt <= Date.now()) {
+      // Dropped as it is found, so the next caller does not download it again to
+      // reach the same conclusion.
+      await this.drop(cacheKey, cacheType).catch((cause: unknown) => this.logger.warn(`Could not drop the expired entry ${cacheType}:${cacheKey}`, cause));
 
       return null;
     }
 
-    return this.read<T>(cacheKey, cacheType);
+    return envelope.value;
   }
 
-  /**
-   * Writes the file, then the document that points at it — in that order, so a
-   * failure leaves an unreferenced object rather than an entry pointing at nothing.
-   */
+  /** One write, so there is no half-written entry to recover from. */
   async set<T>(cacheKey: string, cacheType: CacheType, value: T, ttlMs: number): Promise<void> {
-    const token = randomUUID();
+    const envelope: CacheEnvelope<T> = { expiredAt: Date.now() + ttlMs, value };
 
-    await this.fileFor(cacheKey).save(Buffer.from(JSON.stringify(value)), {
+    await this.fileFor(cacheKey, cacheType).save(Buffer.from(JSON.stringify(envelope)), {
       contentType: CONTENT_TYPE,
       resumable: false,
-      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
-    });
-
-    await this.documentFor(cacheKey, cacheType).set({
-      cacheKey,
-      cacheType,
-      dataUrl: this.firebase.downloadUrl(objectPathFor(cacheKey), token),
-      expiredAt: Timestamp.fromMillis(Date.now() + ttlMs),
     });
   }
 
-  /** The document and the file it points at. Quiet about a file that is not there. */
-  drop(cacheKey: string, cacheType: CacheType): Promise<void> {
-    return this.remove(cacheKey, cacheType);
+  /** Quiet about an entry that is not there — dropping one twice is not a failure. */
+  async drop(cacheKey: string, cacheType: CacheType): Promise<void> {
+    await this.fileFor(cacheKey, cacheType).delete({ ignoreNotFound: true });
   }
 
   /**
-   * The file behind a live document, read through the Admin SDK rather than over
-   * its URL — the service that wrote it does not need a token to read it back.
+   * The stored envelope, read through the Admin SDK — the service that wrote it
+   * does not need a URL to read it back.
    *
-   * A file that cannot be read or parsed means the document outlived it, or that
-   * something wrote nonsense. The entry is worthless either way, so it goes.
+   * A file that cannot be read or parsed is worthless whatever went wrong, so it
+   * goes. A missing one is the ordinary miss, and says nothing.
    */
-  private async read<T>(cacheKey: string, cacheType: CacheType): Promise<T | null> {
-    try {
-      const [contents] = await this.fileFor(cacheKey).download();
+  private async read<T>(cacheKey: string, cacheType: CacheType): Promise<CacheEnvelope<T> | null> {
+    const file = this.fileFor(cacheKey, cacheType);
 
-      return JSON.parse(contents.toString()) as T;
+    let contents: Buffer;
+
+    try {
+      [contents] = await file.download();
+    } catch {
+      return null;
+    }
+
+    try {
+      return JSON.parse(contents.toString()) as CacheEnvelope<T>;
     } catch (cause: unknown) {
       this.logger.warn(`${cacheType}:${cacheKey} could not be read back`, cause);
-      await this.remove(cacheKey, cacheType);
+      await this.drop(cacheKey, cacheType);
 
       return null;
     }
   }
 
-  /** The file first, so a failure cannot leave the document pointing at a deleted object. */
-  private async remove(cacheKey: string, cacheType: CacheType): Promise<void> {
-    await this.fileFor(cacheKey).delete({ ignoreNotFound: true });
-    await this.documentFor(cacheKey, cacheType).delete();
-  }
-
-  private get collection(): CollectionReference {
-    return this.firebase.firestore.collection(SYSTEM_CACHE_COLLECTION);
-  }
-
-  /**
-   * Where an entry is filed: the type and the key together, so one lookup answers
-   * for both and two entries cannot end up live under one key.
-   *
-   * Encoded because a document id may not contain `/`, and a cache key eventually
-   * will. Both fields are stored on the document anyway, so what is written stays
-   * legible in the emulator UI.
-   */
-  private documentFor(cacheKey: string, cacheType: CacheType): DocumentReference {
-    return this.collection.doc(encodeURIComponent(`${cacheType}:${cacheKey}`));
-  }
-
-  private fileFor(cacheKey: string) {
-    return this.firebase.bucket.file(objectPathFor(cacheKey));
+  private fileFor(cacheKey: string, cacheType: CacheType) {
+    return this.firebase.bucket.file(objectPathFor(cacheKey, cacheType));
   }
 }
 
-/** `caches/novel:validate:novel543:0413553971.json` — every entry is JSON, so every file is `.json`. */
-function objectPathFor(cacheKey: string): string {
-  return `${CACHE_PREFIX}/${cacheKey}.json`;
+/**
+ * `caches/scraping/novel%3Avalidate%3Anovel543%3A0413553971.json` — the type is a
+ * folder and the key is one name under it, so two types are free to hold the same
+ * key. Encoded because a key eventually carries a `/`, and an unencoded one would
+ * file the entry under a folder of its own making.
+ */
+function objectPathFor(cacheKey: string, cacheType: CacheType): string {
+  return `${CACHE_PREFIX}/${cacheType}/${encodeURIComponent(cacheKey)}.json`;
 }

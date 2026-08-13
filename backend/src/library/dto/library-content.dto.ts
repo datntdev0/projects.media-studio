@@ -33,9 +33,16 @@ export class LibraryContentBaseDto implements LibraryContentBase {
   updatedAt!: string;
 }
 
-/** One chapter of a novel. */
+/**
+ * One chapter of a novel.
+ *
+ * Each of the three below pins `type` to its own value, and each needs its own
+ * `enumName`: a subclass's `@ApiProperty` is merged with the base's, so an
+ * override that says nothing about the name inherits `LibraryItemType` and
+ * republishes that shared schema as the single value it pinned.
+ */
 export class NovelChapterDto extends LibraryContentBaseDto implements NovelChapter {
-  @ApiProperty({ enum: [LibraryItemType.Novel] })
+  @ApiProperty({ enum: [LibraryItemType.Novel], enumName: 'NovelChapterType' })
   declare type: LibraryItemType.Novel;
 
   @ApiProperty({ description: 'The chapter number, and what the list is ordered by.', example: 412 })
@@ -53,7 +60,7 @@ export class NovelChapterDto extends LibraryContentBaseDto implements NovelChapt
 
 /** One image of a set. */
 export class ImageAssetDto extends LibraryContentBaseDto implements ImageAsset {
-  @ApiProperty({ enum: [LibraryItemType.Image] })
+  @ApiProperty({ enum: [LibraryItemType.Image], enumName: 'ImageAssetType' })
   declare type: LibraryItemType.Image;
 
   @ApiProperty({ example: 'img_001.jpg' })
@@ -65,7 +72,7 @@ export class ImageAssetDto extends LibraryContentBaseDto implements ImageAsset {
 
 /** One clip of a set. */
 export class VideoAssetDto extends LibraryContentBaseDto implements VideoAsset {
-  @ApiProperty({ enum: [LibraryItemType.Video] })
+  @ApiProperty({ enum: [LibraryItemType.Video], enumName: 'VideoAssetType' })
   declare type: LibraryItemType.Video;
 
   @ApiProperty({ example: 'clip_001.mp4' })

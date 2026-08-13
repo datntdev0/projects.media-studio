@@ -20,7 +20,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const contents = useLibraryContents()
+const { libraryClient } = useApiClient()
 
 const title = ref('')
 
@@ -51,7 +51,7 @@ async function save() {
     // A rename is a PUT of the whole row, so everything it keeps is restated —
     // an omitted field would be a cleared one.
     if (props.chapter) {
-      await contents.replace(props.itemId, props.chapter.id, {
+      await libraryClient.replaceContent(props.itemId, props.chapter.id, {
         title: title.value.trim(),
         index: props.chapter.index,
         language: props.chapter.language,
@@ -59,7 +59,7 @@ async function save() {
         contentUrl: props.chapter.contentUrl
       })
     } else {
-      await contents.create(props.itemId, { title: title.value.trim() })
+      await libraryClient.createContent(props.itemId, { title: title.value.trim() })
     }
   } catch (cause) {
     saveError.value = apiMessage(cause, FALLBACK_ERROR)

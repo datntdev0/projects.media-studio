@@ -17,9 +17,9 @@ const SEARCH_DEBOUNCE = 300
 
 const route = useRoute()
 
-const library = useLibrary()
+const { libraryClient } = useApiClient()
 
-const contents = useLibraryContents()
+const covers = useCovers()
 
 const files = useContentFiles()
 
@@ -33,13 +33,13 @@ const debouncedSearch = refDebounced(search, SEARCH_DEBOUNCE)
 
 const { data: item, status: itemStatus, error: itemError, refresh: refreshItem } = useAsyncData(
   () => `library-item-${itemId.value}`,
-  () => library.get(itemId.value),
+  () => libraryClient.get(itemId.value).then(asLibraryItem),
   { watch: [itemId] }
 )
 
 const { data: page, status: contentStatus, error: contentError, refresh: refreshContents } = useAsyncData(
   () => `library-contents-${itemId.value}`,
-  () => contents.list(itemId.value, { search: debouncedSearch.value.trim() || undefined, pageSize: PAGE_SIZE }),
+  () => libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, undefined, PAGE_SIZE).then(asLibraryContentPage),
   { lazy: true, watch: [itemId, debouncedSearch] }
 )
 
@@ -140,8 +140,10 @@ async function onItemDeleted() {
   toast.add({ title: `Deleted ${item.value?.title ?? 'the item'}`, icon: 'i-lucide-check', color: 'primary' })
 }
 
-function removeItem() {
-  return library.remove(itemId.value)
+/** The item, then the cover it pointed at — the order `removeContent` below takes for a row and its bytes. */
+async function removeItem() {
+  await libraryClient.remove(itemId.value)
+  await covers.discard(item.value?.coverUrl)
 }
 
 /**
@@ -150,7 +152,7 @@ function removeItem() {
  */
 async function removeContent() {
   for (const content of deleting.value) {
-    await contents.remove(itemId.value, content.id)
+    await libraryClient.removeContent(itemId.value, content.id)
     await files.discard(content.contentUrl)
   }
 }
@@ -180,7 +182,7 @@ async function onUpload(picked: FileList | null) {
 
       uploaded = await files.uploadAsset(itemId.value, file)
 
-      await contents.create(itemId.value, { filename: file.name, filesize: file.size, contentUrl: uploaded })
+      await libraryClient.createContent(itemId.value, { filename: file.name, filesize: file.size, contentUrl: uploaded })
       added += 1
     } catch (cause) {
       // The row is what failed, so the object it would have pointed at goes —

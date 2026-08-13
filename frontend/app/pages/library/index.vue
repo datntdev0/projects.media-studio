@@ -13,7 +13,8 @@ const PAGE_SIZE = 20
 /** Long enough that typing a title does not fetch once per letter. */
 const SEARCH_DEBOUNCE = 300
 
-const library = useLibrary()
+const { libraryClient } = useApiClient()
+const covers = useCovers()
 const toast = useToast()
 
 const filters = reactive<LibraryFilters>({
@@ -46,7 +47,11 @@ watch(() => [filters.type, filters.status, filters.sourceMode, search.value], ()
 
 const { data: page, status: listStatus, error: listError, refresh } = useAsyncData(
   'library',
-  () => library.list(query.value),
+  () => {
+    const { type, status, sourceMode, search: term, page: number, pageSize } = query.value
+
+    return libraryClient.list(type, status, sourceMode, term, number, pageSize).then(asLibraryItemPage)
+  },
   { lazy: true, watch: [query] }
 )
 
@@ -112,9 +117,18 @@ async function onSaved() {
   toast.add({ title: added ? 'Item added' : 'Item saved', icon: 'i-lucide-check', color: 'primary' })
 }
 
+/**
+ * The item, then the cover it pointed at — the order every delete here takes: the
+ * row first, its bytes after, so a refused delete leaves an item with its cover
+ * rather than one pointing at nothing.
+ *
+ * `discard` is quiet about a URL that is not ours, which is what makes it safe to
+ * call on a cover somebody linked to rather than uploaded.
+ */
 async function removeItem() {
   if (deleting.value) {
-    await library.remove(deleting.value.id)
+    await libraryClient.remove(deleting.value.id)
+    await covers.discard(deleting.value.coverUrl)
   }
 }
 

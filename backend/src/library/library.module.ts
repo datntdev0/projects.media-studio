@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { LibraryContentController } from './library-content.controller';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryContentRepository } from './library-content.repository';
 import { LibraryController } from './library.controller';
@@ -7,8 +6,12 @@ import { LibraryManager } from './library.manager';
 import { LibraryRepository } from './library.repository';
 
 /**
- * The catalogue everything else will hang off, and what each item holds: two
- * controllers over two managers over two repositories, one job each.
+ * The catalogue everything else will hang off, and what each item holds: one
+ * controller over two managers over two repositories, one job each.
+ *
+ * One controller because content is not addressable apart from its item — see
+ * `library.controller.ts`. The managers stay two: an item's rules and a row's are
+ * not the same rules.
  *
  * The managers are exported because the parts after this one read and write items
  * and their content without going through HTTP — a scraping job fills in the
@@ -16,7 +19,7 @@ import { LibraryRepository } from './library.repository';
  * is this module's alone.
  */
 @Module({
-  controllers: [LibraryController, LibraryContentController],
+  controllers: [LibraryController],
   providers: [LibraryManager, LibraryRepository, LibraryContentManager, LibraryContentRepository],
   exports: [LibraryManager, LibraryContentManager],
 })

@@ -6,15 +6,6 @@ import type { FormError } from '@nuxt/ui'
  * shows who the API agrees the caller is. Out of `appNavLinks` — an account
  * screen, not a section.
  */
-interface Profile {
-  id: string
-  email: string
-  name: string
-  emailVerified: boolean
-  photoUrl: string | null
-  createdAt: string
-  lastSignInAt: string | null
-}
 
 /** Matches the floor the API enforces — see ChangePasswordDto. */
 const MIN_PASSWORD_LENGTH = 8
@@ -22,10 +13,10 @@ const MIN_PASSWORD_LENGTH = 8
 const FALLBACK_ERROR = 'Could not change your password. Try again.'
 
 const { initials, reauthenticate, signOut } = useAuth()
-const api = useApi()
+const { authClient } = useApiClient()
 const toast = useToast()
 
-const { data: profile, error: loadError, refresh } = await useAsyncData('profile', () => api<Profile>('/auth/me'))
+const { data: profile, error: loadError, refresh } = await useAsyncData('profile', () => authClient.me())
 
 const details = computed(() => profile.value
   ? [
@@ -80,10 +71,7 @@ async function onSubmit() {
   let changed = false
 
   try {
-    await api('/auth/me/password', {
-      method: 'PATCH',
-      body: { currentPassword: passwords.current, newPassword: passwords.next }
-    })
+    await authClient.changePassword({ currentPassword: passwords.current, newPassword: passwords.next })
     changed = true
 
     // The change does not renew the session it was made from, so sign in again

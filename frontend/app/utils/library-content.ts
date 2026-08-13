@@ -1,12 +1,19 @@
 import type { BadgeProps } from '@nuxt/ui'
-import type { LibraryContent, LibraryContentStatus } from '~/types/library-content'
+import type { LibraryContent, LibraryContentPage, LibraryContentStatus } from '~/types/library-content'
 import type { LibraryItemType } from '~/types/library'
+import type { LibraryContentPageDto, NovelChapterDto } from './api.clients'
 
 /**
  * How a piece of content reads on screen. Safe because `LibraryContent` is a
  * discriminated union: a chapter's word count and an asset's size are only
  * reachable on the types that carry one.
  */
+
+/** A generated row, read as the union everything below narrows on — see `asLibraryItem`. */
+export const asLibraryContent = (content: NovelChapterDto): LibraryContent => content as unknown as LibraryContent
+
+/** The same, for a page of them. */
+export const asLibraryContentPage = (page: LibraryContentPageDto): LibraryContentPage => page as unknown as LibraryContentPage
 
 /** The mockup's own words for the three states. */
 const CONTENT_STATUS_TAGS: Record<LibraryContentStatus, { label: string, color: BadgeProps['color'], variant: BadgeProps['variant'] }> = {

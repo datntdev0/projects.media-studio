@@ -12,9 +12,6 @@ import { AppConfigService } from '../config/app-config.service';
  */
 type Bucket = ReturnType<Storage['bucket']>;
 
-/** Where an object is downloaded from, when it is not the emulator. */
-const STORAGE_HOST = 'https://firebasestorage.googleapis.com';
-
 /**
  * The Firebase Admin app, initialised once.
  *
@@ -85,26 +82,6 @@ export class FirebaseAdminService implements OnModuleInit {
   /** The one bucket this service writes to. Named rather than the project default, so the two cannot differ. */
   get bucket(): Bucket {
     return getStorage(this.app).bucket(this.config.firebase.storageBucket);
-  }
-
-  /**
-   * Where an object can be read from, as a URL.
-   *
-   * The same shape `getDownloadURL` returns, deliberately: an item's cover
-   * already carries one, and a second spelling of the same thing would be one
-   * more shape for anything reading these to recognise. Built here rather than
-   * with that function, which fetches the object's metadata to read back a token
-   * its caller has just written — a round trip for something already known.
-   *
-   * `token` is the object's `firebaseStorageDownloadTokens` metadata. Whoever
-   * holds the URL can read the object, which is what makes it usable from an
-   * `<img>`, and why one is only made for something a signed-in user may read.
-   */
-  downloadUrl(objectPath: string, token: string): string {
-    const { storageBucket, emulators } = this.config.firebase;
-    const host = emulators.storageHost ? `http://${emulators.storageHost}` : STORAGE_HOST;
-
-    return `${host}/v0/b/${storageBucket}/o/${encodeURIComponent(objectPath)}?alt=media&token=${token}`;
   }
 
   /**

@@ -1,11 +1,25 @@
 import type { BadgeProps } from '@nuxt/ui'
-import type { LibraryChoice, LibraryFilterOption, LibraryFilters, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, LibraryView, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
+import type { LibraryChoice, LibraryFilterOption, LibraryFilters, LibraryItem, LibraryItemDetail, LibraryItemPage, LibraryItemStatus, LibraryItemType, LibrarySourceMode, LibraryView, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
+import type { LibraryItemDto, LibraryItemPageDto } from './api.clients'
 
 /**
  * How a library item reads on screen — the labels, tags and summaries both views
  * share. Safe because `LibraryItem` is a discriminated union: a size or run time is
  * only reachable on the types that carry one.
  */
+
+/**
+ * A generated item, read as the union everything below narrows on.
+ *
+ * `metadata` is `oneOf` three shapes in the document, and NSwag flattens a `oneOf`
+ * to its first branch — so every generated item describes itself as a novel. The
+ * bytes off the wire are already right; only the generator's reading of them was
+ * narrow, and this is the one place the two are reconciled.
+ */
+export const asLibraryItem = (item: LibraryItemDto): LibraryItemDetail => item as unknown as LibraryItemDetail
+
+/** The same, for a page of them. */
+export const asLibraryItemPage = (page: LibraryItemPageDto): LibraryItemPage => page as unknown as LibraryItemPage
 
 /** What a piece of content is called, per type. */
 const CONTENT_UNITS: Record<LibraryItemType, string> = {
