@@ -89,13 +89,13 @@ export class CreateLibraryItemDto {
   @IsEnum(LibrarySourceMode)
   sourceMode!: LibrarySourceMode;
 
-  @ApiPropertyOptional({ maxLength: MAX_SOURCE_NAME, description: 'Which crawler, for a crawler item — required of one. A manual item is `Manual`, whatever is sent.', example: 'novelbin.crawler' })
+  @ApiPropertyOptional({ maxLength: MAX_SOURCE_NAME, description: 'Which crawler, for a crawler item — required of one. A manual item is `Manual`, whatever is sent.', example: 'novel543' })
   @IsOptional()
   @IsString()
   @MaxLength(MAX_SOURCE_NAME)
   sourceName?: string;
 
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: MAX_URL, description: 'What the crawler reads. Required of a crawler item, and refused of a manual one.', example: 'https://novelbin.net/n/silent-cartographer' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: MAX_URL, description: 'What the crawler reads. Required of a crawler item, and refused of a manual one.', example: 'https://www.novel543.com/0413553971' })
   @IsOptional()
   @IsUrl()
   @MaxLength(MAX_URL)

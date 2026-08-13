@@ -31,6 +31,9 @@ export const LIBRARY_PATH = 'library';
 /** Under an item. `/api/v1/library/:itemId/contents/…` */
 export const LIBRARY_CONTENT_PATH = 'contents';
 
+/** Versioned. `/api/v1/scraping/…` */
+export const SCRAPING_PATH = 'scraping';
+
 /** The generated OpenAPI document. */
 export const OPENAPI_JSON_PATH = 'openapi.json';
 

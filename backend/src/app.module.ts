@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { CoreModule } from './core/core.module';
 import { LibraryModule } from './library/library.module';
+import { ScrapingModule } from './scraping/scraping.module';
 import { SystemModule } from './system/system.module';
 
 /**
@@ -10,6 +11,6 @@ import { SystemModule } from './system/system.module';
  * has no module to own it.
  */
 @Module({
-  imports: [CoreModule, SystemModule, AuthModule, LibraryModule],
+  imports: [CoreModule, SystemModule, AuthModule, LibraryModule, ScrapingModule],
 })
 export class AppModule {}

@@ -81,10 +81,10 @@ export class LibraryItemDto {
   @ApiProperty({ description: 'Set on creation and immutable after it.', enum: LibrarySourceMode, enumName: 'LibrarySourceMode' })
   sourceMode!: LibrarySourceMode;
 
-  @ApiProperty({ description: "`Manual`, or the crawler's name.", example: 'novelbin.crawler' })
+  @ApiProperty({ description: "`Manual`, or the crawler's name.", example: 'novel543' })
   sourceName!: string;
 
-  @ApiProperty({ type: String, nullable: true, description: 'What a crawler reads. Null for a manual item.', example: 'https://novelbin.net/n/silent-cartographer' })
+  @ApiProperty({ type: String, nullable: true, description: 'What a crawler reads. Null for a manual item.', example: 'https://www.novel543.com/0413553971' })
   sourceUrl!: string | null;
 
   @ApiProperty({ description: 'Where the item is in our pipeline.', enum: LibraryItemStatus, enumName: 'LibraryItemStatus' })
