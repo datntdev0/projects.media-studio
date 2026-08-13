@@ -1,10 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppConfigService } from './config/app-config.service';
 import { appConfig } from './config/configuration';
 import { FirebaseAdminService } from './firebase/firebase-admin.service';
 import { AppLogger } from './logging/app.logger';
 import { CacheProvider } from './providers/cache.provider';
+import { ScheduleProvider } from './providers/schedule.provider';
 import { ScrapingProvider } from './providers/scraping.provider';
 
 /**
@@ -24,8 +26,10 @@ import { ScrapingProvider } from './providers/scraping.provider';
       cache: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // Sets up the scheduler ScheduleProvider books its jobs with.
+    ScheduleModule.forRoot(),
   ],
-  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScrapingProvider],
-  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScrapingProvider],
+  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScheduleProvider, ScrapingProvider],
+  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ScheduleProvider, ScrapingProvider],
 })
 export class CoreModule {}
