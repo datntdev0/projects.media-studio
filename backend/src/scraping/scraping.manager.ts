@@ -2,8 +2,10 @@ import { BadRequestException, Injectable, Logger, NotFoundException, NotImplemen
 import { AppConfigService } from '../core/config/app-config.service';
 import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '../core/providers/scraping.provider';
+import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryItemType, NovelStatus } from '../library/entities/library-item.entity';
 import { Crawler, CRAWLER_NAMES, crawlerByName } from './crawlers';
+import { DiscoverDto } from './dto/discover.dto';
 import { NovelPreviewDto, PreviewDto } from './dto/preview.dto';
 import { ValidateDto } from './dto/validate.dto';
 
@@ -58,6 +60,16 @@ export class ScrapingManager {
     await this.cache.set(key, CacheType.Scraping, preview, this.config.scraping.cacheTtlDays * DAY_MS);
 
     return preview;
+  }
+
+  /**
+   * What the item's source holds and our store does not, appended as placeholders.
+   *
+   * Declared here and nothing more: the comparison, the batched write and the
+   * recount arrive with step 2.
+   */
+  discover(input: DiscoverDto): Promise<LibraryItemDto> {
+    throw new NotImplementedException(`Discovering the content of ${input.libraryId} is not wired up yet`);
   }
 
   /**

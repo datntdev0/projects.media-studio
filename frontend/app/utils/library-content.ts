@@ -15,10 +15,12 @@ export const asLibraryContent = (content: NovelChapterDto): LibraryContent => co
 /** The same, for a page of them. */
 export const asLibraryContentPage = (page: LibraryContentPageDto): LibraryContentPage => page as unknown as LibraryContentPage
 
-/** The mockup's own words for the three states. */
+/** One badge per state, labelled with the state's own name. The `Record` makes a missing one a compile error. */
 const CONTENT_STATUS_TAGS: Record<LibraryContentStatus, { label: string, color: BadgeProps['color'], variant: BadgeProps['variant'] }> = {
-  pending: { label: 'Queued', color: 'neutral', variant: 'subtle' },
-  ready: { label: 'Done', color: 'primary', variant: 'subtle' },
+  discovered: { label: 'Discovered', color: 'neutral', variant: 'outline' },
+  pending: { label: 'Pending', color: 'neutral', variant: 'subtle' },
+  scraping: { label: 'Scraping', color: 'primary', variant: 'subtle' },
+  completed: { label: 'Completed', color: 'primary', variant: 'subtle' },
   failed: { label: 'Failed', color: 'neutral', variant: 'outline' }
 }
 

@@ -2,15 +2,18 @@ import { FirestoreEntity } from '../../core/firebase/firestore.repository';
 import { LibraryItemType } from './library-item.entity';
 
 /**
- * Where one piece of content is.
+ * How far one piece of content has got — a life cycle rather than a derivation.
  *
- * Split by ownership, as `LibraryItemStatus` is: `Pending` and `Ready` follow from
- * whether the bytes are stored, so the manager derives both from `contentUrl` and
- * no client sends either. `Failed` belongs to the job runner.
+ * `Discovered` is what the source turned out to hold and nothing more; `Pending` is
+ * queued, or a placeholder added by hand; `Scraping` is in flight; `Completed` means
+ * the bytes are stored. `Scraping` and `Failed` belong to the job runner, and the
+ * manager still derives `Pending` and `Completed` from `contentUrl`.
  */
 export enum LibraryContentStatus {
+  Discovered = 'discovered',
   Pending = 'pending',
-  Ready = 'ready',
+  Scraping = 'scraping',
+  Completed = 'completed',
   Failed = 'failed',
 }
 
@@ -21,6 +24,8 @@ export enum LibraryContentStatus {
  */
 export interface LibraryContentBase extends FirestoreEntity {
   id: string;
+  /** Where the piece came from. Null for a row added by hand, and what discovery matches on. */
+  sourceUrl: string | null;
   /** Where the bytes are. Null while the row is a placeholder — a chapter added by title alone. */
   contentUrl: string | null;
   status: LibraryContentStatus;

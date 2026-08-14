@@ -484,7 +484,7 @@ export class LibraryClient {
 
     /**
      * One item's content — chapters by their number, assets by their name
-     * @param status (optional) All three, including the one only the job runner sets — a filter reads data it does not write.
+     * @param status (optional) All five, including the ones only discovery and the job runner set — a filter reads data it does not write.
      * @param search (optional) Case-insensitive, matched against a chapter's title or an asset's filename.
      * @param page (optional) 
      * @param pageSize (optional) 
@@ -781,7 +781,7 @@ export class ScrapingClient {
      * @param refresh (optional) Skip the cached answer and read the source again.
      */
     validate(body: ValidateDto, refresh?: boolean | undefined, signal?: AbortSignal): Promise<PreviewDto> {
-        let url_ = this.baseUrl + "/api/v1/scraping/validate?";
+        let url_ = this.baseUrl + "/api/v1/scrapings/validate?";
         if (refresh === null)
             throw new globalThis.Error("The parameter 'refresh' cannot be null.");
         else if (refresh !== undefined)
@@ -841,6 +841,72 @@ export class ScrapingClient {
         }
         return Promise.resolve<PreviewDto>(null as any);
     }
+
+    /**
+     * Read an item's source, and append the content it turns out to hold
+     * @return Read, compared, appended. The counters are as they now stand.
+     */
+    discover(body: DiscoverDto, signal?: AbortSignal): Promise<LibraryItemDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/discover";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDiscover(_response);
+        });
+    }
+
+    protected processDiscover(response: Response): Promise<LibraryItemDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryItemDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A manual item \u2014 it has no source to read \u2014 or a `sourceUrl` that is not on the crawler\'s own site.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id, no crawler under its `sourceName`, or no book at its URL.", status, _responseText, _headers);
+            });
+        } else if (status === 501) {
+            return response.text().then((_responseText) => {
+            return throwException("A crawler item that is not a novel.", status, _responseText, _headers);
+            });
+        } else if (status === 502) {
+            return response.text().then((_responseText) => {
+            return throwException("The source or the browser behind the scraping service failed.", status, _responseText, _headers);
+            });
+        } else if (status === 503) {
+            return response.text().then((_responseText) => {
+            return throwException("The scraping service did not answer, or did not answer in time.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LibraryItemDto>(null as any);
+    }
 }
 
 /** The environment that build was configured for, as recorded on boot. */
@@ -898,16 +964,18 @@ export interface ChangePasswordDto {
 /** The item's own type. Set from the parent, never sent. */
 export type NovelChapterType = "novel";
 
-/** Derived from `contentUrl`. `failed` is the job runner's. */
-export type LibraryContentStatus = "pending" | "ready" | "failed";
+/** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
+export type LibraryContentStatus = "discovered" | "pending" | "scraping" | "completed" | "failed";
 
 export interface NovelChapterDto {
     id: string;
     /** The item's own type. Set from the parent, never sent. */
     type: NovelChapterType;
+    /** Where the piece came from. Null for a row added by hand. */
+    sourceUrl: string | null;
     /** Where the bytes are. Null while the row is a placeholder. */
     contentUrl: string | null;
-    /** Derived from `contentUrl`. `failed` is the job runner's. */
+    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
@@ -926,9 +994,11 @@ export interface ImageAssetDto {
     id: string;
     /** The item's own type. Set from the parent, never sent. */
     type: ImageAssetType;
+    /** Where the piece came from. Null for a row added by hand. */
+    sourceUrl: string | null;
     /** Where the bytes are. Null while the row is a placeholder. */
     contentUrl: string | null;
-    /** Derived from `contentUrl`. `failed` is the job runner's. */
+    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
@@ -944,9 +1014,11 @@ export interface VideoAssetDto {
     id: string;
     /** The item's own type. Set from the parent, never sent. */
     type: VideoAssetType;
+    /** Where the piece came from. Null for a row added by hand. */
+    sourceUrl: string | null;
     /** Where the bytes are. Null while the row is a placeholder. */
     contentUrl: string | null;
-    /** Derived from `contentUrl`. `failed` is the job runner's. */
+    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
@@ -1142,6 +1214,8 @@ export interface CreateLibraryContentDto {
     filename?: string;
     /** An image or video asset only. Bytes, as the uploader reports them. */
     filesize?: number;
+    /** Where the piece came from. Left out for a row added by hand. */
+    sourceUrl?: string | null;
     /** Where the browser put the bytes. Left out for a placeholder row. */
     contentUrl?: string | null;
 }
@@ -1159,6 +1233,8 @@ export interface UpdateLibraryContentDto {
     filename?: string;
     /** An image or video asset only. Bytes, as the uploader reports them. */
     filesize?: number;
+    /** Where the piece came from. Left out for a row added by hand. */
+    sourceUrl?: string | null;
     /** Where the browser put the bytes. Left out for a placeholder row. */
     contentUrl?: string | null;
 }
@@ -1210,6 +1286,11 @@ export interface PreviewDto {
     /** The crawler's kind, which decides the shape of `content`. */
     type: LibraryItemType;
     content: NovelPreviewDto;
+}
+
+export interface DiscoverDto {
+    /** The crawler item to read the source of. A manual item is a 400. */
+    libraryId: string;
 }
 
 export class ApiException extends Error {

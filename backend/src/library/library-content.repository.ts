@@ -27,7 +27,7 @@ export interface LibraryContentFilter {
 /** What the item's counters are built from — see `LibraryContentManager`. */
 export interface LibraryContentCounts {
   total: number;
-  ready: number;
+  completed: number;
   bytes: number;
 }
 
@@ -145,13 +145,13 @@ export class LibraryContentRepository {
   async counts(itemId: string): Promise<LibraryContentCounts> {
     const contents = this.contentsOf(itemId);
 
-    const [total, ready, bytes] = await Promise.all([
+    const [total, completed, bytes] = await Promise.all([
       contents.count().get(),
-      contents.where('status', '==', LibraryContentStatus.Ready).count().get(),
+      contents.where('status', '==', LibraryContentStatus.Completed).count().get(),
       contents.aggregate({ sum: AggregateField.sum('filesize') }).get(),
     ]);
 
-    return { total: total.data().count, ready: ready.data().count, bytes: bytes.data().sum ?? 0 };
+    return { total: total.data().count, completed: completed.data().count, bytes: bytes.data().sum ?? 0 };
   }
 
   private contentsOf(itemId: string): CollectionReference {

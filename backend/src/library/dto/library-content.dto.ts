@@ -20,10 +20,13 @@ export class LibraryContentBaseDto implements LibraryContentBase {
   @ApiProperty({ description: "The item's own type. Set from the parent, never sent.", enum: LibraryItemType, enumName: 'LibraryItemType' })
   type!: LibraryItemType;
 
+  @ApiProperty({ type: String, nullable: true, description: 'Where the piece came from. Null for a row added by hand.', example: null })
+  sourceUrl!: string | null;
+
   @ApiProperty({ type: String, nullable: true, description: 'Where the bytes are. Null while the row is a placeholder.', example: null })
   contentUrl!: string | null;
 
-  @ApiProperty({ description: 'Derived from `contentUrl`. `failed` is the job runner\'s.', enum: LibraryContentStatus, enumName: 'LibraryContentStatus' })
+  @ApiProperty({ description: 'A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery\'s and the job runner\'s.', enum: LibraryContentStatus, enumName: 'LibraryContentStatus' })
   status!: LibraryContentStatus;
 
   @ApiProperty({ example: '2026-08-11T09:12:04.113Z' })

@@ -17,7 +17,7 @@ const MAX_PAGE_SIZE = 200;
  * mockup scrolls them rather than paging through them.
  */
 export class QueryListLibraryContentsDto {
-  @ApiPropertyOptional({ description: 'All three, including the one only the job runner sets — a filter reads data it does not write.', enum: LibraryContentStatus, enumName: 'LibraryContentStatus' })
+  @ApiPropertyOptional({ description: 'All five, including the ones only discovery and the job runner set — a filter reads data it does not write.', enum: LibraryContentStatus, enumName: 'LibraryContentStatus' })
   @IsOptional()
   @IsEnum(LibraryContentStatus)
   status?: LibraryContentStatus;

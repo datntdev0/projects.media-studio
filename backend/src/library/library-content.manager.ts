@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateLibraryContentDto } from './dto/create-library-content.dto';
+import { CreateLibraryContentDto } from './dto/library-content-create.dto';
 import { LibraryContentPageDto } from './dto/library-content.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
-import { UpdateLibraryContentDto } from './dto/update-library-content.dto';
+import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { ImageAsset, LibraryContent, LibraryContentBase, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemType } from './entities/library-item.entity';
 import { LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
@@ -115,7 +115,7 @@ export class LibraryContentManager {
 
     await this.items.updateCounters(item.id, {
       discoveredCount: counts.total,
-      downloadedCount: counts.ready,
+      downloadedCount: counts.completed,
       // A novel's metadata has no size field, so it is left out rather than added.
       downloadedSize: item.type === LibraryItemType.Novel ? undefined : counts.bytes,
     });
@@ -165,14 +165,15 @@ function nextDraft(stored: LibraryContent, input: UpdateLibraryContentDto): Libr
 }
 
 /**
- * What the row is, whatever its type: where its bytes are, and therefore where it
- * stands. `status` is derived rather than sent — a row with a URL holds something
- * and a row without one does not, and no third answer is a client's to give.
+ * What the row is, whatever its type: where it came from, where its bytes are, and
+ * therefore where it stands. `status` is derived rather than sent — a row with a URL
+ * holds something and a row without one does not, and no third answer is a client's
+ * to give. The two states discovery and the runner set are theirs alone.
  */
 function rootOf(input: CreateLibraryContentDto): ContentRoot {
   const contentUrl = input.contentUrl ?? null;
 
-  return { contentUrl, status: contentUrl ? LibraryContentStatus.Ready : LibraryContentStatus.Pending };
+  return { sourceUrl: input.sourceUrl ?? null, contentUrl, status: contentUrl ? LibraryContentStatus.Completed : LibraryContentStatus.Pending };
 }
 
 /** A chapter is a title and the text under it — and is refused the fields of a file. */

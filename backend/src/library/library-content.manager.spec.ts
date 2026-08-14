@@ -66,8 +66,8 @@ class FakeContentRepository {
     return Promise.resolve();
   }
 
-  counts(): Promise<{ total: number, ready: number, bytes: number }> {
-    return Promise.resolve({ total: this.rows.length, ready: this.rows.filter((row) => row.status === LibraryContentStatus.Ready).length, bytes: 4096 });
+  counts(): Promise<{ total: number, completed: number, bytes: number }> {
+    return Promise.resolve({ total: this.rows.length, completed: this.rows.filter((row) => row.status === LibraryContentStatus.Completed).length, bytes: 4096 });
   }
 }
 
@@ -117,8 +117,9 @@ function chapter(over: Partial<NovelChapter> = {}): NovelChapter {
     title: 'Nine Bells for the Harbour',
     language: 'en',
     words: 2744,
+    sourceUrl: null,
     contentUrl: TEXT_URL,
-    status: LibraryContentStatus.Ready,
+    status: LibraryContentStatus.Completed,
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
@@ -131,8 +132,9 @@ function asset(over: Partial<ImageAsset> = {}): ImageAsset {
     type: LibraryItemType.Image,
     filename: 'img_001.jpg',
     filesize: 2088960,
+    sourceUrl: null,
     contentUrl: IMAGE_URL,
-    status: LibraryContentStatus.Ready,
+    status: LibraryContentStatus.Completed,
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
@@ -169,11 +171,11 @@ describe('LibraryContentManager.create', () => {
     expect(created).toMatchObject({ index: 9 });
   });
 
-  it('is pending without a URL and ready with one', async () => {
+  it('is pending without a URL and completed with one', async () => {
     const manager = managerOver(new FakeContentRepository(), new FakeItemRepository([novel()]));
 
     await expect(manager.create('novel-1', { title: 'Paper Boats' })).resolves.toMatchObject({ status: LibraryContentStatus.Pending, contentUrl: null });
-    await expect(manager.create('novel-1', { title: 'Paper Boats', contentUrl: TEXT_URL })).resolves.toMatchObject({ status: LibraryContentStatus.Ready });
+    await expect(manager.create('novel-1', { title: 'Paper Boats', contentUrl: TEXT_URL })).resolves.toMatchObject({ status: LibraryContentStatus.Completed });
   });
 
   it('refuses a chapter without a title', async () => {

@@ -5,12 +5,14 @@
 
 import type { LibraryItemType } from '~/types/library'
 
-/** Where one piece of content is. `failed` is the job runner's; the other two follow from `contentUrl`. */
-export type LibraryContentStatus = 'pending' | 'ready' | 'failed'
+/** How far one piece of content has got. `pending` and `completed` follow from `contentUrl`; the rest are discovery's and the job runner's. */
+export type LibraryContentStatus = 'discovered' | 'pending' | 'scraping' | 'completed' | 'failed'
 
 /** What a row carries whatever its type. */
 interface LibraryContentBase {
   id: string
+  /** Where the piece came from. Null for a row added by hand. */
+  sourceUrl: string | null
   /** Where the bytes are. Null while the row is a placeholder. */
   contentUrl: string | null
   status: LibraryContentStatus
@@ -68,6 +70,7 @@ export interface CreateLibraryContent {
   words?: number
   filename?: string
   filesize?: number
+  sourceUrl?: string | null
   contentUrl?: string | null
 }
 

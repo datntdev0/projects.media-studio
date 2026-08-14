@@ -1,4 +1,4 @@
-import { CreateLibraryContentDto } from './create-library-content.dto';
+import { CreateLibraryContentDto } from './library-content-create.dto';
 
 /**
  * The row's whole writable representation, which is why the route is a `PUT`:

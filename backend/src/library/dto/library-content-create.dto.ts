@@ -63,6 +63,12 @@ export class CreateLibraryContentDto {
   @Min(0)
   filesize?: number;
 
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: MAX_URL, description: 'Where the piece came from. Left out for a row added by hand.' })
+  @IsOptional()
+  @IsUrl()
+  @MaxLength(MAX_URL)
+  sourceUrl?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: MAX_URL, description: 'Where the browser put the bytes. Left out for a placeholder row.' })
   @IsOptional()
   @IsUrl()
