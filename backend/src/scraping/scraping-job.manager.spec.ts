@@ -5,6 +5,7 @@ jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { ScheduledTask, ScheduleProvider } from '../core/providers/schedule.provider';
 import { ScrapedContent, ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
@@ -19,8 +20,11 @@ import { ScrapingJobManager, selectByRange, wordCount } from './scraping-job.man
 
 const NOW = '2026-08-11T09:12:04.113Z';
 
-/** Three chapters, one of them done — enough for a caller to see it was not the last. */
-const COUNTS: LibraryContentCounts = { total: 3, completed: 1, bytes: 0 };
+/** Three chapters, one done and two still owed — enough for a caller to see it was not the last. */
+const COUNTS: LibraryContentCounts = { total: 3, completed: 1, failed: 0, pending: 2, bytes: 0 };
+
+/** Nothing queued and nothing in flight: what a drained job leaves behind. */
+const DRAINED: LibraryContentCounts = { total: 3, completed: 3, failed: 0, pending: 0, bytes: 0 };
 
 const CRAWLER = 'novel543';
 
@@ -105,6 +109,11 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
 
       return Promise.resolve();
     }),
+    markFailed: jest.fn().mockImplementation(() => {
+      order.push('markFailed');
+
+      return Promise.resolve();
+    }),
   };
 
   const contents = {
@@ -117,7 +126,9 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
 
       return Promise.resolve(COUNTS);
     }),
-    markFailed: jest.fn().mockResolvedValue(undefined),
+    // Answers with the counts, as `completeScrape` does — it recounts, and a job whose
+    // last chapter fails is still a job that has drained.
+    markFailed: jest.fn().mockResolvedValue(COUNTS),
   };
 
   const producer = { sendMany: jest.fn().mockResolvedValue(undefined) };
@@ -138,6 +149,14 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     }),
   };
 
+  const realtime = {
+    clearContents: jest.fn().mockImplementation((itemId: string) => {
+      order.push(`clearContents:${itemId}`);
+
+      return Promise.resolve();
+    }),
+  };
+
   const manager = new ScrapingJobManager(
     library as unknown as LibraryManager,
     contents as unknown as LibraryContentManager,
@@ -145,9 +164,10 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     schedule as unknown as ScheduleProvider,
     scraping as unknown as ScrapingProvider,
     files as unknown as ContentFileProvider,
+    realtime as unknown as RealtimeProvider,
   );
 
-  return { manager, library, contents, producer, schedule, scraping, files, order, rows };
+  return { manager, library, contents, producer, schedule, scraping, files, realtime, order, rows };
 }
 
 /** The payloads one `sendMany` was handed, and the options that went with them. */
@@ -224,7 +244,8 @@ describe('ScrapingJobManager.start', () => {
     const started = await manager.start(job());
 
     expect(started).toEqual({ queued: 3, skipped: 0, startAt: null });
-    expect(contents.markQueued).toHaveBeenCalledWith('novel-1', ['chapter-1', 'chapter-2', 'chapter-3']);
+    // The rows rather than their ids: each carries the number the live tree names it by.
+    expect(contents.markQueued).toHaveBeenCalledWith('novel-1', [{ id: 'chapter-1', index: 1 }, { id: 'chapter-2', index: 2 }, { id: 'chapter-3', index: 3 }]);
     expect(library.markScraping).toHaveBeenCalledWith('novel-1');
     expect(published(producer).payloads).toEqual([message(), message({ contentId: 'chapter-2' }), message({ contentId: 'chapter-3' })]);
   });
@@ -341,10 +362,43 @@ describe('ScrapingJobManager.scrape', () => {
   it('returns the item to ready once the last chapter lands', async () => {
     const { manager, contents, library } = fixture();
 
-    contents.completeScrape.mockResolvedValue({ total: 3, completed: 3, bytes: 0 });
+    contents.completeScrape.mockResolvedValue(DRAINED);
     await manager.scrape(message());
 
     expect(library.markReady).toHaveBeenCalledWith('novel-1');
+  });
+
+  it('settles a job over a range, where the novel is nowhere near downloaded', async () => {
+    const { manager, contents, library } = fixture();
+
+    // Twenty of 1,305 fetched and nothing left owed. The old test — `completed === total`
+    // — never fired here, so the item wore **Scraping** for good.
+    contents.completeScrape.mockResolvedValue({ total: 1305, completed: 20, failed: 0, pending: 0, bytes: 0 });
+    await manager.scrape(message());
+
+    expect(library.markReady).toHaveBeenCalledWith('novel-1');
+  });
+
+  it('settles the item failed where the drained job left a row failed', async () => {
+    const { manager, contents, library } = fixture();
+
+    contents.completeScrape.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, bytes: 0 });
+    await manager.scrape(message());
+
+    expect(library.markFailed).toHaveBeenCalledWith('novel-1');
+    expect(library.markReady).not.toHaveBeenCalled();
+  });
+
+  it('drops the per-row subtree once the job settles, and not before', async () => {
+    const { manager, contents, realtime } = fixture();
+
+    await manager.scrape(message());
+    expect(realtime.clearContents).not.toHaveBeenCalled();
+
+    contents.completeScrape.mockResolvedValue(DRAINED);
+    await manager.scrape(message());
+
+    expect(realtime.clearContents).toHaveBeenCalledWith('novel-1');
   });
 
   it('leaves the item scraping while chapters remain', async () => {
@@ -401,5 +455,25 @@ describe('ScrapingJobManager.fail', () => {
     await manager.fail(message());
 
     expect(contents.markFailed).toHaveBeenCalledWith('novel-1', 'chapter-1');
+  });
+
+  it('settles the item where the failure was the last thing owed', async () => {
+    const { manager, contents, library, realtime } = fixture();
+
+    contents.markFailed.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, bytes: 0 });
+    await manager.fail(message());
+
+    // Without this the item never leaves `scraping`: nothing else notices a queue that
+    // drained on a failure rather than on a completion.
+    expect(library.markFailed).toHaveBeenCalledWith('novel-1');
+    expect(realtime.clearContents).toHaveBeenCalledWith('novel-1');
+  });
+
+  it('leaves the item alone while chapters are still owed', async () => {
+    const { manager, library } = fixture();
+
+    await manager.fail(message());
+
+    expect(library.markFailed).not.toHaveBeenCalled();
   });
 });

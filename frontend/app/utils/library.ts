@@ -1,5 +1,6 @@
 import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryChoice, LibraryFilterOption, LibraryFilters, LibraryItem, LibraryItemDetail, LibraryItemPage, LibraryItemStatus, LibraryItemType, LibrarySourceMode, LibraryView, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
+import type { ScrapingItemStatus } from '~/types/scraping-status'
 import type { LibraryItemDto, LibraryItemPageDto } from './api.clients'
 
 /**
@@ -20,6 +21,31 @@ export const asLibraryItem = (item: LibraryItemDto): LibraryItemDetail => item a
 
 /** The same, for a page of them. */
 export const asLibraryItemPage = (page: LibraryItemPageDto): LibraryItemPage => page as unknown as LibraryItemPage
+
+/**
+ * An item wearing a running job's own numbers instead of the ones the fetch returned.
+ *
+ * `live` is null wherever there is no job to believe — `useScrapingStatus` decides that,
+ * and this only applies what it was handed — so a screen can pass whatever it has and
+ * get the API's answer back untouched.
+ *
+ * Only the three fields a job moves: what it is, how much there is, and how much we
+ * hold. `statusTag()` and `contentLabel()` then read the merged row and need no idea
+ * any of this happened. The cast is `asLibraryItem`'s, for its reason: `metadata` is
+ * correlated with `type` by the union, and a spread loses the correlation without
+ * changing a single byte.
+ */
+export function withLiveStatus<T extends LibraryItem>(item: T, live: ScrapingItemStatus | null): T {
+  if (!live) {
+    return item
+  }
+
+  return {
+    ...item,
+    status: live.status,
+    metadata: { ...item.metadata, discoveredCount: live.total, downloadedCount: live.completed }
+  } as T
+}
 
 /** What a piece of content is called, per type. */
 const CONTENT_UNITS: Record<LibraryItemType, string> = {
@@ -90,6 +116,16 @@ export function contentLabel(item: LibraryItem): string {
   }
 
   return parts.join(' · ')
+}
+
+/**
+ * How much of the item is held, 0–100. Zero while a job has yet to publish a total,
+ * so the bar starts empty rather than at a width divided by nothing.
+ */
+export function progressPercent(item: LibraryItem): number {
+  const { discoveredCount, downloadedCount } = item.metadata
+
+  return discoveredCount > 0 ? Math.min(100, Math.round((downloadedCount / discoveredCount) * 100)) : 0
 }
 
 /**

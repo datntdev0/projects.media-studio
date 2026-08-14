@@ -28,6 +28,16 @@ export interface LibraryContentFilter {
 export interface LibraryContentCounts {
   total: number;
   completed: number;
+  /** Rows whose attempts are spent. What decides whether a drained job settles red. */
+  failed: number;
+  /**
+   * Rows queued or in flight — what is still owed.
+   *
+   * Zero is what *drained* means, and the only honest test of it: `completed === total`
+   * asks whether the whole item is downloaded, which a job over a range never makes
+   * true, so an item scraped in parts would wear **Scraping** for good.
+   */
+  pending: number;
   bytes: number;
 }
 
@@ -196,13 +206,22 @@ export class LibraryContentRepository {
   async counts(itemId: string): Promise<LibraryContentCounts> {
     const contents = this.contentsOf(itemId);
 
-    const [total, completed, bytes] = await Promise.all([
+    const [total, completed, failed, pending, bytes] = await Promise.all([
       contents.count().get(),
       contents.where('status', '==', LibraryContentStatus.Completed).count().get(),
+      contents.where('status', '==', LibraryContentStatus.Failed).count().get(),
+      // The two states a job still owes an answer for, in one query rather than two.
+      contents.where('status', 'in', [LibraryContentStatus.Pending, LibraryContentStatus.Scraping]).count().get(),
       contents.aggregate({ sum: AggregateField.sum('filesize') }).get(),
     ]);
 
-    return { total: total.data().count, completed: completed.data().count, bytes: bytes.data().sum ?? 0 };
+    return {
+      total: total.data().count,
+      completed: completed.data().count,
+      failed: failed.data().count,
+      pending: pending.data().count,
+      bytes: bytes.data().sum ?? 0,
+    };
   }
 
   private contentsOf(itemId: string): CollectionReference {

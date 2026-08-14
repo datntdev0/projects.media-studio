@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { ScheduleProvider } from '../core/providers/schedule.provider';
 import { ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
@@ -7,6 +8,7 @@ import { QueueProducer } from '../core/queues/queue.producer';
 import { LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
 import { LibraryItemType, LibrarySourceMode } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
+import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryManager } from '../library/library.manager';
 import { checkHost, Crawler, requireCrawler } from './crawlers';
 import { attemptsFor, ScrapingJobDto, ScrapingJobStartedDto } from './dto/scraping-job.dto';
@@ -36,6 +38,7 @@ export class ScrapingJobManager {
     private readonly schedule: ScheduleProvider,
     private readonly scraping: ScrapingProvider,
     private readonly files: ContentFileProvider,
+    private readonly realtime: RealtimeProvider,
   ) {}
 
   /**
@@ -74,7 +77,9 @@ export class ScrapingJobManager {
 
     // Marked before anything is published, so a job booked for 03:00 does not leave
     // the screen looking untouched.
-    await this.contents.markQueued(item.id, queued.map((chapter) => chapter.id));
+    // The whole rows rather than their ids: the live tree wants each one's number, and
+    // this is the one moment the claimed set is in hand.
+    await this.contents.markQueued(item.id, queued.map((chapter) => ({ id: chapter.id, index: chapter.index })));
     await this.library.markScraping(item.id);
 
     const publish = () => this.publish(crawler, item.id, queued, input);
@@ -128,16 +133,39 @@ export class ScrapingJobManager {
     // otherwise a draining queue says nothing at all.
     this.logger.debug(`Stored ${content.index} of ${message.itemId} — ${counts.completed}/${counts.total} done`);
 
-    // Nothing else in this design knows the queue has drained, so without this the
-    // item wears **Scraping** for good.
-    if (counts.completed === counts.total) {
-      await this.library.markReady(message.itemId);
-    }
+    await this.settle(message.itemId, counts);
   }
 
-  /** The attempts are spent, and the row says so. */
+  /** The attempts are spent, and the row says so — and may have been the last one owed. */
   async fail(message: ContentScrapeRequested): Promise<void> {
-    await this.contents.markFailed(message.itemId, message.contentId);
+    const counts = await this.contents.markFailed(message.itemId, message.contentId);
+
+    await this.settle(message.itemId, counts);
+  }
+
+  /**
+   * Where a job leaves the item, once nothing of it is queued or in flight.
+   *
+   * `pending === 0` is the whole test. It was `completed === total`, which asks whether
+   * the *novel* is downloaded rather than whether the *job* is over — so scraping
+   * chapters 1–20 of 1,305 left the item at **Scraping** for good, and so did any job
+   * that ended with a row failed.
+   *
+   * The per-row subtree goes with it: it described work that is over. The summary stays,
+   * because it is what tells the screen the job has settled.
+   */
+  private async settle(itemId: string, counts: LibraryContentCounts): Promise<void> {
+    if (counts.pending > 0) {
+      return;
+    }
+
+    if (counts.failed > 0) {
+      await this.library.markFailed(itemId);
+    } else {
+      await this.library.markReady(itemId);
+    }
+
+    await this.realtime.clearContents(itemId);
   }
 
   /**

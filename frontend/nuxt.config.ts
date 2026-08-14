@@ -32,8 +32,10 @@ export default defineNuxtConfig({
         apiKey: '',
         authDomain: '', // The domain of the Firebase Authentication instance, e.g. `my-project.firebaseapp.com`.
         storageBucket: '', // The bucket name is the same as the project ID, but with `.appspot.com` appended.
+        databaseUrl: '', // The Realtime Database holding live scraping status. Its subdomain is the namespace, and the backend must name the same one.
         emulatorAuthenticationHost: '', // The host of the Firebase Authentication emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_auth.
-        emulatorStorageHost: '' // The host of the Firebase Storage emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_storage.
+        emulatorStorageHost: '', // The host of the Firebase Storage emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_storage.
+        emulatorDatabaseHost: '' // The host of the Realtime Database emulator, if used. See https://firebase.google.com/docs/emulator-suite/connect_rtdb.
       }
     }
   },

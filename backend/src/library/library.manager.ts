@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { LibraryItemDto, LibraryItemMetadataInputDto, NovelMetadataInputDto } from './dto/library-item.dto';
 import { LibraryItemPageDto, LibraryListItemDto } from './dto/library-item-list.dto';
@@ -30,7 +31,7 @@ type WritableNovelMetadata = Omit<NovelMetadata, keyof LibraryItemMetadataBase>;
  */
 @Injectable()
 export class LibraryManager {
-  constructor(private readonly repository: LibraryRepository, private readonly contents: LibraryContentRepository) {}
+  constructor(private readonly repository: LibraryRepository, private readonly contents: LibraryContentRepository, private readonly realtime: RealtimeProvider) {}
 
   /**
    * One page of the listing.
@@ -93,29 +94,67 @@ export class LibraryManager {
   async markScraping(id: string): Promise<void> {
     await this.require(id);
     await this.repository.updateStatus(id, LibraryItemStatus.Scraping);
+    await this.publish(id, LibraryItemStatus.Scraping);
   }
 
   /**
-   * The queue has drained, so the item is done being fetched.
+   * The queue has drained clean, so the item is done being fetched.
    *
    * Only a `scraping` item moves: a draft is not something a finished job promotes,
    * and an item already `ready` is not written to a second time.
    */
   async markReady(id: string): Promise<void> {
+    await this.settle(id, LibraryItemStatus.Ready);
+  }
+
+  /**
+   * The queue has drained with rows left failed.
+   *
+   * The same guard `markReady` keeps, for the same reason — and the reason this exists
+   * at all: `Failed` has been declared since part 1 and written by nothing, so an item
+   * holding one dead chapter never left `scraping`.
+   */
+  async markFailed(id: string): Promise<void> {
+    await this.settle(id, LibraryItemStatus.Failed);
+  }
+
+  /** The item, and everything filed under it — neither store cascades. */
+  async remove(id: string): Promise<void> {
+    await this.require(id);
+    await this.contents.removeAll(id);
+    await this.repository.delete(id);
+    await this.realtime.clear(id);
+  }
+
+  /** Where a finished job leaves the item. Only one that was scraping has anywhere to go. */
+  private async settle(id: string, status: LibraryItemStatus): Promise<void> {
     const item = await this.require(id);
 
     if (item.status !== LibraryItemStatus.Scraping) {
       return;
     }
 
-    await this.repository.updateStatus(id, LibraryItemStatus.Ready);
+    await this.repository.updateStatus(id, status);
+    await this.publish(id, status);
   }
 
-  /** The item, and everything filed under it — Firestore does not cascade. */
-  async remove(id: string): Promise<void> {
-    await this.require(id);
-    await this.contents.removeAll(id);
-    await this.repository.delete(id);
+  /**
+   * The item's live summary, for the screens watching it.
+   *
+   * The counts are read here rather than passed in: an item status moves twice a job —
+   * once at the start and once at the end — so five aggregations is a rounding error
+   * beside the scrape, and a caller that had to assemble them could get them wrong.
+   */
+  private async publish(id: string, status: LibraryItemStatus): Promise<void> {
+    const counts = await this.contents.counts(id);
+
+    await this.realtime.publishItem(id, {
+      status,
+      total: counts.total,
+      completed: counts.completed,
+      failed: counts.failed,
+      pending: counts.pending,
+    });
   }
 
   /** The item, or the 404 every route that names one owes. */

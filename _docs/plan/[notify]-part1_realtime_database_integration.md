@@ -70,7 +70,7 @@ the same plugin, the same composable and the same rules file.
 | What a failed publish does | **Nothing.** Every method on `RealtimeProvider` swallows and logs. A realtime write is a courtesy to a screen; a chapter that has been fetched, stored and completed must not be re-fetched because a mirror write failed. |
 | Item stuck in `scraping` | **Fixed here.** Two existing faults make the badge spin forever, and both are invisible until it is live. `LibraryItemStatus.Failed` is declared but written by no code, so a novel with one dead chapter never settles; and drain is tested with `completed === total`, which a job over a range — chapters 1–20 of 1,305 — never satisfies. |
 | What drain actually means | **`pending === 0`** — nothing of this item is queued or in flight. Not `completed === total`, which asks whether the whole novel is downloaded, which is a different question and the wrong one. |
-| Where the emulator lives | Port **9000**, in the same container as the other three, under the same `--only` list. Namespace `demo-media-studio-default-rtdb`, named identically from both ends — the emulator takes its namespace from the `databaseURL`'s subdomain, and two ends that disagree read two empty databases and simply stay still. |
+| Where the emulator lives | Port **9000**, in the same container as the other three, under the same `--only` list. Namespace `demo-media-studio`, named identically from both ends — the emulator takes its namespace from the `databaseURL`'s subdomain, and two ends that disagree read two empty databases and simply stay still. |
 
 ---
 
@@ -293,12 +293,12 @@ must rebuild. It already passes `--build`.
 | --- | --- |
 | `backend/src/core/config/configuration.ts` | `FirebaseConfig` gains `databaseUrl`; `FirebaseEmulatorConfig` gains `databaseHost`. Read from `FIREBASE_DATABASE_URL` and `FIREBASE_EMULATOR_DATABASE_HOST` — named for the service, not for the variable the SDK reads, which is the rule the comment above `emulators` already states. |
 | `backend/src/core/firebase/firebase-admin.service.ts` | `process.env.FIREBASE_DATABASE_EMULATOR_HOST` set beside the other three; `databaseURL` passed to `initializeApp`; a `get database(): Database` accessor over `getDatabase(this.app)`; `credential()`'s emulator branch extended to require the fourth host; the matching log line. |
-| `backend/.env.example`, `backend/.env` | `FIREBASE_DATABASE_URL=https://demo-media-studio-default-rtdb.firebaseio.com` and `FIREBASE_EMULATOR_DATABASE_HOST=127.0.0.1:9000`, bare `host:port` as the other three are, under the existing `# ── Emulators ──` banner. |
+| `backend/.env.example`, `backend/.env` | `FIREBASE_DATABASE_URL=https://demo-media-studio.firebaseio.com` and `FIREBASE_EMULATOR_DATABASE_HOST=127.0.0.1:9000`, bare `host:port` as the other three are, under the existing `# ── Emulators ──` banner. |
 | `backend/src/core/providers/realtime.provider.ts` | **New.** The class above. |
 | `backend/src/core/core.module.ts` | `RealtimeProvider` joins `providers` and `exports`. |
 
 The namespace is load-bearing. The emulator reads it from the `databaseURL`'s subdomain, so
-`demo-media-studio-default-rtdb` must be spelled identically here and in the frontend's own URL. Two
+`demo-media-studio` must be spelled identically here and in the frontend's own URL. Two
 ends that disagree each get their own empty database, no error is raised anywhere, and the screen
 simply never moves — which is the hardest possible way to find this out.
 
@@ -350,7 +350,7 @@ the browser and nothing draws them yet.
 | File | What changes |
 | --- | --- |
 | `frontend/nuxt.config.ts` | `runtimeConfig.public.firebase` gains `databaseUrl` and `emulatorDatabaseHost`, both `''`, commented as their neighbours are. |
-| `frontend/.env.example`, `frontend/.env` | `NUXT_PUBLIC_FIREBASE_DATABASE_URL=http://127.0.0.1:9000/?ns=demo-media-studio-default-rtdb` and `NUXT_PUBLIC_FIREBASE_EMULATOR_DATABASE_HOST=http://127.0.0.1:9000`. Schemes included, as the frontend's other two hosts carry them. |
+| `frontend/.env.example`, `frontend/.env` | `NUXT_PUBLIC_FIREBASE_DATABASE_URL=http://127.0.0.1:9000/?ns=demo-media-studio` and `NUXT_PUBLIC_FIREBASE_EMULATOR_DATABASE_HOST=http://127.0.0.1:9000`. Schemes included, as the frontend's other two hosts carry them. |
 | `frontend/app/plugins/firebase.client.ts` | `getDatabase(app)`, `connectDatabaseEmulator(db, hostname, Number(port))`, and `firebaseDatabase` in `provide`. It belongs here for the reason the plugin's own docblock gives: the emulator must be connected before anything touches the service. |
 | `frontend/app/types/scraping-status.ts` | **New.** `ScrapingItemStatus` and `ScrapingContentStatus`, mirrored by hand from the provider's shapes — the arrangement `types/library.ts` already has with the DTOs. |
 | `frontend/app/composables/useScrapingStatus.ts` | **New.** |

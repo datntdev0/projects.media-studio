@@ -55,7 +55,32 @@ const { data: page, status: listStatus, error: listError, refresh } = useAsyncDa
   { lazy: true, watch: [query] }
 )
 
-const items = computed(() => page.value?.items ?? [])
+const { running, settled, reconcile } = useScrapingStatuses()
+
+/**
+ * The fetched page, with a running job's own numbers over each row it has them for.
+ * `AppLibraryTable` and `AppLibraryGrid` read the merged rows and are unchanged.
+ */
+const items = computed(() => (page.value?.items ?? []).map(item => withLiveStatus(item, running(item.id))))
+
+/**
+ * A job that has just settled, refetched once.
+ *
+ * Membership of the page is deliberately not recomputed as statuses move: an item
+ * filtered to `Ready` that starts scraping keeps its place until this fires. Re-running
+ * the query on every tick would fight the pager and the debounced search, and a job
+ * settles once.
+ */
+watch(settled, async (isSettled) => {
+  if (!isSettled) {
+    return
+  }
+
+  await refresh()
+
+  // Only now: until the fetched rows are in hand, the live values are the truer ones.
+  reconcile()
+})
 
 /** What matches the filter, which is what both counts on this screen mean. */
 const total = computed(() => page.value?.total ?? 0)
@@ -74,6 +99,15 @@ watch(page, (loaded) => {
 })
 
 const loading = computed(() => listStatus.value === 'pending')
+
+/**
+ * Skeleton rows only where there is nothing to draw yet.
+ *
+ * A refetch with rows already on screen keeps them: a job settling in the background
+ * would otherwise blank the table every time, and the rows it replaces them with are
+ * the same rows.
+ */
+const showSkeleton = computed(() => loading.value && !items.value.length)
 
 /** Whether "nothing here" means an empty catalogue or a filter with no matches. */
 const narrowed = computed(() => filters.type !== 'all'
@@ -197,7 +231,7 @@ async function onDeleted() {
           <AppLibraryTable
             v-if="view === 'table'"
             :items="items"
-            :loading="loading"
+            :loading="showSkeleton"
             @edit="onEdit"
             @remove="onRemove"
           />
@@ -205,7 +239,7 @@ async function onDeleted() {
           <AppLibraryGrid
             v-else
             :items="items"
-            :loading="loading"
+            :loading="showSkeleton"
             @edit="onEdit"
             @remove="onRemove"
           />

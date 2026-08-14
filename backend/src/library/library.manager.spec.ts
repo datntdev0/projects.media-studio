@@ -4,11 +4,12 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { RealtimeProvider, ScrapingStatusSnapshot } from '../core/providers/realtime.provider';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
-import { LibraryContentRepository } from './library-content.repository';
+import { LibraryContentCounts, LibraryContentRepository } from './library-content.repository';
 import { LibraryManager } from './library.manager';
 import { LibraryItemDraft, LibraryItemFilter, LibraryRepository } from './library.repository';
 
@@ -53,19 +54,44 @@ class FakeRepository {
   }
 }
 
-/** Only the one method `LibraryManager` reaches for: the cascade behind a delete. */
+/** The two methods `LibraryManager` reaches for: the cascade behind a delete, and the counts it publishes. */
 class FakeContentRepository {
   cleared: string[] = [];
+
+  constructor(private readonly counted: LibraryContentCounts = { total: 0, completed: 0, failed: 0, pending: 0, bytes: 0 }) {}
 
   removeAll(itemId: string): Promise<void> {
     this.cleared.push(itemId);
 
     return Promise.resolve();
   }
+
+  counts(): Promise<LibraryContentCounts> {
+    return Promise.resolve(this.counted);
+  }
 }
 
-function managerOver(repository: FakeRepository, contents = new FakeContentRepository()): LibraryManager {
-  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository);
+/** The live tree, recorded rather than written. */
+class FakeRealtimeProvider {
+  summaries: ScrapingStatusSnapshot[] = [];
+
+  cleared: string[] = [];
+
+  publishItem(itemId: string, snapshot: ScrapingStatusSnapshot): Promise<void> {
+    this.summaries.push(snapshot);
+
+    return Promise.resolve();
+  }
+
+  clear(itemId: string): Promise<void> {
+    this.cleared.push(itemId);
+
+    return Promise.resolve();
+  }
+}
+
+function managerOver(repository: FakeRepository, contents = new FakeContentRepository(), realtime = new FakeRealtimeProvider()): LibraryManager {
+  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository, realtime as unknown as RealtimeProvider);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {

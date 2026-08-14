@@ -90,6 +90,13 @@ const SKELETON_CARDS = 8
             <span class="truncate">{{ contentLabel(item) }}</span>
             <span class="shrink-0">{{ relativeUpdated(item.updatedAt) }}</span>
           </div>
+
+          <!-- Under the count it measures, and the last thing in the card, so a row
+               of cards draws one line at the same height. -->
+          <UProgress
+            :model-value="progressPercent(item)"
+            :ui="{ base: 'h-[3px] rounded-none', indicator: 'rounded-none' }"
+          />
         </div>
       </AppBlueprint>
     </template>

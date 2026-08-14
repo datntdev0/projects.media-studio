@@ -98,6 +98,42 @@ function refreshContents(): Promise<void> {
   return fetchPage(1)
 }
 
+/**
+ * The rows already on screen, fetched again in place.
+ *
+ * What a settling job wants, and what `refreshContents()` is wrong for: that one resets
+ * to page one, so a reader who had scrolled through a thousand rows would be thrown back
+ * to the first two hundred by a job finishing in the background. The loaded pages are
+ * fetched together and swapped in a single assignment, so nothing blanks and nothing
+ * moves — and `loading` is deliberately left alone, since the rows are already drawn.
+ *
+ * Quiet about its own failure: the rows on screen are a job's worth of live updates and
+ * are right in every column but `words`. An error banner over them would be worse.
+ */
+async function reloadLoaded(): Promise<void> {
+  const pages = loaded.value
+
+  if (pages < 1) {
+    return
+  }
+
+  const mine = ++ticket
+
+  try {
+    const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
+      libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
+
+    if (mine !== ticket) {
+      return
+    }
+
+    rows.value = answers.flatMap(answer => answer.items)
+    total.value = answers[answers.length - 1]?.total ?? total.value
+  } catch {
+    // Keep what is drawn.
+  }
+}
+
 /** The next page, when the reader reaches the end of the last one. */
 function loadMore() {
   if (loading.value || loadingMore.value || !more.value) {
@@ -109,15 +145,35 @@ function loadMore() {
 
 watch([itemId, debouncedSearch], () => refreshContents(), { immediate: true })
 
+const { rows: liveRows, running, live, reconcile } = useItemScrapingStatus(itemId)
+
+/** The item, wearing a running job's own counters. Null only before the first fetch lands. */
+const shown = computed(() => item.value ? withLiveStatus(item.value, live.value) : null)
+
 /**
  * The two panels want the item narrowed to its own shape. Split rather than cast:
  * `type` is what decides which half of this screen renders at all.
  */
-const novel = computed(() => item.value?.type === 'novel' ? item.value as LibraryItemDetail & NovelItem : null)
+const novel = computed(() => shown.value?.type === 'novel' ? shown.value as LibraryItemDetail & NovelItem : null)
 
-const set = computed(() => item.value && item.value.type !== 'novel' ? item.value as LibraryItemDetail & (ImageSetItem | VideoSetItem) : null)
+const set = computed(() => shown.value && shown.value.type !== 'novel' ? shown.value as LibraryItemDetail & (ImageSetItem | VideoSetItem) : null)
 
-const chapters = computed(() => rows.value.filter((row): row is NovelChapter => row.type === 'novel'))
+/**
+ * The loaded rows, each wearing its live status where a job has published one.
+ *
+ * Merged into the row rather than passed alongside it, so `AppLibraryChapterTable` and
+ * `contentStatusTag()` need no idea this exists — they draw whatever `status` the row
+ * now carries.
+ */
+const chapters = computed(() => rows.value
+  .filter((row): row is NovelChapter => row.type === 'novel')
+  .map((row) => {
+    const live = liveRows.value[row.id]
+
+    // The same object back where the live status agrees with the stored one, so a tick
+    // that moved one chapter leaves every other row identical rather than merely equal.
+    return live && live.status !== row.status ? { ...row, status: live.status } : row
+  }))
 
 const assets = computed(() => rows.value.filter((row): row is LibraryAsset => row.type !== 'novel'))
 
@@ -188,6 +244,28 @@ async function refreshAll() {
   await Promise.all([refreshContents(), refreshItem()])
 }
 
+/**
+ * The job has settled, so the screen goes back to the API's answer.
+ *
+ * The single point where it does, and it has to happen: the per-row subtree is dropped
+ * when a job settles, so the live statuses the table has been wearing go with it. This
+ * is what replaces them with the stored rows — and collects what the tree deliberately
+ * never carried, `words` and `updatedAt`.
+ *
+ * `reloadLoaded()` rather than `refreshAll()`, and neither half draws a skeleton: a job
+ * ending in the background must not blank the screen or move what someone is reading.
+ */
+watch(running, async (isRunning, was) => {
+  if (!was || isRunning) {
+    return
+  }
+
+  await Promise.all([reloadLoaded(), refreshItem()])
+
+  // Only now: until the stored rows are in hand, the live values are the truer ones.
+  reconcile()
+})
+
 async function onContentSaved() {
   await refreshAll()
 
@@ -239,11 +317,19 @@ function onScrapeSelected() {
 }
 
 /**
- * Nothing follows a job while it runs, so this is the whole of what the screen
- * learns: the rows it just marked, and a sentence about what was queued.
+ * A job has been described, and the screen follows it from here.
+ *
+ * The content list is deliberately left alone. Queueing's first act is to publish every
+ * claimed row as **Pending** and the item as **Scraping**, so the table flips on its own
+ * within a tick — reloading it would throw away the reader's place to draw the very same
+ * thing, and a novel scrolled to its four hundredth chapter would snap back to its
+ * second hundredth for no reason anyone could see.
+ *
+ * The item is still refetched, quietly: its counters are the server's, and a screen with
+ * no realtime channel at all should still show the job has started.
  */
 async function onJobStarted(answer: ScrapingJobStartedDto) {
-  await refreshAll()
+  await refreshItem()
 
   if (!answer.queued) {
     toast.add({ title: 'Nothing to scrape', icon: 'i-lucide-info', color: 'neutral' })
@@ -376,7 +462,9 @@ async function onUpload(picked: FileList | null) {
       />
     </div>
 
-    <div v-else-if="itemStatus === 'pending'" class="grid gap-3 p-6">
+    <!-- Only before the first item lands. A refetch has the whole screen already drawn,
+         and blanking it to two bars because a background job settled is the flash. -->
+    <div v-else-if="itemStatus === 'pending' && !item" class="grid gap-3 p-6">
       <USkeleton class="h-8 w-64" />
       <USkeleton class="h-4 w-40" />
     </div>

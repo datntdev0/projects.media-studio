@@ -132,6 +132,12 @@ const SKELETON_ROWS = 6
             :variant="statusTag(item.status).variant"
             size="sm"
           />
+
+          <UProgress
+            class="mt-1.5"
+            :model-value="progressPercent(item)"
+            :ui="{ base: 'h-[3px] rounded-none', indicator: 'rounded-none' }"
+          />
         </td>
 
         <td class="px-2 py-3 text-label text-muted">
