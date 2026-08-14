@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { App, applicationDefault, cert, getApp, getApps, initializeApp, ServiceAccount } from 'firebase-admin/app';
 import { Auth, getAuth } from 'firebase-admin/auth';
+import { Database, getDatabase } from 'firebase-admin/database';
 import { Firestore, getFirestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
 import { AppConfigService } from '../config/app-config.service';
@@ -31,7 +32,7 @@ export class FirebaseAdminService implements OnModuleInit {
   constructor(private readonly config: AppConfigService) {}
 
   onModuleInit(): void {
-    const { projectId, emulators } = this.config.firebase;
+    const { projectId, databaseUrl, emulators } = this.config.firebase;
 
     // The Admin SDK offers no option for either host — it reads them from the
     // environment itself, under names of its own. This is where ours are handed
@@ -48,11 +49,15 @@ export class FirebaseAdminService implements OnModuleInit {
       process.env.FIREBASE_STORAGE_EMULATOR_HOST = emulators.storageHost;
     }
 
+    if (emulators.databaseHost) {
+      process.env.FIREBASE_DATABASE_EMULATOR_HOST = emulators.databaseHost;
+    }
+
     // `getApp` rather than a second `initializeApp`, which would throw: a watch
     // reload can run this twice in one process.
     const initialised = getApps().length > 0;
 
-    this.app = initialised ? getApp() : initializeApp({ projectId, ...this.credential() });
+    this.app = initialised ? getApp() : initializeApp({ projectId, databaseURL: databaseUrl, ...this.credential() });
     this.db = getFirestore(this.app);
 
     if (!initialised) {
@@ -69,6 +74,11 @@ export class FirebaseAdminService implements OnModuleInit {
     this.logger.log(emulators.authenticationHost ? `Firebase project ${projectId} via the auth emulator at ${emulators.authenticationHost}` : `Firebase project ${projectId}`);
     this.logger.log(emulators.firestoreHost ? `Firestore via the emulator at ${emulators.firestoreHost}` : 'Firestore in the cloud');
     this.logger.log(emulators.storageHost ? `Storage via the emulator at ${emulators.storageHost}` : 'Storage in the cloud');
+    // The URL and not just the host: its subdomain is the namespace, and a namespace
+    // this end does not share with the browser is the one misconfiguration that raises
+    // nothing anywhere — both sides simply read an empty database. This line is where
+    // it shows.
+    this.logger.log(emulators.databaseHost ? `Realtime Database ${databaseUrl} via the emulator at ${emulators.databaseHost}` : `Realtime Database ${databaseUrl}`);
   }
 
   get auth(): Auth {
@@ -84,15 +94,20 @@ export class FirebaseAdminService implements OnModuleInit {
     return getStorage(this.app).bucket(this.config.firebase.storageBucket);
   }
 
+  /** The live tree the browser subscribes to. Written through `RealtimeProvider` and nowhere else. */
+  get database(): Database {
+    return getDatabase(this.app);
+  }
+
   /**
    * No credential against the emulators: they issue unsigned tokens and accept
-   * unauthenticated calls, so there is nothing to sign with. All three, because a
+   * unauthenticated calls, so there is nothing to sign with. All four, because a
    * service pointing at the real Firebase needs one whatever its neighbours do.
    */
   private credential(): { credential?: ReturnType<typeof applicationDefault> } {
     const { emulators, serviceAccountJson } = this.config.firebase;
 
-    if (emulators.authenticationHost && emulators.firestoreHost && emulators.storageHost) {
+    if (emulators.authenticationHost && emulators.firestoreHost && emulators.storageHost && emulators.databaseHost) {
       return {};
     }
 

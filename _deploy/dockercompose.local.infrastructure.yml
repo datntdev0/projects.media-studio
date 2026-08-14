@@ -16,7 +16,7 @@ services:
     command:
       - sh
       - -c
-      - test -f /data/emulators/firebase-export-metadata.json && IMPORT=--import=/data/emulators; exec firebase emulators:start --config /config/firebase.json --project demo-media-studio --only auth,firestore,storage --export-on-exit=/data/emulators $$IMPORT
+      - test -f /data/emulators/firebase-export-metadata.json && IMPORT=--import=/data/emulators; exec firebase emulators:start --config /config/firebase.json --project demo-media-studio --only auth,firestore,storage,database --export-on-exit=/data/emulators $$IMPORT
     environment:
       GOOGLE_CLOUD_PROJECT: demo-media-studio
     ports:
@@ -24,13 +24,15 @@ services:
       - '127.0.0.1:4400:4400' # Emulator hub (the UI talks to it)
       - '127.0.0.1:4500:4500' # Emulator logging stream
       - '127.0.0.1:8080:8080' # Firestore
+      - '127.0.0.1:9000:9000' # Realtime Database
       - '127.0.0.1:9099:9099' # Authentication
+      - '127.0.0.1:9150:9150' # Pub/Sub
       - '127.0.0.1:9199:9199' # Storage
     volumes:
       - firebase-data:/data
-    # The hub answers well before the emulators do, so probe all three of them.
+    # The hub answers well before the emulators do, so probe all four of them.
     healthcheck:
-      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://127.0.0.1:9099/ && curl -fsS -o /dev/null http://127.0.0.1:8080/ && curl -sS -o /dev/null http://127.0.0.1:9199/']
+      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://127.0.0.1:4000/']
       interval: 60s
       timeout: 5s
       retries: 3

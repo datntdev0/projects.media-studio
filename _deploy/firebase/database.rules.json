@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "scraping": {
+      ".read": "auth != null",
+      ".write": false
+    }
+  }
+}

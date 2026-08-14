@@ -11,13 +11,13 @@ RUN apt-get update \
 RUN npm install -g firebase-tools@${FIREBASE_TOOLS_VERSION}
 
 # Pull the emulator jars now so a container starts without reaching the network.
-RUN firebase setup:emulators:firestore && firebase setup:emulators:storage && firebase setup:emulators:ui
+RUN firebase setup:emulators:database && firebase setup:emulators:firestore && firebase setup:emulators:storage && firebase setup:emulators:ui
 
 # Baked in rather than bind-mounted: Docker Desktop's Windows file sharing serves these
 # small files unreliably. Re-run with `--build` after editing the config or the rules.
-COPY firebase.json .firebaserc firestore.rules firestore.indexes.json storage.rules /config/
+COPY firebase.json .firebaserc database.rules.json firestore.rules firestore.indexes.json storage.rules /config/
 
 # Writable cwd for the emulators' debug logs; the config is in /config, the data in /data.
 WORKDIR /workspace
 
-EXPOSE 4000 4400 4500 8080 9099 9199
+EXPOSE 4000 4400 4500 8080 9000 9099 9150 9199

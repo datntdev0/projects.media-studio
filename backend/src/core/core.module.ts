@@ -9,6 +9,7 @@ import { FirebaseAdminService } from './firebase/firebase-admin.service';
 import { AppLogger } from './logging/app.logger';
 import { CacheProvider } from './providers/cache.provider';
 import { ContentFileProvider } from './providers/content-file.provider';
+import { RealtimeProvider } from './providers/realtime.provider';
 import { ScheduleProvider } from './providers/schedule.provider';
 import { ScrapingProvider } from './providers/scraping.provider';
 import { allConsumerQueues } from './queues/queue.messages';
@@ -66,9 +67,9 @@ const ConsumerQueues = BullModule.registerQueue(...allConsumerQueues().map((name
     }),
     ConsumerQueues,
   ],
-  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, ScheduleProvider, ScrapingProvider, QueueProducer],
+  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScheduleProvider, ScrapingProvider, QueueProducer],
   // The queues are re-exported so a feature module's consumer resolves the one it
   // processes, and so anything holding a queue directly can still reach it.
-  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, ScheduleProvider, ScrapingProvider, QueueProducer, ConsumerQueues],
+  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScheduleProvider, ScrapingProvider, QueueProducer, ConsumerQueues],
 })
 export class CoreModule {}

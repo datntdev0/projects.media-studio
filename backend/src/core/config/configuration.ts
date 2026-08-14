@@ -23,6 +23,8 @@ export interface FirebaseEmulatorConfig {
   firestoreHost: string;
   /** `host:port` of the Storage emulator. Set locally, empty everywhere else. */
   storageHost: string;
+  /** `host:port` of the Realtime Database emulator. Set locally, empty everywhere else. */
+  databaseHost: string;
 }
 
 export interface FirebaseConfig {
@@ -34,6 +36,14 @@ export interface FirebaseConfig {
   serviceAccountJson: string;
   /** The bucket cached files are written to — the one the browser already uploads covers to. */
   storageBucket: string;
+  /**
+   * Where the Realtime Database lives — the live scraping status the browser subscribes to.
+   *
+   * The emulator takes its namespace from this URL's subdomain, so this and the frontend's
+   * own `NUXT_PUBLIC_FIREBASE_DATABASE_URL` must name the same one. Two ends that disagree
+   * each read an empty database, raise nothing, and leave the screen still.
+   */
+  databaseUrl: string;
   emulators: FirebaseEmulatorConfig;
 }
 
@@ -86,6 +96,8 @@ const DEFAULT_CORS_ORIGINS = 'http://localhost:3000';
 const DEFAULT_FIREBASE_PROJECT_ID = 'demo-media-studio';
 const DEFAULT_FIREBASE_API_KEY = 'demo-key';
 const DEFAULT_FIREBASE_STORAGE_BUCKET = 'demo-media-studio.firebasestorage.app';
+/** The `-default-rtdb` suffix is the namespace, and is what the emulator reads off this. */
+const DEFAULT_FIREBASE_DATABASE_URL = 'https://demo-media-studio-default-rtdb.firebaseio.com';
 const DEFAULT_SCRAPING_BASE_URL = 'http://127.0.0.1:8000';
 /** The scraping service's own per-operation default, so ours does not cut its short. */
 const DEFAULT_SCRAPING_TIMEOUT_MS = 120_000;
@@ -124,6 +136,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       apiKey: env.FIREBASE_API_KEY ?? DEFAULT_FIREBASE_API_KEY,
       serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT ?? '',
       storageBucket: env.FIREBASE_STORAGE_BUCKET ?? DEFAULT_FIREBASE_STORAGE_BUCKET,
+      databaseUrl: env.FIREBASE_DATABASE_URL ?? DEFAULT_FIREBASE_DATABASE_URL,
       // Named for the service each one stands in for, rather than after the
       // variables the Admin SDK reads — those are its business, and
       // `FirebaseAdminService` is where ours are handed over to them.
@@ -131,6 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         authenticationHost: env.FIREBASE_EMULATOR_AUTHENTICATION_HOST ?? '',
         firestoreHost: env.FIREBASE_EMULATOR_FIRESTORE_HOST ?? '',
         storageHost: env.FIREBASE_EMULATOR_STORAGE_HOST ?? '',
+        databaseHost: env.FIREBASE_EMULATOR_DATABASE_HOST ?? '',
       },
     },
     scraping: {

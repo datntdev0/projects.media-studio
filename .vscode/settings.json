@@ -4,9 +4,11 @@
         "**/.git": true,
         "**/.hg": true,
         "**/.nuxt": true,
+        "**/.playwright-cli": true,
         "**/.svn": true,
         "**/node_modules": true,
         "**/Thumbs.db": true,
-        "**/*/debug.log": true
+        "**/*/debug.log": true,
+        "firestore-debug.log": true
     }
 }
