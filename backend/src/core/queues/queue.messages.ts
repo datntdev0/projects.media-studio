@@ -8,12 +8,27 @@
  */
 export enum QueueTopic {
   SamplePinged = 'sample.pinged',
+  ContentScrapeRequested = 'content.scrape.requested',
 }
 
 /** The sample's payload. Stands in for a real one — see `system/sample.handler.ts`. */
 export interface SamplePinged {
   note: string;
   sentBy: string;
+}
+
+/**
+ * One piece of content to fetch and store. Ids and primitives only — the message
+ * outlives the process that wrote it, and the row it names is free to move under it.
+ */
+export interface ContentScrapeRequested {
+  itemId: string;
+  contentId: string;
+  crawler: string;
+  /** The chapter's own URL, as discovery stored it. */
+  sourceUrl: string;
+  /** Whether stored bytes are to be overwritten, decided when the job was described. */
+  refetch: boolean;
 }
 
 /**
@@ -26,6 +41,7 @@ export interface SamplePinged {
  */
 export interface QueuePayloads {
   [QueueTopic.SamplePinged]: SamplePinged;
+  [QueueTopic.ContentScrapeRequested]: ContentScrapeRequested;
 }
 
 /** What a consumer is handed: the payload, and enough about the send to trace it. */
@@ -46,6 +62,8 @@ export const SAMPLE_AUDIT_QUEUE = 'sample.pinged.audit';
 
 export const SAMPLE_NOTIFY_QUEUE = 'sample.pinged.notify';
 
+export const CONTENT_SCRAPE_QUEUE = 'content.scrape.requested.scraper';
+
 /**
  * Which consumers receive what. The one place fan-out is configured: a queue name
  * added here, and a consumer declared for it, is the whole of subscribing —
@@ -56,6 +74,7 @@ export const SAMPLE_NOTIFY_QUEUE = 'sample.pinged.notify';
  */
 export const QUEUE_CONSUMERS: Record<QueueTopic, readonly string[]> = {
   [QueueTopic.SamplePinged]: [SAMPLE_AUDIT_QUEUE, SAMPLE_NOTIFY_QUEUE],
+  [QueueTopic.ContentScrapeRequested]: [CONTENT_SCRAPE_QUEUE],
 };
 
 /** Every queue that has to exist, for the module that registers them. Deduplicated. */

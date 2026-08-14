@@ -1,3 +1,4 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { LibraryItemType, NovelStatus } from '../library/entities/library-item.entity';
 
 /**
@@ -46,4 +47,38 @@ export const CRAWLER_NAMES = CRAWLERS.map((crawler) => crawler.name);
 
 export function crawlerByName(name: string): Crawler | null {
   return CRAWLERS.find((crawler) => crawler.name === name.trim()) ?? null;
+}
+
+/** The crawler named, or the 404 a name nothing answers to earns. */
+export function requireCrawler(name: string): Crawler {
+  const crawler = crawlerByName(name);
+
+  if (!crawler) {
+    throw new NotFoundException(`No crawler called \`${name}\`. There is: ${CRAWLER_NAMES.join(', ')}`);
+  }
+
+  return crawler;
+}
+
+/**
+ * That the URL is one this crawler reads — checked before the cache and before the
+ * browser, because it is the mistake the wizard exists to catch and it should cost
+ * nothing to report.
+ */
+export function checkHost(crawler: Crawler, sourceUrl: string): void {
+  const host = hostOf(sourceUrl);
+
+  if (!host || !crawler.hosts.includes(host)) {
+    throw new BadRequestException(`${crawler.name} only reads ${crawler.domain}. Pick the crawler that matches this URL.`);
+  }
+}
+
+export function hostOf(sourceUrl: string): string | null {
+  try {
+    return new URL(sourceUrl).hostname.toLowerCase();
+  } catch {
+    // The DTO's `@IsUrl` has already refused anything this could catch. Belt and
+    // braces, because what follows would otherwise throw a 500 over a typo.
+    return null;
+  }
 }

@@ -44,20 +44,22 @@ py -3.11 -m venv .venv
 | `GET` | `/novels/{crawler}/metadata` | Book metadata |
 | `GET` | `/novels/{crawler}/chapters` | The full chapter list, in reading order |
 | `GET` | `/novels/{crawler}/cover` | Cover image bytes, content type from the file signature |
+| `GET` | `/novels/{crawler}/content` | The text of one chapter |
 
-The three scraping endpoints take the same shape: the crawler in the path, the book as `sourceUrl`.
+The scraping endpoints take the same shape: the crawler in the path, the book as `sourceUrl`. `/content` is the exception — its `sourceUrl` is a **chapter** URL, one of the ones `/chapters` listed.
 
 ```bash
 curl "http://127.0.0.1:8000/novels/novel543/metadata?sourceUrl=https://www.novel543.com/0413553971"
 curl "http://127.0.0.1:8000/novels/novel543/chapters?sourceUrl=https://www.novel543.com/0413553971"
 curl -o cover.jpg "http://127.0.0.1:8000/novels/novel543/cover?sourceUrl=https://www.novel543.com/0413553971"
+curl "http://127.0.0.1:8000/novels/novel543/content?sourceUrl=https://www.novel543.com/0413553971/8095_1.html"
 ```
 
 `sourceUrl` also accepts a bare book id. Each crawler checks the URL is its own, so an unknown crawler gives `404` (listing the ones that exist) and a URL from another site gives `400`.
 
 ### Per-request overrides
 
-All three scraping endpoints accept the same optional query parameters.
+Every scraping endpoint accepts the same optional query parameters.
 
 | Parameter | Default | Effect |
 | --- | --- | --- |
@@ -96,6 +98,12 @@ curl "http://127.0.0.1:8000/novels/novel543/chapters?sourceUrl=0413553971&solve=
 [{ "index": 1, "title": "…", "url": "https://www.novel543.com/0413553971/8095_1.html" }]
 ```
 
+`/content` answers with the chapter's own heading and its lines:
+
+```json
+{ "title": "…", "content": ["…", "…"] }
+```
+
 Responses are camelCase. A missing book gives `404`; an upstream or browser failure gives `502`.
 
 ## Configuration
@@ -125,6 +133,9 @@ Responses are camelCase. A missing book gives `404`; an upstream or browser fail
 - **Covers** go through the browser as well: the image CDN is Cloudflare-protected and returns 403 to a plain HTTP client.
 - **Logging** goes through `app/logs.py`. Scrapling reports "No Cloudflare challenge found" at ERROR, but it only means the page had no challenge — the clearance cookie already covered it, or the site is not behind Cloudflare — so it is demoted to INFO. Scrapling also installs its own handler and propagates to the root logger, which would print each of its lines twice, so its handler is dropped and everything shares one format.
 - **Chapters** come from `ul.all` on the `/dir` page. That page also has a short "latest chapters" block, so scanning every anchor would drag the newest chapters to the front and break the ordering.
+- **Chapter text** comes from the direct `<p>` children of `div.content` — direct, because the wrapper also holds nested blocks that are not prose. Four kinds of line are dropped: one carrying a link, which is the site's navigation or its VIP pitch; one that is empty or only whitespace, counting the ideographic spaces the site indents paragraphs with; one made only of punctuation, which is a separator drawn as characters; and the chapter's own heading printed again above the prose, which the caller already has as `title`. So `content` holds prose lines and nothing between them.
+- **The heading match tolerates the site's pagination marker.** A split chapter's `<h1>` reads `第527章 … (1/2)` while the same heading repeated in the body reads `第527章 …`, so `heading_key()` collapses whitespace and drops a trailing `(n/m)` before comparing — otherwise the rule would never fire on exactly the chapters it is for. Matching is on the whole line, so prose that merely *mentions* the heading is kept.
+- **A long chapter is served over several pages** — `…_527.html`, then `…_527_2.html`. The link to the next page carries the same label as the link to the next chapter, so `next_part_url` matches on the href — the current page's stem, one part on — and `/content` follows it until there is none. One chapter is always one response.
 
 ## Layout
 
@@ -146,8 +157,11 @@ The routes know nothing about any particular site: they look the crawler up in t
 | --- | --- |
 | `BASE_URL` | The site root, reported by `/crawlers` |
 | `resolve(source)` | `(book_url, book_id)`, rejecting a URL that belongs to another site |
+| `resolve_chapter(source)` | An absolute chapter URL, rejected the same way |
 | `chapters_url(book_url)` | Where that site keeps the chapter list |
 | `parse_metadata(page, book_url, book_id)` | A dict of `Novel` fields |
 | `parse_chapters(page, book_id)` | A list of `{index, title, url}` |
+| `parse_content(page)` | `{title, content}` — the heading and the lines of one *page* of a chapter |
+| `next_part_url(page, chapter_url)` | The chapter's next page, or `None` where there is one |
 
 Drop the module in and add its name to `CRAWLER_NAMES` in `app/parsers.py`; no route changes. Parser files follow the repository's `<kind>.<name>` naming, and a dot is not valid in a Python module name, so `parsers.py` loads them by path through `importlib` rather than a plain `import`.

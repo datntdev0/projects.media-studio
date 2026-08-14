@@ -58,14 +58,22 @@ export const assetMeta = (content: LibraryContent): string => content.type === '
 /** A chapter's length, or the dash the mockup draws where there is no text yet. */
 export const wordsLabel = (words: number): string => words > 0 ? countLabel(words) : '—'
 
+/** Every character range whose script is written without spaces, so words cannot be counted by them. */
+const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g
+
 /**
- * How long a body runs. Whitespace-separated, which is close enough for a count
- * shown beside a chapter and is what the server is told — see the known limits.
+ * How long a body runs. Whitespace-separated, and counted by character where the
+ * script is written without spaces.
+ *
+ * The same count as `ScrapingJobManager.wordCount`, deliberately: this is the number a
+ * save sends, so a helper that disagreed would rewrite the scraper's figure every time
+ * a chapter was edited. Splitting a `zh-Hant` body on whitespace counts its lines.
  */
 export function wordCount(text: string): number {
-  const trimmed = text.trim()
+  const unspaced = text.match(UNSPACED_SCRIPT)?.length ?? 0
+  const rest = text.replace(UNSPACED_SCRIPT, ' ').trim()
 
-  return trimmed ? trimmed.split(/\s+/).length : 0
+  return unspaced + (rest ? rest.split(/\s+/).length : 0)
 }
 
 /** Paragraphs as the reader draws them: blank lines collapsed, order kept. */

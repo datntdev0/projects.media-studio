@@ -89,6 +89,28 @@ export class LibraryManager {
     return this.repository.replace(stored, nextDraft(stored, root, input.metadata));
   }
 
+  /** The item is being fetched. Set once, when a job claims its rows. */
+  async markScraping(id: string): Promise<void> {
+    await this.require(id);
+    await this.repository.updateStatus(id, LibraryItemStatus.Scraping);
+  }
+
+  /**
+   * The queue has drained, so the item is done being fetched.
+   *
+   * Only a `scraping` item moves: a draft is not something a finished job promotes,
+   * and an item already `ready` is not written to a second time.
+   */
+  async markReady(id: string): Promise<void> {
+    const item = await this.require(id);
+
+    if (item.status !== LibraryItemStatus.Scraping) {
+      return;
+    }
+
+    await this.repository.updateStatus(id, LibraryItemStatus.Ready);
+  }
+
   /** The item, and everything filed under it — Firestore does not cascade. */
   async remove(id: string): Promise<void> {
     await this.require(id);

@@ -5,7 +5,7 @@ import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.d
 import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { ImageAsset, LibraryContent, LibraryContentBase, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item.entity';
-import { LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
+import { LibraryContentCounts, LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
 import { LibraryRepository } from './library.repository';
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
@@ -22,6 +22,12 @@ export interface DiscoveredContent {
   index: number;
   title: string;
   sourceUrl: string;
+}
+
+/** What a completed scrape leaves on the row: where the bytes are, and how long they run. */
+export interface ScrapedRow {
+  contentUrl: string;
+  words: number;
 }
 
 /**
@@ -61,6 +67,15 @@ export class LibraryContentManager {
     await this.requireItem(itemId);
 
     return this.requireContent(itemId, contentId);
+  }
+
+  /**
+   * The row, or null where there is none. For a caller that has no 404 to give: a
+   * queued message names a row that may have been deleted since, and that is an
+   * outcome rather than a failure.
+   */
+  find(itemId: string, contentId: string): Promise<LibraryContent | null> {
+    return this.contents.findOne(itemId, contentId);
   }
 
   async create(itemId: string, input: CreateLibraryContentDto): Promise<LibraryContent> {
@@ -123,6 +138,66 @@ export class LibraryContentManager {
   }
 
   /**
+   * Every chapter of a novel, in reading order — what a job selects from.
+   *
+   * Unpaged: a job is described against the whole novel, and the range it was given
+   * is meaningless over a slice of it.
+   */
+  async chapters(itemId: string): Promise<NovelChapter[]> {
+    const item = await this.requireItem(itemId);
+
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`A ${item.type} set has no chapters to scrape`);
+    }
+
+    const stored = await this.contents.findMatching(itemId, { type: item.type });
+
+    // The query ordered by `index`, which only a chapter has — so every row it
+    // answered with is one.
+    return stored.filter((content): content is NovelChapter => content.type === LibraryItemType.Novel);
+  }
+
+  /**
+   * The rows a job has just claimed, queued.
+   *
+   * Written before anything is published, so a job booked for 03:00 does not leave
+   * the screen looking untouched.
+   */
+  async markQueued(itemId: string, contentIds: string[]): Promise<void> {
+    await this.requireItem(itemId);
+    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Pending);
+  }
+
+  /** One row, in flight. */
+  async markScraping(itemId: string, contentId: string): Promise<void> {
+    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Scraping });
+  }
+
+  /**
+   * The bytes are stored, so the row points at them and the item is recounted.
+   *
+   * Answers with the counts `recount()` has just written, which is how a caller
+   * knows whether this was the last one.
+   */
+  async completeScrape(itemId: string, contentId: string, stored: ScrapedRow): Promise<LibraryContentCounts> {
+    const item = await this.requireItem(itemId);
+
+    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Completed, contentUrl: stored.contentUrl, words: stored.words });
+
+    return this.recount(item);
+  }
+
+  /**
+   * The attempts are spent.
+   *
+   * The status moves and nothing else: a forced re-scrape that failed keeps the text
+   * it already held, which is the safe direction — **Failed** does not mean empty.
+   */
+  async markFailed(itemId: string, contentId: string): Promise<void> {
+    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Failed });
+  }
+
+  /**
    * A brand new row. `index` is read from the store rather than sent, so "Add
    * chapter" is a title and nothing else.
    */
@@ -148,7 +223,7 @@ export class LibraryContentManager {
    * recomputed cannot drift, and a novel of twelve hundred chapters costs the same
    * as one of twelve.
    */
-  private async recount(item: LibraryItem): Promise<void> {
+  private async recount(item: LibraryItem): Promise<LibraryContentCounts> {
     const counts = await this.contents.counts(item.id);
 
     await this.items.updateCounters(item.id, {
@@ -157,6 +232,8 @@ export class LibraryContentManager {
       // A novel's metadata has no size field, so it is left out rather than added.
       downloadedSize: item.type === LibraryItemType.Novel ? undefined : counts.bytes,
     });
+
+    return counts;
   }
 
   /** The item, or the 404 every route that names one owes. */
@@ -188,7 +265,13 @@ export class LibraryContentManager {
 
 /** The stored row, rewritten. Its type is the item's, and never the request's to move. */
 function nextDraft(stored: LibraryContent, input: UpdateLibraryContentDto): LibraryContentDraft {
-  const root = rootOf(input);
+  // `sourceUrl` is the one root field a PUT does not rewrite. It is where the row came
+  // from — the key `appendDiscovered` matches on, and the only address a re-scrape
+  // has — so it belongs to discovery rather than to whoever is editing the text. Left
+  // to `rootOf`, a save that omitted it cleared it, and the chapter could never be
+  // fetched again: `ScrapingJobManager.start` drops a row with no source and counts it
+  // as skipped.
+  const root = { ...rootOf(input), sourceUrl: stored.sourceUrl };
 
   switch (stored.type) {
     // `index` is the one field an omission does not clear: a chapter has no "no

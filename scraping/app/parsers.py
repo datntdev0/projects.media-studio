@@ -4,9 +4,12 @@ Each crawler is one `parser.<name>.py` module in this package exposing:
 
     BASE_URL                              the site root, reported by /crawlers
     resolve(source) -> (book_url, id)     validates the URL belongs to this site
+    resolve_chapter(source) -> str        the same, for one chapter's own URL
     chapters_url(book_url) -> str         where the chapter list lives
     parse_metadata(page, book_url, id)    -> dict of Novel fields
     parse_chapters(page, id)              -> list of {index, title, url}
+    parse_content(page)                   -> {title, content} for one page of a chapter
+    next_part_url(page, chapter_url)      -> the chapter's next page, or None
 
 Adding a site means dropping in the module and listing its name in CRAWLER_NAMES.
 """

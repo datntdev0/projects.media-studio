@@ -37,6 +37,17 @@ class Chapter(CamelModel):
     url: str
 
 
+class ChapterContent(CamelModel):
+    """One chapter's text, as lines. `title` is the chapter's own heading, not the book's.
+
+    A list rather than one string because that is what the page is: the paragraphs
+    stay separate, and whoever stores them decides what goes between them.
+    """
+
+    title: str
+    content: list[str]
+
+
 class Novel(CamelModel):
     id: str
     url: str

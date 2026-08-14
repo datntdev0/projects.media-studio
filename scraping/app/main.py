@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 
 from . import images, logs
 from .browser import browser
-from .models import Chapter, FetchOptions, Health, Novel
+from .models import Chapter, ChapterContent, FetchOptions, Health, Novel
 from .parsers import CRAWLERS
 
 logs.configure()
@@ -35,8 +35,13 @@ app = FastAPI(
 
 DEFAULTS = FetchOptions()
 
+# A chapter runs over one or two pages. Ten is a stop against a link that circles back,
+# not a judgement about how long a chapter may be.
+MAX_CHAPTER_PARTS = 10
+
 CrawlerName = Path(description="Which crawler to use, as listed by /crawlers")
 SourceUrl = Query(..., alias="sourceUrl", description="The book's URL on the source site")
+ChapterUrl = Query(..., alias="sourceUrl", description="One chapter's own URL, as /chapters listed it")
 
 
 def fetch_options(
@@ -60,6 +65,14 @@ def resolve_book(module: ModuleType, source_url: str) -> tuple[str, str]:
     """Resolve the source URL, rejecting one that does not belong to this crawler."""
     try:
         return module.resolve(source_url)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def resolve_chapter(module: ModuleType, source_url: str) -> str:
+    """The same, for a chapter URL — which has no book id to derive."""
+    try:
+        return module.resolve_chapter(source_url)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -114,6 +127,39 @@ async def get_chapters(
 
     page = await fetch_page(module.chapters_url(book_url), options)
     return [Chapter(**chapter) for chapter in module.parse_chapters(page, book_id)]
+
+
+@app.get("/novels/{crawler}/content", response_model=ChapterContent)
+async def get_content(
+    crawler: str = CrawlerName,
+    source_url: str = ChapterUrl,
+    options: FetchOptions = Depends(fetch_options),
+) -> ChapterContent:
+    """The text of one chapter. `sourceUrl` is a chapter URL here, not a book URL.
+
+    A long chapter is served over several pages, so the parts are followed while the
+    page links to the next one and the whole chapter comes back as one answer. The cap
+    is a stop against a site that links in a circle, not a real limit.
+    """
+    module = get_crawler(crawler)
+    chapter_url = resolve_chapter(module, source_url)
+
+    title, lines = "", []
+    for _ in range(MAX_CHAPTER_PARTS):
+        page = await fetch_page(chapter_url, options)
+        part = module.parse_content(page)
+
+        title = title or part["title"]
+        lines.extend(part["content"])
+
+        next_url = module.next_part_url(page, chapter_url)
+        if not next_url:
+            break
+        chapter_url = next_url
+    else:
+        logger.warning("%s has more than %d parts; the rest is not read", source_url, MAX_CHAPTER_PARTS)
+
+    return ChapterContent(title=title, content=lines)
 
 
 @app.get("/novels/{crawler}/cover", responses={200: {"content": {"image/jpeg": {}}}})

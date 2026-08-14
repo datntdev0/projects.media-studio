@@ -3,12 +3,12 @@
 // cannot require. Nothing here talks to Firebase, so an empty module is enough.
 jest.mock('firebase-admin/auth', () => ({}));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { ImageAsset, LibraryContent, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
 import { LibraryContentManager } from './library-content.manager';
-import { LibraryContentDraft, LibraryContentFilter, LibraryContentRepository } from './library-content.repository';
+import { LibraryContentDraft, LibraryContentFilter, LibraryContentPatch, LibraryContentRepository } from './library-content.repository';
 import { LibraryItemCounters, LibraryRepository } from './library.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
@@ -16,6 +16,8 @@ const NOW = '2026-08-11T09:12:04.113Z';
 const TEXT_URL = 'https://storage.example.com/content/uid/ch412.txt';
 
 const IMAGE_URL = 'https://storage.example.com/content/uid/img_001.jpg';
+
+const CHAPTER_URL = 'https://www.novel543.com/0612559073/8096_3.html';
 
 /** What the content manager needs of the item collection: the lookup, and the counters it writes. */
 class FakeItemRepository {
@@ -37,6 +39,12 @@ class FakeItemRepository {
 /** The subcollection, by hand — stamping its dates the way the real repository does. */
 class FakeContentRepository {
   removed: string[] = [];
+
+  /** Every batched status write, in order, so a test can see what was claimed and as what. */
+  statuses: { contentIds: string[], status: LibraryContentStatus }[] = [];
+
+  /** Every narrow write, in order — the shape a running job uses. */
+  patches: { contentId: string, fields: LibraryContentPatch }[] = [];
 
   constructor(public rows: LibraryContent[] = []) {}
 
@@ -62,6 +70,22 @@ class FakeContentRepository {
 
   remove(itemId: string, contentId: string): Promise<void> {
     this.removed.push(contentId);
+
+    return Promise.resolve();
+  }
+
+  updateStatus(itemId: string, contentIds: string[], status: LibraryContentStatus): Promise<void> {
+    this.statuses.push({ contentIds, status });
+    this.rows = this.rows.map((row) => (contentIds.includes(row.id) ? { ...row, status } : row));
+
+    return Promise.resolve();
+  }
+
+  patch(itemId: string, contentId: string, fields: LibraryContentPatch): Promise<void> {
+    this.patches.push({ contentId, fields });
+    // Applied rather than only recorded, so a `counts()` after a completion agrees
+    // with it — which is the whole of what `completeScrape` answers with.
+    this.rows = this.rows.map((row) => (row.id === contentId ? { ...row, ...fields } : row));
 
     return Promise.resolve();
   }
@@ -250,6 +274,22 @@ describe('LibraryContentManager.replace', () => {
     expect(replaced).toMatchObject({ language: '', words: 0, contentUrl: null, status: LibraryContentStatus.Pending });
   });
 
+  it('keeps the source URL a request leaves out, so a rename cannot orphan a scraped chapter', async () => {
+    const contents = new FakeContentRepository([chapter({ sourceUrl: CHAPTER_URL })]);
+    const replaced = await managerOver(contents, new FakeItemRepository([novel()])).replace('novel-1', 'chapter-1', { title: 'Nine Bells' });
+
+    // Cleared, the row would have no address left to re-scrape from — and the job
+    // runner would drop it as unfetchable and report it as skipped.
+    expect(replaced).toMatchObject({ sourceUrl: CHAPTER_URL });
+  });
+
+  it('keeps it even where the request states it as null', async () => {
+    const contents = new FakeContentRepository([chapter({ sourceUrl: CHAPTER_URL })]);
+    const replaced = await managerOver(contents, new FakeItemRepository([novel()])).replace('novel-1', 'chapter-1', { title: 'Nine Bells', sourceUrl: null });
+
+    expect(replaced).toMatchObject({ sourceUrl: CHAPTER_URL });
+  });
+
   it('is a 404 for content that is not under this item', async () => {
     const manager = managerOver(new FakeContentRepository(), new FakeItemRepository([novel()]));
 
@@ -290,6 +330,70 @@ describe('LibraryContentManager.list', () => {
     const manager = managerOver(new FakeContentRepository(), new FakeItemRepository());
 
     await expect(manager.list('missing', query())).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('LibraryContentManager.chapters', () => {
+  it('answers with every chapter of a novel', async () => {
+    const contents = new FakeContentRepository([chapter({ id: 'a', index: 1 }), chapter({ id: 'b', index: 2 })]);
+    const chapters = await managerOver(contents, new FakeItemRepository([novel()])).chapters('novel-1');
+
+    expect(chapters.map((row) => row.id)).toEqual(['a', 'b']);
+  });
+
+  it('refuses a set, which has no chapters to scrape', async () => {
+    const manager = managerOver(new FakeContentRepository([asset()]), new FakeItemRepository([imageSet()]));
+
+    await expect(manager.chapters('image-1')).rejects.toThrow(NotImplementedException);
+  });
+
+  it('is a 404 for an item that is not there', async () => {
+    await expect(managerOver(new FakeContentRepository(), new FakeItemRepository()).chapters('missing')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('LibraryContentManager job writes', () => {
+  it('marks the rows a job claimed pending, in one batch', async () => {
+    const contents = new FakeContentRepository([chapter({ id: 'a' }), chapter({ id: 'b' })]);
+
+    await managerOver(contents, new FakeItemRepository([novel()])).markQueued('novel-1', ['a', 'b']);
+
+    expect(contents.statuses).toEqual([{ contentIds: ['a', 'b'], status: LibraryContentStatus.Pending }]);
+  });
+
+  it('is a 404 for an item that is not there, and marks nothing', async () => {
+    const contents = new FakeContentRepository();
+
+    await expect(managerOver(contents, new FakeItemRepository()).markQueued('missing', ['a'])).rejects.toThrow(NotFoundException);
+    expect(contents.statuses).toEqual([]);
+  });
+
+  it('moves one row in flight and nothing else', async () => {
+    const contents = new FakeContentRepository([chapter()]);
+
+    await managerOver(contents, new FakeItemRepository([novel()])).markScraping('novel-1', 'chapter-1');
+
+    expect(contents.patches).toEqual([{ contentId: 'chapter-1', fields: { status: LibraryContentStatus.Scraping } }]);
+  });
+
+  it('points a completed row at what was stored, and recounts', async () => {
+    const contents = new FakeContentRepository([chapter({ id: 'a', status: LibraryContentStatus.Scraping, contentUrl: null, words: 0 }), chapter({ id: 'b' })]);
+    const items = new FakeItemRepository([novel()]);
+    const counts = await managerOver(contents, items).completeScrape('novel-1', 'a', { contentUrl: TEXT_URL, words: 1841 });
+
+    expect(contents.patches).toEqual([{ contentId: 'a', fields: { status: LibraryContentStatus.Completed, contentUrl: TEXT_URL, words: 1841 } }]);
+    // Answered with what `recount` has just written, which is how a caller knows this was the last one.
+    expect(counts).toMatchObject({ total: 2, completed: 2 });
+    expect(items.counters).toEqual([{ itemId: 'novel-1', counters: { discoveredCount: 2, downloadedCount: 2, downloadedSize: undefined } }]);
+  });
+
+  it('moves a failed row status and leaves the text it already held', async () => {
+    const contents = new FakeContentRepository([chapter({ contentUrl: TEXT_URL })]);
+
+    await managerOver(contents, new FakeItemRepository([novel()])).markFailed('novel-1', 'chapter-1');
+
+    expect(contents.patches).toEqual([{ contentId: 'chapter-1', fields: { status: LibraryContentStatus.Failed } }]);
+    expect(contents.rows[0]).toMatchObject({ contentUrl: TEXT_URL });
   });
 });
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, NotImplementedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { AppConfigService } from '../core/config/app-config.service';
 import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '../core/providers/scraping.provider';
@@ -6,7 +6,7 @@ import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryItemType, LibrarySourceMode, NovelStatus } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
 import { LibraryManager } from '../library/library.manager';
-import { Crawler, CRAWLER_NAMES, crawlerByName } from './crawlers';
+import { checkHost, Crawler, hostOf, requireCrawler } from './crawlers';
 import { DiscoverDto } from './dto/discover.dto';
 import { NovelPreviewDto, PreviewDto } from './dto/preview.dto';
 import { ValidateDto } from './dto/validate.dto';
@@ -123,40 +123,6 @@ export class ScrapingManager {
     const cover = await this.scraping.cover(crawler.name, sourceUrl);
 
     return { type: crawler.kind, content: novelContent(crawler, novel, chapters, cover) };
-  }
-}
-
-/** The crawler named, or the 404 a name nothing answers to earns. */
-function requireCrawler(name: string): Crawler {
-  const crawler = crawlerByName(name);
-
-  if (!crawler) {
-    throw new NotFoundException(`No crawler called \`${name}\`. There is: ${CRAWLER_NAMES.join(', ')}`);
-  }
-
-  return crawler;
-}
-
-/**
- * That the URL is one this crawler reads — checked here, before the cache and
- * before the browser, because it is the mistake this whole screen exists to catch
- * and it should cost nothing to report.
- */
-function checkHost(crawler: Crawler, sourceUrl: string): void {
-  const host = hostOf(sourceUrl);
-
-  if (!host || !crawler.hosts.includes(host)) {
-    throw new BadRequestException(`${crawler.name} only reads ${crawler.domain}. Pick the crawler that matches this URL.`);
-  }
-}
-
-function hostOf(sourceUrl: string): string | null {
-  try {
-    return new URL(sourceUrl).hostname.toLowerCase();
-  } catch {
-    // The DTO's `@IsUrl` has already refused anything this could catch. Belt and
-    // braces, because what follows would otherwise throw a 500 over a typo.
-    return null;
   }
 }
 

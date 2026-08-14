@@ -44,12 +44,26 @@ export interface ScrapedCover {
   bytes: Buffer;
 }
 
+/**
+ * One chapter's text, as the source publishes it: its heading, and its lines.
+ *
+ * Lines rather than one string, because that is what the page is — what goes between
+ * them is decided where the file is written, not here. A chapter served over several
+ * pages arrives as one of these, already joined up by the service.
+ */
+export interface ScrapedContent {
+  title: string;
+  content: string[];
+}
+
 /** What the service calls each thing it can answer about a book. */
 const METADATA = 'metadata';
 
 const CHAPTERS = 'chapters';
 
 const COVER = 'cover';
+
+const CONTENT = 'content';
 
 const UNREADABLE = 'The source could not be read. Try again.';
 
@@ -84,6 +98,17 @@ export class ScrapingProvider {
   /** Every chapter, in reading order. */
   async chapters(crawler: string, sourceUrl: string): Promise<ScrapedChapter[]> {
     return this.json<ScrapedChapter[]>(await this.call(CHAPTERS, crawler, sourceUrl));
+  }
+
+  /**
+   * The text behind one chapter.
+   *
+   * `sourceUrl` here is a **chapter** URL — the one discovery stored on the row — and
+   * not a book URL, which is the one thing this call does differently from the three
+   * beside it.
+   */
+  async content(crawler: string, sourceUrl: string): Promise<ScrapedContent> {
+    return this.json<ScrapedContent>(await this.call(CONTENT, crawler, sourceUrl));
   }
 
   /**

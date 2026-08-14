@@ -109,6 +109,16 @@ export class LibraryRepository extends FirestoreRepository<LibraryItem> {
   }
 
   /**
+   * The item's own status, and nothing else.
+   *
+   * A root field rather than a dotted path into `metadata`, and its own method rather
+   * than a `replace`: a job runner holds an id and a state, not an item.
+   */
+  async updateStatus(itemId: string, status: LibraryItemStatus): Promise<void> {
+    await this.collection.doc(itemId).update({ status, updatedAt: Timestamp.now() });
+  }
+
+  /**
    * What the item holds, after its content changed.
    *
    * Dotted paths rather than a whole `metadata` map, so the descriptive block a

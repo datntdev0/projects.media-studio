@@ -31,6 +31,13 @@ export interface LibraryContentCounts {
   bytes: number;
 }
 
+/** What a running job writes to one row. Everything else about it stays where it is. */
+export interface LibraryContentPatch {
+  status?: LibraryContentStatus;
+  contentUrl?: string | null;
+  words?: number;
+}
+
 /** Distributes over the union, so `type` still narrows the rest. */
 type WithoutStamps<T> = T extends LibraryContent ? Omit<T, 'id' | 'createdAt' | 'updatedAt'> : never;
 
@@ -109,6 +116,36 @@ export class LibraryContentRepository {
 
       await batch.commit();
     }
+  }
+
+  /**
+   * The status of many rows at once, for a job that has just claimed them.
+   *
+   * Batched at Firestore's limit, in the loop shape `createMany` uses. One field and
+   * nothing else: the rows are not the caller's to rewrite, and a queued chapter has
+   * not changed in any other way.
+   */
+  async updateStatus(itemId: string, contentIds: string[], status: LibraryContentStatus): Promise<void> {
+    const contents = this.contentsOf(itemId);
+
+    for (let from = 0; from < contentIds.length; from += BATCH_LIMIT) {
+      const batch = this.firebase.firestore.batch();
+      const now = Timestamp.now();
+
+      contentIds.slice(from, from + BATCH_LIMIT).forEach((contentId) => batch.update(contents.doc(contentId), { status, updatedAt: now }));
+
+      await batch.commit();
+    }
+  }
+
+  /**
+   * The few fields a job writes as it goes, and nothing else.
+   *
+   * Not `replace`: that is the whole writable row, and a consumer holds none of it —
+   * it knows a URL, a word count and where the row now stands.
+   */
+  async patch(itemId: string, contentId: string, fields: LibraryContentPatch): Promise<void> {
+    await this.contentsOf(itemId).doc(contentId).update({ ...fields, updatedAt: Timestamp.now() });
   }
 
   /**
