@@ -86,3 +86,9 @@ export type LibraryAsset = ImageAsset | VideoAsset
 
 /** What every content type is called on screen, per item type. */
 export type LibraryContentUnit = Record<LibraryItemType, string>
+
+/** Which rows a scraping job takes. The dialog's four cards, and what `range` is built from. */
+export type ScrapeScope = 'missing' | 'all' | 'range' | 'selected'
+
+/** When the work is published. `at` is the only one that carries a time. */
+export type ScrapeStart = 'now' | 'at'

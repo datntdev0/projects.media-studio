@@ -907,6 +907,64 @@ export class ScrapingClient {
         }
         return Promise.resolve<LibraryItemDto>(null as any);
     }
+
+    /**
+     * Queue the content behind an item's chapters, now or at a set time
+     * @return Selected, marked, and published — or booked. `queued: 0` where the range matched nothing.
+     */
+    job(body: ScrapingJobDto, signal?: AbortSignal): Promise<ScrapingJobStartedDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/job";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processJob(_response);
+        });
+    }
+
+    protected processJob(response: Response): Promise<ScrapingJobStartedDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobStartedDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A manual item, a range that will not parse, or a `startAt` that has passed.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id, or no crawler under its `sourceName`.", status, _responseText, _headers);
+            });
+        } else if (status === 501) {
+            return response.text().then((_responseText) => {
+            return throwException("A crawler item that is not a novel.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScrapingJobStartedDto>(null as any);
+    }
 }
 
 /** The environment that build was configured for, as recorded on boot. */
@@ -1291,6 +1349,28 @@ export interface PreviewDto {
 export interface DiscoverDto {
     /** The crawler item to read the source of. A manual item is a 400. */
     libraryId: string;
+}
+
+export interface ScrapingJobDto {
+    /** The crawler item to scrape. A manual item is a 400. */
+    libraryId: string;
+    /** `all`, `missing`, or an index expression — `1,3,5,7`, `23-34`, `[23:34]`. Anything else is a 400. */
+    range: string;
+    /** Whether a chapter that already holds text is fetched again. */
+    refetch?: boolean;
+    /** When to publish the work. Null queues it now. */
+    startAt?: string | null;
+    /** How many times a failed chapter is tried again. The dialog offers 3, 1 and 0. */
+    retry?: number;
+}
+
+export interface ScrapingJobStartedDto {
+    /** How many chapters were published, or booked to be. `0` where the range matched nothing. */
+    queued: number;
+    /** Candidates dropped as already complete. */
+    skipped: number;
+    /** When the work runs. Null where it was published immediately. */
+    startAt: string | null;
 }
 
 export class ApiException extends Error {

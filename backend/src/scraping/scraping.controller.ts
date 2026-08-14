@@ -5,7 +5,9 @@ import { SCRAPING_PATH } from '../core/api.constants';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { DiscoverDto } from './dto/discover.dto';
 import { PreviewDto } from './dto/preview.dto';
+import { ScrapingJobDto, ScrapingJobStartedDto } from './dto/scraping-job.dto';
 import { QueryValidateDto, ValidateDto } from './dto/validate.dto';
+import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingManager } from './scraping.manager';
 
 /**
@@ -19,7 +21,10 @@ import { ScrapingManager } from './scraping.manager';
 @UseGuards(FirebaseAuthGuard)
 @Controller(SCRAPING_PATH)
 export class ScrapingController {
-  constructor(private readonly scraping: ScrapingManager) {}
+  constructor(
+    private readonly scraping: ScrapingManager,
+    private readonly jobs: ScrapingJobManager,
+  ) {}
 
   @Post('validate')
   // A POST that creates nothing: it answers a question about a source, and the
@@ -50,5 +55,19 @@ export class ScrapingController {
   @ApiServiceUnavailableResponse({ description: 'The scraping service did not answer, or did not answer in time.' })
   discover(@Body() input: DiscoverDto): Promise<LibraryItemDto> {
     return this.scraping.discover(input);
+  }
+
+  @Post('job')
+  // It queues work, and the job is not a resource a caller can address yet — so
+  // 200, and a count of what was published rather than a location.
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Queue the content behind an item's chapters, now or at a set time" })
+  @ApiOkResponse({ type: ScrapingJobStartedDto, description: 'Selected, marked, and published — or booked. `queued: 0` where the range matched nothing.' })
+  @ApiBadRequestResponse({ description: 'A manual item, a range that will not parse, or a `startAt` that has passed.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
+  @ApiNotFoundResponse({ description: 'No item under that id, or no crawler under its `sourceName`.' })
+  @ApiNotImplementedResponse({ description: 'A crawler item that is not a novel.' })
+  job(@Body() input: ScrapingJobDto): Promise<ScrapingJobStartedDto> {
+    return this.jobs.start(input);
   }
 }

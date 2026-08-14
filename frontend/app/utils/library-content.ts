@@ -1,5 +1,5 @@
 import type { BadgeProps } from '@nuxt/ui'
-import type { LibraryContent, LibraryContentPage, LibraryContentStatus } from '~/types/library-content'
+import type { LibraryContent, LibraryContentPage, LibraryContentStatus, ScrapeScope, ScrapeStart } from '~/types/library-content'
 import type { LibraryItemType } from '~/types/library'
 import type { LibraryContentPageDto, NovelChapterDto } from './api.clients'
 
@@ -84,5 +84,26 @@ export function checkAsset(file: File, type: LibraryItemType): void {
   }
 }
 
-/** Why every scraping control on the detail screens is disabled. */
+/** Why the scraping controls that are still deferred are disabled. */
 export const SCRAPING_DEFERRED = 'Scraping arrives with the job runner.'
+
+/** What each card in the scrape dialog is called. The `Record` makes a missing one a compile error. */
+export const SCRAPE_SCOPE_LABELS: Record<ScrapeScope, string> = {
+  missing: 'Everything not yet extracted',
+  all: 'Everything — including already extracted',
+  range: 'A specific range',
+  selected: 'Only the selected chapters'
+}
+
+/** On failure. The values are the retry counts the endpoint takes, not names for them. */
+export const SCRAPE_RETRY_OPTIONS: { label: string, value: number }[] = [
+  { label: 'Retry 3× then mark failed', value: 3 },
+  { label: 'Retry once', value: 1 },
+  { label: 'Do not retry', value: 0 }
+]
+
+/** When to start. `at` is a wall-clock time the caller picks. */
+export const SCRAPE_START_OPTIONS: { label: string, value: ScrapeStart }[] = [
+  { label: 'Queue it now', value: 'now' },
+  { label: 'At a set time', value: 'at' }
+]

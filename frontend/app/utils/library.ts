@@ -152,6 +152,14 @@ export function relativeUpdated(updatedAt: string): string {
   return new Date(updatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })
 }
 
+/** A booked instant as the clock it was picked on — `03:00`, and the date where it is not today. */
+export function timeLabel(at: string): string {
+  const when = new Date(at)
+  const time = when.toLocaleTimeString(undefined, { timeStyle: 'short' })
+
+  return when.toDateString() === new Date().toDateString() ? time : `${when.toLocaleDateString(undefined, { dateStyle: 'medium' })} ${time}`
+}
+
 /** The URL without its scheme, which every row would otherwise repeat. */
 export const displayUrl = (url: string | null): string => url ? url.replace(/^https?:\/\//, '') : '—'
 

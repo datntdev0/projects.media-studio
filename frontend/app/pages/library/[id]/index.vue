@@ -2,6 +2,7 @@
 import { refDebounced } from '@vueuse/core'
 import type { ImageSetItem, LibraryItemDetail, NovelItem, VideoSetItem } from '~/types/library'
 import type { LibraryAsset, LibraryContent, NovelChapter } from '~/types/library-content'
+import type { ScrapingJobStartedDto } from '~/utils/api.clients'
 
 /**
  * One library item, and what it holds. A novel gets its metadata column beside a
@@ -122,6 +123,11 @@ const assets = computed(() => rows.value.filter((row): row is LibraryAsset => ro
 
 const failed = computed(() => rows.value.filter(row => row.status === 'failed').length)
 
+/** What the scrape dialog counts against: the item's own inventory, not the filtered table's. */
+const discovered = computed(() => novel.value?.metadata.discoveredCount ?? 0)
+
+const notExtracted = computed(() => Math.max(discovered.value - (novel.value?.metadata.downloadedCount ?? 0), 0))
+
 const selected = ref<string[]>([])
 
 /** The panel's Upload button opens the grid's picker — there is one, not two. */
@@ -136,6 +142,11 @@ const formOpen = ref(false)
 const deleteItemOpen = ref(false)
 
 const chapterOpen = ref(false)
+
+const scrapeOpen = ref(false)
+
+/** The chapter numbers a **Scrape selected** press hands the dialog. Empty for the panel's own button. */
+const scrapeIndexes = ref<number[]>([])
 
 const deleteContentOpen = ref(false)
 
@@ -215,6 +226,35 @@ async function onDiscover() {
   } finally {
     discovering.value = false
   }
+}
+
+/** The panel's button describes a job over the whole novel; the table's over what is ticked. */
+function onScrape(indexes: number[] = []) {
+  scrapeIndexes.value = indexes
+  scrapeOpen.value = true
+}
+
+function onScrapeSelected() {
+  onScrape(chapters.value.filter(chapter => selected.value.includes(chapter.id)).map(chapter => chapter.index))
+}
+
+/**
+ * Nothing follows a job while it runs, so this is the whole of what the screen
+ * learns: the rows it just marked, and a sentence about what was queued.
+ */
+async function onJobStarted(answer: ScrapingJobStartedDto) {
+  await refreshAll()
+
+  if (!answer.queued) {
+    toast.add({ title: 'Nothing to scrape', icon: 'i-lucide-info', color: 'neutral' })
+
+    return
+  }
+
+  const what = `${countLabel(answer.queued)} ${contentUnit('novel', answer.queued)}`
+  const when = answer.startAt ? `Scheduled for ${timeLabel(answer.startAt)} · ${what}` : `Queued ${what}`
+
+  toast.add({ title: when, icon: 'i-lucide-check', color: 'primary' })
 }
 
 async function onItemSaved() {
@@ -351,6 +391,7 @@ async function onUpload(picked: FileList | null) {
           @edit="formOpen = true"
           @remove="deleteItemOpen = true"
           @discover="onDiscover"
+          @scrape="onScrape()"
         />
       </AppResizable>
 
@@ -378,11 +419,18 @@ async function onUpload(picked: FileList | null) {
             <template v-if="selected.length">
               <span class="text-label text-muted">{{ selected.length }} selected</span>
 
-              <UTooltip :text="SCRAPING_DEFERRED">
+              <UTooltip v-if="novel.sourceMode !== 'crawler'" text="A manual item has no source to read.">
                 <span class="block">
                   <UButton label="Scrape selected" size="sm" disabled />
                 </span>
               </UTooltip>
+
+              <UButton
+                v-else
+                label="Scrape selected"
+                size="sm"
+                @click="onScrapeSelected"
+              />
 
               <UButton
                 label="Delete selected"
@@ -508,6 +556,15 @@ async function onUpload(picked: FileList | null) {
       :item-id="itemId"
       :chapter="renaming"
       @saved="onContentSaved"
+    />
+
+    <AppLibraryScrapeDialog
+      v-model:open="scrapeOpen"
+      :item-id="itemId"
+      :total="discovered"
+      :missing="notExtracted"
+      :indexes="scrapeIndexes"
+      @started="onJobStarted"
     />
 
     <AppDialog

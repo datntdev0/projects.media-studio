@@ -4,9 +4,8 @@ import type { LibraryItemDetail, NovelItem } from '~/types/library'
 /**
  * A novel's left column: what the work is, and what can be done to it.
  *
- * Discovery is live; fetching the text behind each chapter is not, and stays drawn
- * and disabled — a control that looks live and is not would be worse than one that
- * plainly is not.
+ * Both scraping controls read the item's own source, so both are refused to a
+ * manual item under the same sentence rather than left to be guessed at.
  */
 const props = defineProps<{
   item: LibraryItemDetail & NovelItem
@@ -20,12 +19,15 @@ defineEmits<{
   edit: []
   remove: []
   discover: []
+  scrape: []
 }>()
 
 /** Only a crawler item has a source to read; a manual one is told so rather than left to guess. */
 const readable = computed(() => props.item.sourceMode === 'crawler')
 
 const discoverHint = computed(() => readable.value ? 'Read the source for chapters we do not hold yet.' : 'A manual item has no source to read.')
+
+const scrapeHint = computed(() => readable.value ? 'Fetch the text behind the chapters we know about.' : 'A manual item has no source to read.')
 
 const facts = computed(() => [
   { label: 'Chapters', value: `${countLabel(props.chapters)} ${contentUnit('novel', props.chapters)}` },
@@ -103,13 +105,14 @@ const facts = computed(() => [
     </dl>
 
     <div class="flex flex-col gap-2 mt-6">
-      <UTooltip :text="SCRAPING_DEFERRED">
+      <UTooltip :text="scrapeHint">
         <span class="block">
           <UButton
             icon="i-lucide-download"
             label="Scrape content…"
             block
-            disabled
+            :disabled="!readable"
+            @click="$emit('scrape')"
           />
         </span>
       </UTooltip>
