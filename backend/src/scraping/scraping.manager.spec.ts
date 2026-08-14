@@ -7,7 +7,9 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AppConfigService } from '../core/config/app-config.service';
 import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '../core/providers/scraping.provider';
-import { LibraryItemType, NovelStatus } from '../library/entities/library-item.entity';
+import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from '../library/entities/library-item.entity';
+import { DiscoveredContent, LibraryContentManager } from '../library/library-content.manager';
+import { LibraryManager } from '../library/library.manager';
 import { PreviewDto } from './dto/preview.dto';
 import { ScrapingManager } from './scraping.manager';
 
@@ -121,12 +123,67 @@ class FakeCache {
   }
 }
 
-function fixture() {
+/** What discovery needs of the catalogue: the lookup, and the 404 it owes. */
+class FakeLibraryManager {
+  constructor(public items: LibraryItem[] = []) {}
+
+  get(id: string): Promise<LibraryItem> {
+    const item = this.items.find((candidate) => candidate.id === id);
+
+    if (!item) {
+      return Promise.reject(new NotFoundException(`No library item ${id}`));
+    }
+
+    return Promise.resolve(item);
+  }
+}
+
+/** What it needs of the subcollection: what it was handed, and how much of it was new. */
+class FakeContentManager {
+  readonly appended: { itemId: string, found: DiscoveredContent[] }[] = [];
+
+  fresh = 0;
+
+  appendDiscovered(itemId: string, found: DiscoveredContent[]): Promise<number> {
+    this.appended.push({ itemId, found });
+
+    return Promise.resolve(this.fresh);
+  }
+}
+
+function novel(over: Partial<NovelItem> = {}): NovelItem {
+  return {
+    id: 'novel-1',
+    type: LibraryItemType.Novel,
+    title: '我只是一個凡人，為什麼你們都奉我為聖',
+    coverUrl: null,
+    sourceMode: LibrarySourceMode.Crawler,
+    sourceName: CRAWLER,
+    sourceUrl: SOURCE_URL,
+    status: LibraryItemStatus.Draft,
+    metadata: { discoveredCount: 0, discoveredAt: null, downloadedCount: 0, status: NovelStatus.Ongoing, author: '金屬寒霜', language: 'zh-Hant', genres: [], description: '' },
+    createdAt: '2026-08-11T09:12:04.113Z',
+    updatedAt: '2026-08-11T09:12:04.113Z',
+    ...over,
+  };
+}
+
+function fixture(items: LibraryItem[] = [novel()]) {
   const scraping = new FakeScrapingProvider();
   const cache = new FakeCache();
   const config = { scraping: { baseUrl: '', timeoutMs: 1, cacheTtlDays: TTL_DAYS } } as AppConfigService;
+  const library = new FakeLibraryManager(items);
+  const contents = new FakeContentManager();
 
-  return { scraping, cache, manager: new ScrapingManager(scraping as unknown as ScrapingProvider, cache as unknown as CacheProvider, config) };
+  const manager = new ScrapingManager(
+    scraping as unknown as ScrapingProvider,
+    cache as unknown as CacheProvider,
+    config,
+    library as unknown as LibraryManager,
+    contents as unknown as LibraryContentManager,
+  );
+
+  return { scraping, cache, library, contents, manager };
 }
 
 describe('ScrapingManager.validate', () => {

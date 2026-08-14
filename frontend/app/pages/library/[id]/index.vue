@@ -17,7 +17,7 @@ const SEARCH_DEBOUNCE = 300
 
 const route = useRoute()
 
-const { libraryClient } = useApiClient()
+const { libraryClient, scrapingClient } = useApiClient()
 
 const covers = useCovers()
 
@@ -69,6 +69,8 @@ const selected = ref<string[]>([])
 const grid = useTemplateRef<{ pick: () => void }>('grid')
 
 const uploading = ref(false)
+
+const discovering = ref(false)
 
 const formOpen = ref(false)
 
@@ -126,6 +128,34 @@ async function onContentDeleted() {
   await refreshAll()
 
   toast.add({ title: 'Deleted', icon: 'i-lucide-check', color: 'primary' })
+}
+
+/**
+ * The source's inventory, read now. Slow on a long novel, and idempotent — so a
+ * request that gives up can simply be made again, and the second one appends
+ * exactly what the first missed.
+ */
+async function onDiscover() {
+  if (discovering.value) {
+    return
+  }
+
+  const before = novel.value?.metadata.discoveredCount ?? 0
+
+  discovering.value = true
+
+  try {
+    const read = asLibraryItem(await scrapingClient.discover({ libraryId: itemId.value }))
+    const added = Math.max(read.metadata.discoveredCount - before, 0)
+
+    await refreshAll()
+
+    toast.add({ title: added ? `Found ${added} new ${contentUnit('novel', added)}` : 'No new chapters', icon: 'i-lucide-check', color: 'primary' })
+  } catch (cause) {
+    toast.add({ title: apiMessage(cause, 'Could not read the source.'), icon: 'i-lucide-triangle-alert', color: 'error' })
+  } finally {
+    discovering.value = false
+  }
 }
 
 async function onItemSaved() {
@@ -258,8 +288,10 @@ async function onUpload(picked: FileList | null) {
         <AppLibraryNovelPanel
           :item="novel"
           :chapters="total"
+          :discovering="discovering"
           @edit="formOpen = true"
           @remove="deleteItemOpen = true"
+          @discover="onDiscover"
         />
       </AppResizable>
 

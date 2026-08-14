@@ -36,6 +36,7 @@ what makes a client that times out on a 1,305-chapter novel able to simply call 
 - A batched `createMany` on the content repository, and an `appendDiscovered` on the content manager
   that owns the comparison.
 - The path prefix respelled `scrapings`, carrying `validate` with it.
+- **Discover new chapters** enabled on the item detail screen, calling that endpoint.
 
 **Out of scope — deliberately**
 
@@ -43,7 +44,7 @@ what makes a client that times out on a 1,305-chapter novel able to simply call 
 | --- | --- |
 | Scraping the chapter text | Discovery is an inventory. Fetching 1,305 chapter bodies is a different job with a different failure story, and it is the one that genuinely needs the queue. The rows this writes are placeholders — `contentUrl: null` — which is exactly the shape part 2 designed for. |
 | Putting discovery on BullMQ | The producer and consumer exist (`core/queues/`), and this endpoint is the obvious first real caller. It stays synchronous here because it is idempotent and because a queued version needs a job record and a `Scrapings` screen to show it on — neither of which exists yet. Nothing below blocks the move. |
-| Enabling the frontend control | **Discover new chapters** stays disabled. This part ships the endpoint and the generated client; wiring the button belongs with the screen that reports progress. |
+| Reporting progress while it runs | The button waits on the request and says what landed when it is done. A run that narrates itself needs the job record and the `Scrapings` screen, and neither exists yet. **Scrape content…**, **Scrape selected** and **Retry failed** stay disabled for the same reason. |
 | Image and video discovery | `sourceUrl` lands on `LibraryContentBase` so a set can reuse it, but only a novel crawler exists, and `discover` refuses anything else with a `501` exactly as `validate` does. |
 | A migration for stored rows | `ready` → `completed` orphans content already written. Everything lives in the Firestore emulator and is reseeded — see *Known limits*. |
 
@@ -136,9 +137,9 @@ of the scraping service by this part.
 ```mermaid
 flowchart LR
     subgraph fe["Nuxt · :3000"]
-        DETAIL["item detail screen<br/>Discover new chapters<br/><i>still disabled</i>"]
+        DETAIL["item detail screen<br/>Discover new chapters"]
         CLIENT["utils/api.clients.ts<br/>ScrapingClient.discover"]
-        DETAIL -.-> CLIENT
+        DETAIL --> CLIENT
     end
 
     subgraph be["NestJS · :3001"]
@@ -166,7 +167,6 @@ flowchart LR
     SCRAPE --> SITE
 
     style SITE stroke-dasharray: 4 3
-    style DETAIL stroke-dasharray: 4 3
 ```
 
 ### The flow
@@ -222,9 +222,10 @@ frontend regeneration happens once. Step 2 adds no DTO, so it needs no second re
 | `frontend/app/types/library-content.ts` | The union gains `'discovered'` and `'scraping'`; `'ready'` becomes `'completed'`. |
 | `frontend/app/utils/library-content.ts` | `CONTENT_STATUS_TAGS` needs all five keys — the `Record` makes a missing one a compile error. |
 
-Badge labels, in the mockup's register: `discovered` → **Found** (neutral, outline), `pending` →
-**Queued** (neutral, subtle), `scraping` → **Scraping** (primary, subtle), `completed` → **Done**
-(primary, subtle), `failed` → **Failed** (neutral, outline).
+Badge labels are the states' own names — **Discovered** (neutral, outline), **Pending** (neutral,
+subtle), **Scraping** (primary, subtle), **Completed** (primary, subtle), **Failed** (neutral,
+outline) — so what the badge says and what the store holds are one word, and a filter chosen by name
+matches the row it drew.
 
 `contentStatusTag()` has exactly one consumer, `AppLibraryChapterTable.vue`, and it needs no edit.
 `LibraryItemStatus` is a different enum and is not touched: the `'ready'` in
@@ -335,6 +336,21 @@ the same rule `novelContent()` follows.
 exports `LibraryManager` and `LibraryContentManager`, and does not import `ScrapingModule`, so there is
 no cycle. The module's docblock claims it has no imports; that sentence goes.
 
+**The button** — the control part 2 drew disabled, now calling the endpoint.
+
+| File | What changes |
+| --- | --- |
+| `frontend/app/components/AppLibraryNovelPanel.vue` | **Discover new chapters** loses `disabled` and emits `discover`. A `discovering` prop drives its spinner, as `uploading` drives the gallery panel's. It stays disabled for a manual item — there is no source to read — and the tooltip says which of the two it is rather than repeating `SCRAPING_DEFERRED`. |
+| `frontend/app/pages/library/[id]/index.vue` | Owns the call, as it owns every other one on the screen: `scrapingClient.discover({ libraryId })`, then `refreshAll()`, then a toast. |
+
+The page reads `metadata.discoveredCount` off the response and subtracts what it held before, so the
+toast says **Found 1,305 new chapters** or **No new chapters** — which is what makes a second run's
+idempotency visible without opening the emulator. Failures land in a toast through `apiMessage`, the
+way an upload's do; the endpoint's refusals are already sentences.
+
+`SCRAPING_DEFERRED` stays where it is. **Scrape content…**, **Scrape selected** and **Retry failed**
+are the text-fetching half, and that is still the job runner's.
+
 ## Step 3 — Verification
 
 **The specs**
@@ -371,11 +387,20 @@ Expect `200`, and a `LibraryItemDto` whose `metadata.discoveredCount` is the sou
 whose `metadata.discoveredAt` is now.
 
 4. Open the item's detail screen. The chapter list is populated, ordered from index 1, every row badged
-   **Found** with an em dash for its word count.
+   **Discovered** with an em dash for its word count.
 5. **Call it a second time.** `discoveredCount` must not move and no duplicate rows may appear. This is
    the idempotency check, and the one that proves the `sourceUrl` comparison works.
 6. Confirm the wizard's **Validate** button still works — it is on the respelled path now.
 7. Send a manual item's id → `400`. Send an id that does not exist → `404`.
+
+Then the same thing through the screen, which is what step 2 now ships:
+
+8. On a fresh crawler item, press **Discover new chapters**. It spins for the four seconds the source
+   takes, the table fills, the **Chapters** count moves, and the toast reads **Found 1,305 new
+   chapters**.
+9. Press it again. Nothing is added and the toast reads **No new chapters**.
+10. Open a manual novel. The button is disabled, and its tooltip reads *A manual item has no source to
+    read.* — not the deferred-scraping sentence, which still belongs to the three controls beside it.
 
 In the Emulator UI at `localhost:4000`, `libraryItems/{id}/contents` holds one document per chapter,
 each with `sourceUrl` set, `contentUrl: null` and `status: 'discovered'`.

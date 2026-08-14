@@ -4,19 +4,28 @@ import type { LibraryItemDetail, NovelItem } from '~/types/library'
 /**
  * A novel's left column: what the work is, and what can be done to it.
  *
- * The scraping actions are drawn and disabled — there is no job runner yet, and a
- * control that looks live and is not would be worse than one that plainly is not.
+ * Discovery is live; fetching the text behind each chapter is not, and stays drawn
+ * and disabled — a control that looks live and is not would be worse than one that
+ * plainly is not.
  */
 const props = defineProps<{
   item: LibraryItemDetail & NovelItem
   /** What the chapters pane counts, so both halves of the screen agree. */
   chapters: number
+  /** True while the source is being read. The one control that waits on it. */
+  discovering?: boolean
 }>()
 
 defineEmits<{
   edit: []
   remove: []
+  discover: []
 }>()
+
+/** Only a crawler item has a source to read; a manual one is told so rather than left to guess. */
+const readable = computed(() => props.item.sourceMode === 'crawler')
+
+const discoverHint = computed(() => readable.value ? 'Read the source for chapters we do not hold yet.' : 'A manual item has no source to read.')
 
 const facts = computed(() => [
   { label: 'Chapters', value: `${countLabel(props.chapters)} ${contentUnit('novel', props.chapters)}` },
@@ -105,7 +114,7 @@ const facts = computed(() => [
         </span>
       </UTooltip>
 
-      <UTooltip :text="SCRAPING_DEFERRED">
+      <UTooltip :text="discoverHint">
         <span class="block">
           <UButton
             icon="i-lucide-refresh-cw"
@@ -113,7 +122,9 @@ const facts = computed(() => [
             color="neutral"
             variant="subtle"
             block
-            disabled
+            :loading="discovering"
+            :disabled="!readable"
+            @click="$emit('discover')"
           />
         </span>
       </UTooltip>

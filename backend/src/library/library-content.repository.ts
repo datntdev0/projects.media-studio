@@ -15,7 +15,7 @@ import { LibraryItemType } from './entities/library-item.entity';
  */
 export const CONTENT_SCAN_LIMIT = 2000;
 
-/** How many deletes fit in one Firestore batch. */
+/** How many writes fit in one Firestore batch. */
 const BATCH_LIMIT = 500;
 
 /** What Firestore itself narrows a list request by. `type` picks the ordering, not a filter. */
@@ -95,6 +95,20 @@ export class LibraryContentRepository {
     await document.set({ ...draft, createdAt: now, updatedAt: now });
 
     return { ...draft, id: document.id, createdAt: iso(now), updatedAt: iso(now) };
+  }
+
+  /** Rows a source turned out to hold. Batched, because a novel is a thousand of them. */
+  async createMany(itemId: string, drafts: LibraryContentDraft[]): Promise<void> {
+    const contents = this.contentsOf(itemId);
+
+    for (let from = 0; from < drafts.length; from += BATCH_LIMIT) {
+      const batch = this.firebase.firestore.batch();
+      const now = Timestamp.now();
+
+      drafts.slice(from, from + BATCH_LIMIT).forEach((draft) => batch.set(contents.doc(), { ...draft, createdAt: now, updatedAt: now }));
+
+      await batch.commit();
+    }
   }
 
   /**

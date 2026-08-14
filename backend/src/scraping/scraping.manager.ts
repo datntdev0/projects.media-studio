@@ -3,7 +3,9 @@ import { AppConfigService } from '../core/config/app-config.service';
 import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '../core/providers/scraping.provider';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
-import { LibraryItemType, NovelStatus } from '../library/entities/library-item.entity';
+import { LibraryItemType, LibrarySourceMode, NovelStatus } from '../library/entities/library-item.entity';
+import { LibraryContentManager } from '../library/library-content.manager';
+import { LibraryManager } from '../library/library.manager';
 import { Crawler, CRAWLER_NAMES, crawlerByName } from './crawlers';
 import { DiscoverDto } from './dto/discover.dto';
 import { NovelPreviewDto, PreviewDto } from './dto/preview.dto';
@@ -30,6 +32,8 @@ export class ScrapingManager {
     private readonly scraping: ScrapingProvider,
     private readonly cache: CacheProvider,
     private readonly config: AppConfigService,
+    private readonly library: LibraryManager,
+    private readonly contents: LibraryContentManager,
   ) {}
 
   async validate(input: ValidateDto, refresh = false): Promise<PreviewDto> {
@@ -65,11 +69,35 @@ export class ScrapingManager {
   /**
    * What the item's source holds and our store does not, appended as placeholders.
    *
-   * Declared here and nothing more: the comparison, the batched write and the
-   * recount arrive with step 2.
+   * Read live rather than from `validate`'s cache: a stale chapter list is exactly
+   * the thing this endpoint exists to notice. Idempotent, so a client that gives up
+   * on a long novel can simply call again.
    */
-  discover(input: DiscoverDto): Promise<LibraryItemDto> {
-    throw new NotImplementedException(`Discovering the content of ${input.libraryId} is not wired up yet`);
+  async discover(input: DiscoverDto): Promise<LibraryItemDto> {
+    const item = await this.library.get(input.libraryId);
+
+    if (item.sourceMode !== LibrarySourceMode.Crawler || !item.sourceUrl) {
+      throw new BadRequestException('A manual item has no source to read. Add its content by hand.');
+    }
+
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`${item.type} sets are not read from a source yet`);
+    }
+
+    const crawler = requireCrawler(item.sourceName);
+
+    checkHost(crawler, item.sourceUrl);
+
+    const chapters = await this.scraping.chapters(crawler.name, item.sourceUrl);
+    // Field by field rather than a spread, so a field the service adds cannot
+    // arrive in our store without anyone deciding it should.
+    const added = await this.contents.appendDiscovered(item.id, chapters.map((chapter) => ({ index: chapter.index, title: chapter.title, sourceUrl: chapter.url })));
+
+    this.logger.log(`${crawler.name} holds ${chapters.length} chapters of \`${item.title}\`; ${added} were new`);
+
+    // Re-read rather than patched in memory: `recount()` writes the counters
+    // straight to Firestore, so this is what makes the answer agree with the store.
+    return this.library.get(input.libraryId);
   }
 
   /**

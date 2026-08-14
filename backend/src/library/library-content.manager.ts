@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
 import { LibraryContentPageDto } from './dto/library-content.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { ImageAsset, LibraryContent, LibraryContentBase, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
-import { LibraryItem, LibraryItemType } from './entities/library-item.entity';
+import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item.entity';
 import { LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
 import { LibraryRepository } from './library.repository';
 
@@ -16,6 +16,13 @@ type ChapterBlock = Pick<NovelChapter, 'title' | 'language' | 'words'>;
 
 /** The fields an asset adds, likewise. */
 type AssetBlock = Pick<ImageAsset, 'filename' | 'filesize'>;
+
+/** One piece of content a source is known to hold, as discovery reports it. */
+export interface DiscoveredContent {
+  index: number;
+  title: string;
+  sourceUrl: string;
+}
 
 /**
  * The rules for what a library item holds: which fields belong to which type of
@@ -82,6 +89,37 @@ export class LibraryContentManager {
     await this.requireContent(itemId, contentId);
     await this.contents.remove(itemId, contentId);
     await this.recount(item);
+  }
+
+  /**
+   * The pieces the source has and we do not, appended as placeholders.
+   *
+   * Matched on `sourceUrl` — the source's own key, and the only field that survives
+   * a retitling or a chapter inserted above it. Answers with how many landed, so a
+   * caller can say so.
+   */
+  async appendDiscovered(itemId: string, found: DiscoveredContent[]): Promise<number> {
+    const item = await this.requireItem(itemId);
+
+    // A chapter is the only row this can build. An asset would need a filename and
+    // a size, and discovery reports neither — see `assetBlock`.
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`Discovering the content of a ${item.type} set is not described yet`);
+    }
+
+    const stored = await this.contents.findMatching(itemId, { type: item.type });
+    const known = new Set(stored.map((content) => content.sourceUrl).filter(Boolean));
+    const fresh = found.filter((content) => !known.has(content.sourceUrl));
+
+    // Nothing new writes nothing and recounts nothing: a second run costs one read.
+    if (fresh.length === 0) {
+      return 0;
+    }
+
+    await this.contents.createMany(itemId, fresh.map((content) => chapterDraft(item, content)));
+    await this.recount(item);
+
+    return fresh.length;
   }
 
   /**
@@ -189,6 +227,24 @@ function chapterBlock(input: CreateLibraryContentDto): ChapterBlock {
   }
 
   return { title, language: input.language ?? '', words: input.words ?? 0 };
+}
+
+/**
+ * One chapter the source turned out to hold: its numbering and its title verbatim,
+ * a placeholder for the text, and the language off the item — which the wizard set
+ * from the crawler at creation, so discovery needs none of its own.
+ */
+function chapterDraft(item: NovelItem, content: DiscoveredContent): LibraryContentDraft {
+  return {
+    type: item.type,
+    index: content.index,
+    title: content.title,
+    language: item.metadata.language,
+    words: 0,
+    sourceUrl: content.sourceUrl,
+    contentUrl: null,
+    status: LibraryContentStatus.Discovered,
+  };
 }
 
 /** An asset is a file — and is refused the fields of a chapter. */
