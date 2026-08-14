@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NovelChapter } from '~/types/library-content'
+import type { LibraryContent, NovelChapter } from '~/types/library-content'
 
 /**
  * One chapter, read or written. The navigator on the left is the whole novel, so
@@ -10,7 +10,7 @@ import type { NovelChapter } from '~/types/library-content'
  */
 const FALLBACK_ERROR = 'Could not save the chapter. Try again.'
 
-/** Enough to hold a whole novel's navigator; past it the list is trimmed. */
+/** One page of the navigator. The rest arrives as it is scrolled. */
 const PAGE_SIZE = 200
 
 const route = useRoute()
@@ -27,13 +27,68 @@ const contentId = computed(() => String(route.params.contentId))
 
 const { data: item } = useAsyncData(() => `library-item-${itemId.value}`, () => libraryClient.get(itemId.value).then(asLibraryItem), { watch: [itemId] })
 
-// Its own key, not the detail screen's: that list is whatever the search box there
-// narrowed it to, and the navigator has to be the whole novel.
-const { data: page } = useAsyncData(
-  () => `library-chapters-${itemId.value}`,
-  () => libraryClient.listContents(itemId.value, undefined, undefined, undefined, PAGE_SIZE).then(asLibraryContentPage),
-  { lazy: true, watch: [itemId] }
-)
+// Its own fetch, not the detail screen's list: that one is whatever the search box
+// there narrowed it to, and the navigator has to be the whole novel.
+const rows = ref<LibraryContent[]>([])
+
+const total = ref(0)
+
+/** How many pages have landed. The next request is always one past it. */
+const loaded = ref(0)
+
+const loadingMore = ref(false)
+
+/** Whether the novel runs past what has been fetched. */
+const more = computed(() => rows.value.length < total.value)
+
+/** Bumped per request, so a page answered late cannot land under another novel's. */
+let ticket = 0
+
+async function fetchPage(next: number) {
+  const mine = ++ticket
+
+  loadingMore.value = true
+
+  try {
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, undefined, next, PAGE_SIZE))
+
+    if (mine !== ticket) {
+      return
+    }
+
+    rows.value = next === 1 ? answer.items : [...rows.value, ...answer.items]
+    total.value = answer.total
+    loaded.value = next
+  } catch {
+    // The navigator is a convenience. A failure leaves it short rather than
+    // taking over a screen that is showing the chapter perfectly well.
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+/** The next page, when the reader reaches the end of the last one. */
+function loadMore() {
+  if (loadingMore.value || !more.value) {
+    return
+  }
+
+  return fetchPage(loaded.value + 1)
+}
+
+watch(itemId, () => {
+  loaded.value = 0
+
+  return fetchPage(1)
+}, { immediate: true })
+
+const sentinel = useTemplateRef<HTMLElement>('sentinel')
+
+useIntersectionObserver(sentinel, ([entry]) => {
+  if (entry?.isIntersecting) {
+    loadMore()
+  }
+})
 
 const { data: chapter, status: chapterStatus, error: chapterError, refresh: refreshChapter } = useAsyncData(
   () => `library-content-${contentId.value}`,
@@ -41,7 +96,7 @@ const { data: chapter, status: chapterStatus, error: chapterError, refresh: refr
   { watch: [contentId] }
 )
 
-const siblings = computed(() => (page.value?.items ?? []).filter((row): row is NovelChapter => row.type === 'novel'))
+const siblings = computed(() => rows.value.filter((row): row is NovelChapter => row.type === 'novel'))
 
 const editing = ref(false)
 
@@ -208,6 +263,11 @@ async function save() {
             <span class="w-6 shrink-0 text-label text-muted tabular-nums">{{ sibling.index }}</span>
             <span class="min-w-0">{{ sibling.title }}</span>
           </NuxtLink>
+
+          <!-- The trigger and the wait are one row, so the list grows rather than jumping. -->
+          <div v-if="more" ref="sentinel" class="px-6 py-2 border-b border-default">
+            <USkeleton v-if="loadingMore" class="h-4 w-2/3" />
+          </div>
         </nav>
       </AppResizable>
 

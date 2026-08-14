@@ -5,15 +5,24 @@ import type { NovelChapter } from '~/types/library-content'
  * A novel's chapters. The title is a link into the reader, so a row is reachable
  * by keyboard; the row carries the click for the pointer, and the checkbox and the
  * action cell stop it.
+ *
+ * Long lists arrive a page at a time: the last row is a sentinel, and reaching it
+ * is what asks for the next page. The caller owns the fetching — this only says
+ * when the reader has run out of rows.
  */
 defineProps<{
   itemId: string
   chapters: NovelChapter[]
   loading?: boolean
+  /** True while the next page is in flight. */
+  loadingMore?: boolean
+  /** Whether there are rows past the ones handed over. */
+  more?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   remove: [chapter: NovelChapter]
+  load: []
 }>()
 
 /** Which rows the toolbar's bulk actions are about. */
@@ -21,6 +30,16 @@ const selected = defineModel<string[]>('selected', { required: true })
 
 /** Enough rows for the skeleton to read as a table rather than as a gap. */
 const SKELETON_ROWS = 8
+
+const sentinel = useTemplateRef<HTMLElement>('sentinel')
+
+// Fires again every time the row re-enters the viewport, which is what makes the
+// second page and the twentieth cost the same code.
+useIntersectionObserver(sentinel, ([entry]) => {
+  if (entry?.isIntersecting) {
+    emit('load')
+  }
+})
 
 function toggle(id: string, on: boolean) {
   selected.value = on ? [...selected.value, id] : selected.value.filter(one => one !== id)
@@ -122,6 +141,17 @@ function toggle(id: string, on: boolean) {
             @click="$emit('remove', chapter)"
           />
         </td>
+      </tr>
+
+      <!-- The trigger and the wait are one row, so the table grows rather than jumping. -->
+      <tr v-if="more" ref="sentinel" class="border-b border-default">
+        <td />
+
+        <td v-for="cell in 5" :key="cell" class="px-2 py-3">
+          <USkeleton v-if="loadingMore" class="h-4 w-2/3" />
+        </td>
+
+        <td />
       </tr>
     </tbody>
   </table>

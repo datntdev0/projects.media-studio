@@ -37,6 +37,8 @@ what makes a client that times out on a 1,305-chapter novel able to simply call 
   that owns the comparison.
 - The path prefix respelled `scrapings`, carrying `validate` with it.
 - **Discover new chapters** enabled on the item detail screen, calling that endpoint.
+- The chapter table loading its rows as the reader reaches them, because the screen that drew 200 of
+  them was written before anything could produce 1,305.
 
 **Out of scope — deliberately**
 
@@ -405,6 +407,56 @@ Then the same thing through the screen, which is what step 2 now ships:
 In the Emulator UI at `localhost:4000`, `libraryItems/{id}/contents` holds one document per chapter,
 each with `sourceUrl` set, `contentUrl: null` and `status: 'discovered'`.
 
+## Step 4 — Lazy-loading the chapter list
+
+Step 2 made a screen assumption false in one press of a button. The chapters pane asks for
+`PAGE_SIZE = 200` and draws what comes back; the count beside **Chapters** is the server's `total`. So
+a novel discovery just filled reads **1,305**, shows two hundred, and offers nothing that reaches row
+201. Part 2 chose 200 because a novel added by hand has dozens of chapters, and that was true until
+this part shipped.
+
+This step makes the rest reachable, by fetching the next page when the reader arrives at the end of the
+last one.
+
+### Decisions taken
+
+| Question | Decision |
+| --- | --- |
+| Paging or scrolling | **Appending, on scroll.** `query-list-library-contents.dto.ts` already says why: *"a chapter row is one line, and the mockup scrolls them rather than paging through them."* Numbered pages would be a second navigation model on a screen that already scrolls. |
+| What triggers the next page | **A sentinel row after the last chapter**, watched with `useIntersectionObserver`. Not a **Load more** button: the reader's own scrolling is the signal, and the button would be a control whose only job is to undo a limit they never asked for. |
+| Page size | **Stays 200**, the DTO's maximum. Counter-intuitive for a lazy list, and deliberate: `LibraryContentManager.list()` reads *every* matching row and slices in memory, so each page costs a full scan of the subcollection. Fifty-row pages would make the first paint marginally faster and the walk to chapter 1,305 cost 27 scans instead of 7. |
+| Where the accumulation lives | **The page**, as every other fetch on this screen does. The table stays a table: it renders what it is handed, and says when it has run out of rows. |
+| What a content change does | **Resets to the first page.** Refetching every loaded page would be seven scans to redraw one deleted row. It costs the reader their place — see *Known limits*. |
+
+### The files
+
+| File | What changes |
+| --- | --- |
+| `frontend/app/components/AppLibraryChapterTable.vue` | `loadingMore` and `more` props, and a `load` emit. After the last row, a sentinel `<tr>` watched by `useIntersectionObserver`, drawn only while there is more to fetch; while a fetch is in flight it holds one skeleton row, so the table grows rather than flickering. |
+| `frontend/app/pages/library/[id]/index.vue` | The single-page `useAsyncData` becomes an accumulator — `rows`, `total`, `loaded`, `loadMore()` — reset by a watch on `[itemId, debouncedSearch]`, exactly where the old `watch` option sat. `loading` keeps meaning *the first page*, and `loadingMore` is the new one. `refreshAll()` resets. |
+| `frontend/app/pages/library/[id]/[contentId].vue` | The reader's navigator has the same ceiling and the same fix: the same accumulator, watched on `itemId` alone since it has no search, and its sentinel inline in the `<nav>` rather than in a component — the list is a run of `NuxtLink`s, not a table. A failed page leaves the navigator short rather than taking over a screen that is showing the chapter fine, which is what its `useAsyncData` did too. |
+
+The selection watcher needs no edit: it already prunes `selected` to the rows that are loaded, and rows
+are only ever added to that set.
+
+The asset grid has the same 200-row ceiling and is deliberately left alone. It is a different component
+with a different empty state, no crawler can fill one yet, and doing both here would make one commit
+that changes two screens.
+
+### Verification
+
+1. Discover a 1,305-chapter novel, then scroll the chapters pane. Rows arrive in blocks of 200 without
+   a control being pressed, and the pane reaches chapter 1,305.
+2. The count beside **Chapters** reads 1,305 throughout — it is the server's total, not what is drawn.
+3. Type in **Find chapter…**. The list resets to the first page of matches; scrolling pages through
+   those, not through everything.
+4. Select a row, scroll past it, and load two more pages. It stays selected.
+5. Delete a chapter from the third page. The list returns to the top with the row gone and the count
+   down by one.
+6. A twelve-chapter manual novel is unchanged: one page, no sentinel, no second request.
+7. Open a chapter. The navigator on the left pages the same way as it is scrolled, and moving between
+   chapters through it does not refetch what is already loaded.
+
 Each step is one commit, and each leaves `pnpm lint`, `pnpm typecheck` and `pnpm build` green.
 
 ---
@@ -427,6 +479,28 @@ manager method is already the shape a consumer's `handle()` would call.
 novel the `known` set is incomplete and rows past the cap would be appended a second time. The
 repository already logs a warning when a query fills the limit. The fix, if it ever matters, is an
 existence check keyed on `sourceUrl` rather than a full scan.
+
+**So is the chapter list.** The same cap bounds `list()`, so the eleventh page of a 2,500-chapter novel
+comes back empty while `total` still says 2,500 — the reader scrolls to a stop with four hundred rows
+missing and nothing saying so. Step 4 makes this visible where the old 200-row ceiling hid it behind a
+limit nobody could reach anyway.
+
+**Every page of the chapter list is a full scan.** `list()` reads all matching rows and slices in
+memory, so walking a 1,305-chapter novel to the end costs seven reads of the whole subcollection rather
+than seven reads of two hundred rows. Firestore charges per document. The fix is a cursor —
+`startAfter` on `index` — which changes the repository, the manager and the query DTO together, and is
+a step of its own rather than a line in this one.
+
+**Loading more loses your place when the content changes.** Deleting a row from the third page resets
+the list to the first. The alternative is refetching every loaded page, which the scan cost above makes
+worse than the inconvenience it fixes.
+
+**The reader's navigator does not scroll to the chapter you are on.** Open chapter 900 directly and the
+navigator holds chapters 1–200 with no highlight in view; the rest arrives only as it is scrolled.
+Strictly better than before, when 900 was unreachable there at all — but the screen's own promise is
+*"the whole novel, so moving on never goes via the table"*, and it keeps that promise only for the
+first two hundred. Fetching until the current chapter lands would cost up to seven scans on a page load
+that already costs two, so the honest fix is the cursor, not more requests.
 
 **`PUT /library/:id` still zeroes `discoveredCount`** when its body omits `metadata` — `nextDraft()`
 treats the inventory as client-writable, which part 1 chose deliberately. Editing an item straight

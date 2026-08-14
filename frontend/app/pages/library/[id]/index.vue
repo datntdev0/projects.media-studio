@@ -37,17 +37,76 @@ const { data: item, status: itemStatus, error: itemError, refresh: refreshItem }
   { watch: [itemId] }
 )
 
-const { data: page, status: contentStatus, error: contentError, refresh: refreshContents } = useAsyncData(
-  () => `library-contents-${itemId.value}`,
-  () => libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, undefined, PAGE_SIZE).then(asLibraryContentPage),
-  { lazy: true, watch: [itemId, debouncedSearch] }
-)
+/** The rows loaded so far. Pages are appended, so this grows as the reader scrolls. */
+const rows = ref<LibraryContent[]>([])
 
-const rows = computed<LibraryContent[]>(() => page.value?.items ?? [])
+/** What matches, as the server counts it — not what is drawn. */
+const total = ref(0)
 
-const total = computed(() => page.value?.total ?? 0)
+/** How many pages have landed. The next request is always one past it. */
+const loaded = ref(0)
 
-const loading = computed(() => contentStatus.value === 'pending')
+const loading = ref(false)
+
+const loadingMore = ref(false)
+
+const contentError = ref<Error | null>(null)
+
+/** Whether the server holds rows nobody has asked for yet. */
+const more = computed(() => rows.value.length < total.value)
+
+/**
+ * One page. The first replaces what is drawn and the rest append, so a new search
+ * never lays its matches under the old one's.
+ *
+ * `ticket` is bumped per request: the answer to a search two letters ago must not
+ * land after the answer to this one.
+ */
+let ticket = 0
+
+async function fetchPage(next: number) {
+  const mine = ++ticket
+  const pending = next === 1 ? loading : loadingMore
+
+  pending.value = true
+  contentError.value = null
+
+  try {
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
+
+    if (mine !== ticket) {
+      return
+    }
+
+    rows.value = next === 1 ? answer.items : [...rows.value, ...answer.items]
+    total.value = answer.total
+    loaded.value = next
+  } catch (cause) {
+    if (mine === ticket) {
+      contentError.value = cause as Error
+    }
+  } finally {
+    pending.value = false
+  }
+}
+
+/** Back to the first page — what a new item, a new search and a content change all mean. */
+function refreshContents(): Promise<void> {
+  loaded.value = 0
+
+  return fetchPage(1)
+}
+
+/** The next page, when the reader reaches the end of the last one. */
+function loadMore() {
+  if (loading.value || loadingMore.value || !more.value) {
+    return
+  }
+
+  return fetchPage(loaded.value + 1)
+}
+
+watch([itemId, debouncedSearch], () => refreshContents(), { immediate: true })
 
 /**
  * The two panels want the item narrowed to its own shape. Split rather than cast:
@@ -92,8 +151,8 @@ const deletingLabel = computed(() => deleting.value.length === 1 && deleting.val
 
 // A row that has gone cannot stay selected — deleting three and then acting on a
 // stale selection would send requests for rows that are not there.
-watch(rows, (loaded) => {
-  const alive = new Set(loaded.map(row => row.id))
+watch(rows, (current) => {
+  const alive = new Set(current.map(row => row.id))
 
   selected.value = selected.value.filter(id => alive.has(id))
 })
@@ -369,7 +428,10 @@ async function onUpload(picked: FileList | null) {
             :item-id="itemId"
             :chapters="chapters"
             :loading="loading"
+            :loading-more="loadingMore"
+            :more="more"
             @remove="onRemoveContent"
+            @load="loadMore"
           />
 
           <AppBlueprint v-else dashed class="grid place-items-center m-6 p-8 text-center">
