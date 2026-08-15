@@ -227,6 +227,34 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
   }
 
   /**
+   * A job and every task filed under it.
+   *
+   * Supersedes the inherited `delete`, which would take the document and leave the
+   * subcollection behind as records nothing can reach — Firestore does not cascade.
+   * The tasks go first, so a failure part way through leaves a job that can be asked
+   * to delete itself again rather than orphaned rows under an id nobody holds.
+   */
+  async remove(id: string): Promise<void> {
+    const tasks = this.tasksOf(id);
+
+    for (;;) {
+      const snapshot = await tasks.limit(BATCH_LIMIT).get();
+
+      if (snapshot.empty) {
+        break;
+      }
+
+      const batch = this.firestore.batch();
+
+      snapshot.docs.forEach((document) => batch.delete(document.ref));
+
+      await batch.commit();
+    }
+
+    await this.collection.doc(id).delete();
+  }
+
+  /**
    * What the job's counters are made of, as aggregations rather than reads — so a
    * job of twelve hundred tasks costs what one of twelve does, and a counter that
    * is recomputed cannot drift.

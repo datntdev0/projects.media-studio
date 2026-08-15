@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { SCRAPING_JOBS_PATH, SCRAPING_PATH } from '../core/api.constants';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
@@ -87,5 +87,16 @@ export class ScrapingController {
   @ApiNotFoundResponse({ description: 'No job under that id.' })
   updateJobStatus(@Param('id') id: string, @Body() input: UpdateScrapingJobStatusDto): Promise<ScrapingJobDto> {
     return this.jobs.setStatus(id, input.status);
+  }
+
+  @Delete(`${SCRAPING_JOBS_PATH}/:id`)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a settled job' })
+  @ApiNoContentResponse({ description: 'Deleted, and every task filed under it with it.' })
+  @ApiBadRequestResponse({ description: 'A job that has not settled — cancel it first, then delete it.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
+  @ApiNotFoundResponse({ description: 'No job under that id.' })
+  deleteJob(@Param('id') id: string): Promise<void> {
+    return this.jobs.remove(id);
   }
 }

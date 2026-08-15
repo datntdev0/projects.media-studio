@@ -44,6 +44,9 @@ const REACHABLE_FROM: Record<ScrapingJobStatus, ScrapingJobStatus[]> = {
  */
 const HALTABLE_TASK_STATUSES: ScrapingJobStatus[] = [ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued];
 
+/** The three a job settles in, widened to strings — what a status read back is compared against. */
+const TERMINAL: readonly string[] = TERMINAL_JOB_STATUSES;
+
 /** Each tab, as the statuses it names. The one place the three groups are joined up. */
 const STATE_STATUSES: Record<ScrapingJobState, readonly ScrapingJobStatus[]> = {
   [ScrapingJobState.Active]: ACTIVE_JOB_STATUSES,
@@ -307,13 +310,35 @@ export class ScrapingJobManager {
    * than papered over.
    */
   async sweep(): Promise<void> {
-    const terminal: readonly string[] = TERMINAL_JOB_STATUSES;
-
     for (const [jobId, status] of Object.entries(await this.realtime.runningJobs())) {
-      if (terminal.includes(status)) {
+      if (TERMINAL.includes(status)) {
         await this.realtime.clearJob(jobId);
       }
     }
+  }
+
+  /**
+   * A record and its tasks, gone for good.
+   *
+   * Only a settled job. One that is still going has messages in the queue behind it,
+   * and deleting the record under them would leave every one of them arriving to find
+   * a task that is not there — work skipped that nobody cancelled. Stopping it first
+   * is what `stopped` is for, and a stopped job deletes like any other.
+   *
+   * The live node goes with it rather than waiting for the sweep: the sweep works from
+   * the node's own status, and the record that explains it is already gone.
+   */
+  async remove(id: string): Promise<void> {
+    const job = await this.require(id);
+
+    if (!TERMINAL.includes(job.status)) {
+      throw new BadRequestException(`A job that is \`${job.status}\` cannot be deleted. Cancel it first, then delete it.`);
+    }
+
+    await this.jobs.remove(id);
+    await this.realtime.clearJob(id);
+
+    this.logger.log(`Job ${id} and its ${job.total} task(s) deleted`);
   }
 
   /**

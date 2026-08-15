@@ -13,6 +13,8 @@ const PAGE_SIZE = 20
 
 const FALLBACK_ERROR = 'Could not change the job. Try again.'
 
+const DELETE_ERROR = 'Could not delete the job. Try again.'
+
 const { scrapingClient } = useApiClient()
 
 const toast = useToast()
@@ -125,6 +127,63 @@ async function onControl(job: ScrapingJob, status: RequestableJobStatus) {
 
   await Promise.all([refresh(), refreshActive()])
 }
+
+/** Every settled job on this page — what **Clear finished** works through. */
+const finished = computed(() => jobs.value.filter(jobSettled))
+
+const clearing = ref(false)
+
+/** One job and its tasks, gone. Only a settled one has the control that calls this. */
+async function onRemove(job: ScrapingJob) {
+  acting.value = job.id
+
+  try {
+    await scrapingClient.deleteJob(job.id)
+  } catch (cause) {
+    toast.add({ title: apiMessage(cause, DELETE_ERROR), icon: 'i-lucide-triangle-alert', color: 'error' })
+
+    return
+  } finally {
+    acting.value = null
+  }
+
+  await Promise.all([refresh(), refreshActive()])
+}
+
+/**
+ * The finished jobs, deleted one at a time.
+ *
+ * A loop over the single-job endpoint rather than a route of its own — there is no
+ * bulk delete, and one at a time is what keeps a page of twenty from firing twenty
+ * subcollection deletions at once. It stops at the first refusal and says how many
+ * went, because a wall of identical error toasts helps nobody.
+ *
+ * Scoped to the page in view. A History tab deeper than one page needs a second press.
+ */
+async function onClearFinished() {
+  clearing.value = true
+
+  let removed = 0
+
+  for (const job of finished.value) {
+    try {
+      await scrapingClient.deleteJob(job.id)
+      removed += 1
+    } catch (cause) {
+      toast.add({ title: apiMessage(cause, DELETE_ERROR), icon: 'i-lucide-triangle-alert', color: 'error' })
+
+      break
+    }
+  }
+
+  clearing.value = false
+
+  await Promise.all([refresh(), refreshActive()])
+
+  if (removed) {
+    toast.add({ title: `Cleared ${removed} ${removed === 1 ? 'job' : 'jobs'}`, icon: 'i-lucide-check', color: 'primary' })
+  }
+}
 </script>
 
 <template>
@@ -155,10 +214,33 @@ async function onControl(job: ScrapingJob, status: RequestableJobStatus) {
         />
 
         <div class="flex items-center gap-2 ms-auto">
-          <UTooltip v-for="control in ['Pause all', 'Clear finished', 'Retry failed']" :key="control" :text="JOB_CONTROLS_DEFERRED">
+          <UTooltip :text="JOB_CONTROLS_DEFERRED">
             <span class="block">
               <UButton
-                :label="control"
+                label="Pause all"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                disabled
+              />
+            </span>
+          </UTooltip>
+
+          <!-- The one bulk control that is built: a loop over the delete endpoint. -->
+          <UButton
+            label="Clear finished"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :loading="clearing"
+            :disabled="!finished.length"
+            @click="onClearFinished"
+          />
+
+          <UTooltip :text="JOB_CONTROLS_DEFERRED">
+            <span class="block">
+              <UButton
+                label="Retry failed"
                 color="neutral"
                 variant="ghost"
                 size="sm"
@@ -198,6 +280,7 @@ async function onControl(job: ScrapingJob, status: RequestableJobStatus) {
               :busy="acting === job.id"
               @select="selectedId = job.id"
               @control="onControl(job, $event)"
+              @remove="onRemove(job)"
             />
 
             <UPagination

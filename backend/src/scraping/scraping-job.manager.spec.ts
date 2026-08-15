@@ -159,6 +159,7 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     claim: jest.fn().mockResolvedValue(null),
     findMatching: jest.fn().mockResolvedValue([]),
     findById: jest.fn().mockResolvedValue(null),
+    remove: jest.fn().mockResolvedValue(undefined),
   };
 
   const producer = { sendMany: jest.fn().mockResolvedValue(undefined) };
@@ -618,6 +619,39 @@ describe('ScrapingJobManager.setStatus', () => {
     await manager.setStatus(JOB_ID, ScrapingJobStatus.Queued);
 
     expect(published(producer).payloads.map((payload) => payload.contentId)).toEqual(['chapter-2', 'chapter-3']);
+  });
+});
+
+describe('ScrapingJobManager.remove', () => {
+  it.each([ScrapingJobStatus.Completed, ScrapingJobStatus.Failed, ScrapingJobStatus.Stopped])('deletes a %s job and takes its node with it', async (status) => {
+    const { manager, jobs, realtime } = fixture();
+
+    jobs.findById.mockResolvedValue(record({ status }));
+
+    await expect(manager.remove(JOB_ID)).resolves.toBeUndefined();
+    expect(jobs.remove).toHaveBeenCalledWith(JOB_ID);
+    // Not left to the sweep: that works from the node's own status, and the record
+    // explaining it has just gone.
+    expect(realtime.clearJob).toHaveBeenCalledWith(JOB_ID);
+  });
+
+  it.each([ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued, ScrapingJobStatus.Running, ScrapingJobStatus.Paused])('refuses to delete a %s job', async (status) => {
+    const { manager, jobs, realtime } = fixture();
+
+    jobs.findById.mockResolvedValue(record({ status }));
+
+    // Its messages are still in Redis: deleting the record under them would have every
+    // one of them arrive to find a task that is not there.
+    await expect(manager.remove(JOB_ID)).rejects.toThrow(BadRequestException);
+    expect(jobs.remove).not.toHaveBeenCalled();
+    expect(realtime.clearJob).not.toHaveBeenCalled();
+  });
+
+  it('is a 404 for a job that is not there', async () => {
+    const { manager, jobs } = fixture();
+
+    await expect(manager.remove('missing')).rejects.toThrow(NotFoundException);
+    expect(jobs.remove).not.toHaveBeenCalled();
   });
 });
 

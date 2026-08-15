@@ -15,7 +15,7 @@ const props = defineProps<{
   busy: boolean
 }>()
 
-defineEmits<{ select: [], control: [status: RequestableJobStatus] }>()
+defineEmits<{ select: [], control: [status: RequestableJobStatus], remove: [] }>()
 
 /** **Start now**, **Resume** or **Pause**, depending on where the job stands. */
 const primary = computed(() => jobPrimaryControl(props.job))
@@ -56,33 +56,48 @@ const primary = computed(() => jobPrimaryControl(props.job))
       />
 
       <!--
-        Not drawn on a settled job: there is nothing left to pause or cancel, and a
-        control that could never do anything is worse than no control.
+        A job under way is stopped; a settled one is deleted. Neither control is drawn
+        for the other, because neither could do anything there.
       -->
-      <div v-if="!jobSettled(job)" class="flex gap-1" @click.stop>
-        <UTooltip v-if="primary" :text="primary.label">
-          <UButton
-            :icon="primary.icon"
-            :aria-label="`${primary.label} the job`"
-            :disabled="busy"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            square
-            @click="$emit('control', primary.status)"
-          />
-        </UTooltip>
+      <div class="flex gap-1" @click.stop>
+        <template v-if="!jobSettled(job)">
+          <UTooltip v-if="primary" :text="primary.label">
+            <UButton
+              :icon="primary.icon"
+              :aria-label="`${primary.label} the job`"
+              :disabled="busy"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              square
+              @click="$emit('control', primary.status)"
+            />
+          </UTooltip>
 
-        <UTooltip text="Cancel">
+          <UTooltip text="Cancel">
+            <UButton
+              icon="i-lucide-x"
+              aria-label="Cancel the job"
+              :disabled="busy"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              square
+              @click="$emit('control', 'stopped')"
+            />
+          </UTooltip>
+        </template>
+
+        <UTooltip v-else text="Delete">
           <UButton
-            icon="i-lucide-x"
-            aria-label="Cancel the job"
+            icon="i-lucide-trash-2"
+            aria-label="Delete the job"
             :disabled="busy"
             color="neutral"
             variant="ghost"
             size="xs"
             square
-            @click="$emit('control', 'stopped')"
+            @click="$emit('remove')"
           />
         </UTooltip>
       </div>
