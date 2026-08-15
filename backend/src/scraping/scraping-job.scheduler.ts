@@ -31,5 +31,13 @@ export class ScrapingJobScheduler {
     } catch (cause: unknown) {
       this.logger.error('The scheduled-job tick failed', cause);
     }
+
+    // Its own `try`: a publish that threw must not cost the sweep its turn, or a
+    // settled job's node would sit in the live tree until the next clean tick.
+    try {
+      await this.jobs.sweep();
+    } catch (cause: unknown) {
+      this.logger.error('The live-tree sweep failed', cause);
+    }
   }
 }

@@ -25,15 +25,17 @@ export const asLibraryItemPage = (page: LibraryItemPageDto): LibraryItemPage => 
 /**
  * An item wearing a running job's own numbers instead of the ones the fetch returned.
  *
- * `live` is null wherever there is no job to believe — `useScrapingStatus` decides that,
+ * `live` is null wherever there is no job to believe — `useScrapingJobs` decides that,
  * and this only applies what it was handed — so a screen can pass whatever it has and
  * get the API's answer back untouched.
  *
- * Only the three fields a job moves: what it is, how much there is, and how much we
- * hold. `statusTag()` and `contentLabel()` then read the merged row and need no idea
- * any of this happened. The cast is `asLibraryItem`'s, for its reason: `metadata` is
- * correlated with `type` by the union, and a spread loses the correlation without
- * changing a single byte.
+ * **Scraping** is drawn from the fact that there is a job at all, not read from a
+ * stored field: the item's own status is the person's, `draft` or `ready`, and the
+ * runner never writes it. The counters come off the job's `library` block.
+ *
+ * `statusTag()` and `contentLabel()` then read the merged row and need no idea any of
+ * this happened. The cast is `asLibraryItem`'s, for its reason: `metadata` is correlated
+ * with `type` by the union, and a spread loses the correlation without changing a byte.
  */
 export function withLiveStatus<T extends LibraryItem>(item: T, live: ScrapingItemStatus | null): T {
   if (!live) {
@@ -42,8 +44,14 @@ export function withLiveStatus<T extends LibraryItem>(item: T, live: ScrapingIte
 
   return {
     ...item,
-    status: live.status,
-    metadata: { ...item.metadata, discoveredCount: live.total, downloadedCount: live.completed }
+    status: 'scraping',
+    metadata: {
+      ...item.metadata,
+      // The API's own numbers until the job has published its first count: a job that
+      // has queued but fetched nothing knows the item's name and none of its totals.
+      discoveredCount: live.total ?? item.metadata.discoveredCount,
+      downloadedCount: live.completed ?? item.metadata.downloadedCount
+    }
   } as T
 }
 

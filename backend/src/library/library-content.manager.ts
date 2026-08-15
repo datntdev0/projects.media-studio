@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException, NotImplementedException } from '@nestjs/common';
-import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
 import { LibraryContentPageDto } from './dto/library-content.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
@@ -32,18 +31,6 @@ export interface ScrapedRow {
 }
 
 /**
- * What queueing needs of a row: which one, and what it is called in the live tree.
- *
- * `index` travels because this is the one moment the whole claimed set is in hand —
- * every later transition writes a status onto a node that already carries its number,
- * which is what keeps a chapter moving from costing a read to find out what it is.
- */
-export interface QueuedContent {
-  id: string;
-  index: number;
-}
-
-/**
  * The rules for what a library item holds: which fields belong to which type of
  * row, where a chapter's number comes from, and what the item's counters say once
  * the row has landed.
@@ -53,7 +40,7 @@ export interface QueuedContent {
  */
 @Injectable()
 export class LibraryContentManager {
-  constructor(private readonly contents: LibraryContentRepository, private readonly items: LibraryRepository, private readonly realtime: RealtimeProvider) {}
+  constructor(private readonly contents: LibraryContentRepository, private readonly items: LibraryRepository) {}
 
   /**
    * One page of an item's content.
@@ -170,24 +157,17 @@ export class LibraryContentManager {
     return stored.filter((content): content is NovelChapter => content.type === LibraryItemType.Novel);
   }
 
-  /**
-   * The rows a job has just claimed, queued.
-   *
-   * Written before anything is published, so a job booked for 03:00 does not leave
-   * the screen looking untouched.
-   */
-  async markQueued(itemId: string, rows: QueuedContent[]): Promise<void> {
+  /** The rows a job has just claimed, queued — and the item recounted around them. */
+  async markQueued(itemId: string, contentIds: string[]): Promise<void> {
     const item = await this.requireItem(itemId);
 
-    await this.contents.updateStatus(itemId, rows.map((row) => row.id), LibraryContentStatus.Pending);
-    await this.realtime.publishQueued(itemId, rows.map((row) => ({ contentId: row.id, status: LibraryContentStatus.Pending, index: row.index })));
-    await this.publishSummary(item, await this.recount(item));
+    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Pending);
+    await this.recount(item);
   }
 
   /** One row, in flight. The counts do not move — `pending` already counted it. */
   async markScraping(itemId: string, contentId: string): Promise<void> {
     await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Scraping });
-    await this.realtime.publishContent(itemId, contentId, LibraryContentStatus.Scraping);
   }
 
   /**
@@ -200,13 +180,8 @@ export class LibraryContentManager {
     const item = await this.requireItem(itemId);
 
     await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Completed, contentUrl: stored.contentUrl, words: stored.words });
-    await this.realtime.publishContent(itemId, contentId, LibraryContentStatus.Completed);
 
-    const counts = await this.recount(item);
-
-    await this.publishSummary(item, counts);
-
-    return counts;
+    return this.recount(item);
   }
 
   /**
@@ -223,13 +198,8 @@ export class LibraryContentManager {
     const item = await this.requireItem(itemId);
 
     await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Failed });
-    await this.realtime.publishContent(itemId, contentId, LibraryContentStatus.Failed);
 
-    const counts = await this.recount(item);
-
-    await this.publishSummary(item, counts);
-
-    return counts;
+    return this.recount(item);
   }
 
   /**
@@ -258,27 +228,6 @@ export class LibraryContentManager {
    * recomputed cannot drift, and a novel of twelve hundred chapters costs the same
    * as one of twelve.
    */
-  /**
-   * The item's live summary, after its rows moved.
-   *
-   * Called from the job writes and nowhere else. `create`, `replace` and `remove`
-   * recount as readily but publish nothing: the screens read a summary only while it
-   * says `scraping`, so a node written for a chapter somebody renamed by hand would be
-   * noise with no reader.
-   *
-   * `item.status` is the item as it was read at the top of the call, which during a job
-   * is `scraping` — the status it should keep until something settles it.
-   */
-  private publishSummary(item: LibraryItem, counts: LibraryContentCounts): Promise<void> {
-    return this.realtime.publishItem(item.id, {
-      status: item.status,
-      total: counts.total,
-      completed: counts.completed,
-      failed: counts.failed,
-      pending: counts.pending,
-    });
-  }
-
   private async recount(item: LibraryItem): Promise<LibraryContentCounts> {
     const counts = await this.contents.counts(item.id);
 

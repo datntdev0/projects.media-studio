@@ -145,7 +145,16 @@ function loadMore() {
 
 watch([itemId, debouncedSearch], () => refreshContents(), { immediate: true })
 
-const { rows: liveRows, running, live, reconcile } = useItemScrapingStatus(itemId)
+const { forLibrary, settled, reconcile } = useScrapingJobs()
+
+/** The running job over this item, or null. One subscription, shared with every screen. */
+const job = computed(() => forLibrary(itemId.value))
+
+/** The item's own aggregate, as the job last published it. */
+const live = computed(() => job.value?.library ?? null)
+
+/** The job's tasks, keyed by the content row each one names. */
+const liveRows = computed(() => job.value?.tasks ?? {})
 
 /** The item, wearing a running job's own counters. Null only before the first fetch lands. */
 const shown = computed(() => item.value ? withLiveStatus(item.value, live.value) : null)
@@ -168,11 +177,14 @@ const set = computed(() => shown.value && shown.value.type !== 'novel' ? shown.v
 const chapters = computed(() => rows.value
   .filter((row): row is NovelChapter => row.type === 'novel')
   .map((row) => {
-    const live = liveRows.value[row.id]
+    // A task speaks the job's vocabulary; a row speaks the library's. `taskContentStatus`
+    // is where the two meet.
+    const task = liveRows.value[row.id]
+    const status = task ? taskContentStatus(task.status) : null
 
     // The same object back where the live status agrees with the stored one, so a tick
     // that moved one chapter leaves every other row identical rather than merely equal.
-    return live && live.status !== row.status ? { ...row, status: live.status } : row
+    return status && status !== row.status ? { ...row, status } : row
   }))
 
 const assets = computed(() => rows.value.filter((row): row is LibraryAsset => row.type !== 'novel'))
@@ -255,8 +267,8 @@ async function refreshAll() {
  * `reloadLoaded()` rather than `refreshAll()`, and neither half draws a skeleton: a job
  * ending in the background must not blank the screen or move what someone is reading.
  */
-watch(running, async (isRunning, was) => {
-  if (!was || isRunning) {
+watch(settled, async (isSettled) => {
+  if (!isSettled) {
     return
   }
 

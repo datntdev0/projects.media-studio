@@ -1,8 +1,11 @@
 {
   "rules": {
-    "scraping": {
-      ".read": "auth != null",
-      ".write": false
+    "scrapings": {
+      "runningJobs": {
+        ".read": "auth != null",
+        ".write": false,
+        ".indexOn": ["library/id", "status"]
+      }
     }
   }
 }

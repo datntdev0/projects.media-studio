@@ -1,6 +1,8 @@
 import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryFilterOption } from '~/types/library'
+import type { LibraryContentStatus } from '~/types/library-content'
 import type { ScrapingJob, ScrapingJobFilters, ScrapingJobPage, ScrapingJobStatus, ScrapingJobTab } from '~/types/scraping-job'
+import type { RunningJob } from '~/types/scraping-status'
 import type { ScrapingJobPageDto } from './api.clients'
 
 /**
@@ -38,7 +40,42 @@ const STATUS_TAGS: Record<ScrapingJobStatus, { label: string, color: BadgeProps[
 /** The three a job settles in and never leaves — what the History tab lists. */
 const TERMINAL: ScrapingJobStatus[] = ['stopped', 'completed', 'failed']
 
+/**
+ * A task's state, in the words the chapter table draws.
+ *
+ * The two vocabularies are deliberately separate — one says what a job is doing, the
+ * other whether we hold a chapter — so this is where a live task is read as a row. The
+ * three states a job stops in all read as `pending`: the chapter is owed and nothing
+ * is fetching it, which is exactly what a placeholder row means.
+ */
+const TASK_CONTENT_STATUS: Record<ScrapingJobStatus, LibraryContentStatus> = {
+  scheduled: 'pending',
+  queued: 'pending',
+  running: 'scraping',
+  paused: 'pending',
+  stopped: 'pending',
+  completed: 'completed',
+  failed: 'failed'
+}
+
+export const taskContentStatus = (status: ScrapingJobStatus): LibraryContentStatus => TASK_CONTENT_STATUS[status]
+
 export const jobStatusTag = (status: ScrapingJobStatus) => STATUS_TAGS[status]
+
+/**
+ * A fetched job wearing its live node's numbers, where the tree has one for it.
+ *
+ * Only the three fields a run moves, so the card and the panel read the merged job and
+ * need no idea any of this happened. Everything else — the range, the mode, what the
+ * item was called — was settled when the job was described and cannot move.
+ */
+export function withLiveJob(job: ScrapingJob, live: RunningJob | undefined): ScrapingJob {
+  if (!live) {
+    return job
+  }
+
+  return { ...job, status: live.status, completed: live.completed, failed: live.failed }
+}
 
 export const jobSettled = (job: ScrapingJob): boolean => TERMINAL.includes(job.status)
 

@@ -41,13 +41,33 @@ const { data: page, status: listStatus, error: listError, refresh } = useAsyncDa
  * Unwatched: nothing on this screen moves a job yet, and watching the list would
  * refetch the count once more the moment the list landed, for the same answer.
  */
-const { data: activePage } = useAsyncData(
+const { data: activePage, refresh: refreshActive } = useAsyncData(
   'scraping-jobs-active',
   () => scrapingClient.listJobs('active', undefined, undefined, 1, 1).then(asScrapingJobPage),
   { lazy: true }
 )
 
-const jobs = computed<ScrapingJob[]>(() => page.value?.items ?? [])
+const { jobs: liveJobs, settled, reconcile } = useScrapingJobs()
+
+/** The fetched page, each card wearing its live node's numbers where there is one. */
+const jobs = computed<ScrapingJob[]>(() => (page.value?.items ?? []).map(job => withLiveJob(job, liveJobs.value[job.id])))
+
+/** Which jobs the tree currently holds — what tells this screen that work has appeared. */
+const liveIds = computed(() => Object.keys(liveJobs.value).sort().join(','))
+
+/**
+ * A job started or settled elsewhere, picked up without anyone touching the screen.
+ *
+ * The listing is fetched rather than live, and both events change which tab a job
+ * belongs on — so the set of live nodes is what asks for the refetch. The overlay above
+ * keeps the figures moving in between, which is the part that has to be free.
+ */
+watch([liveIds, settled], async () => {
+  await Promise.all([refresh(), refreshActive()])
+
+  // Only now: until the fetched rows are in hand, the live values are the truer ones.
+  reconcile()
+})
 
 const total = computed(() => page.value?.total ?? 0)
 

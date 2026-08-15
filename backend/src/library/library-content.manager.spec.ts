@@ -4,7 +4,6 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
-import { RealtimeProvider, ScrapingContentRow, ScrapingStatusSnapshot } from '../core/providers/realtime.provider';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { ImageAsset, LibraryContent, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
@@ -104,49 +103,8 @@ class FakeContentRepository {
   }
 }
 
-/** The live tree, recorded rather than written — nothing here reaches the Realtime Database. */
-class FakeRealtimeProvider {
-  summaries: ScrapingStatusSnapshot[] = [];
-
-  queued: ScrapingContentRow[] = [];
-
-  rows: { contentId: string, status: string }[] = [];
-
-  cleared: string[] = [];
-
-  publishItem(itemId: string, snapshot: ScrapingStatusSnapshot): Promise<void> {
-    this.summaries.push(snapshot);
-
-    return Promise.resolve();
-  }
-
-  publishQueued(itemId: string, rows: ScrapingContentRow[]): Promise<void> {
-    this.queued.push(...rows);
-
-    return Promise.resolve();
-  }
-
-  publishContent(itemId: string, contentId: string, status: string): Promise<void> {
-    this.rows.push({ contentId, status });
-
-    return Promise.resolve();
-  }
-
-  clearContents(itemId: string): Promise<void> {
-    this.cleared.push(itemId);
-
-    return Promise.resolve();
-  }
-
-  clear(itemId: string): Promise<void> {
-    this.cleared.push(itemId);
-
-    return Promise.resolve();
-  }
-}
-
-function managerOver(contents: FakeContentRepository, items: FakeItemRepository, realtime = new FakeRealtimeProvider()): LibraryContentManager {
-  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryRepository, realtime as unknown as RealtimeProvider);
+function managerOver(contents: FakeContentRepository, items: FakeItemRepository): LibraryContentManager {
+  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryRepository);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
@@ -406,27 +364,15 @@ describe('LibraryContentManager job writes', () => {
   it('marks the rows a job claimed pending, in one batch', async () => {
     const contents = new FakeContentRepository([chapter({ id: 'a' }), chapter({ id: 'b' })]);
 
-    await managerOver(contents, new FakeItemRepository([novel()])).markQueued('novel-1', [{ id: 'a', index: 1 }, { id: 'b', index: 2 }]);
+    await managerOver(contents, new FakeItemRepository([novel()])).markQueued('novel-1', ['a', 'b']);
 
     expect(contents.statuses).toEqual([{ contentIds: ['a', 'b'], status: LibraryContentStatus.Pending }]);
-  });
-
-  it('writes the claimed rows to the live tree, each carrying its number', async () => {
-    const contents = new FakeContentRepository([chapter({ id: 'a' }), chapter({ id: 'b' })]);
-    const realtime = new FakeRealtimeProvider();
-
-    await managerOver(contents, new FakeItemRepository([novel()]), realtime).markQueued('novel-1', [{ id: 'a', index: 1 }, { id: 'b', index: 2 }]);
-
-    expect(realtime.queued).toEqual([
-      { contentId: 'a', status: LibraryContentStatus.Pending, index: 1 },
-      { contentId: 'b', status: LibraryContentStatus.Pending, index: 2 },
-    ]);
   });
 
   it('is a 404 for an item that is not there, and marks nothing', async () => {
     const contents = new FakeContentRepository();
 
-    await expect(managerOver(contents, new FakeItemRepository()).markQueued('missing', [{ id: 'a', index: 1 }])).rejects.toThrow(NotFoundException);
+    await expect(managerOver(contents, new FakeItemRepository()).markQueued('missing', ['a'])).rejects.toThrow(NotFoundException);
     expect(contents.statuses).toEqual([]);
   });
 

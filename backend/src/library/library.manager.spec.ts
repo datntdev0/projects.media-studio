@@ -4,7 +4,6 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { RealtimeProvider, ScrapingStatusSnapshot } from '../core/providers/realtime.provider';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
@@ -71,27 +70,8 @@ class FakeContentRepository {
   }
 }
 
-/** The live tree, recorded rather than written. */
-class FakeRealtimeProvider {
-  summaries: ScrapingStatusSnapshot[] = [];
-
-  cleared: string[] = [];
-
-  publishItem(itemId: string, snapshot: ScrapingStatusSnapshot): Promise<void> {
-    this.summaries.push(snapshot);
-
-    return Promise.resolve();
-  }
-
-  clear(itemId: string): Promise<void> {
-    this.cleared.push(itemId);
-
-    return Promise.resolve();
-  }
-}
-
-function managerOver(repository: FakeRepository, contents = new FakeContentRepository(), realtime = new FakeRealtimeProvider()): LibraryManager {
-  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository, realtime as unknown as RealtimeProvider);
+function managerOver(repository: FakeRepository, contents = new FakeContentRepository()): LibraryManager {
+  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
