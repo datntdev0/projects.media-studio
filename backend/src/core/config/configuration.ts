@@ -93,16 +93,15 @@ export interface AppConfig {
 const DEFAULT_PORT = 3001;
 const DEFAULT_LOG_LEVEL: LogLevelName = 'log';
 const DEFAULT_CORS_ORIGINS = 'http://localhost:3000';
-const DEFAULT_FIREBASE_PROJECT_ID = 'demo-media-studio';
 const DEFAULT_FIREBASE_API_KEY = 'demo-key';
+const DEFAULT_FIREBASE_PROJECT_ID = 'demo-media-studio';
 const DEFAULT_FIREBASE_STORAGE_BUCKET = 'demo-media-studio.firebasestorage.app';
-/** The `-default-rtdb` suffix is the namespace, and is what the emulator reads off this. */
-const DEFAULT_FIREBASE_DATABASE_URL = 'https://demo-media-studio-default-rtdb.firebaseio.com';
+const DEFAULT_FIREBASE_DATABASE_URL = 'https://demo-media-studio.firebaseio.com';
+
 const DEFAULT_SCRAPING_BASE_URL = 'http://127.0.0.1:8000';
-/** The scraping service's own per-operation default, so ours does not cut its short. */
 const DEFAULT_SCRAPING_TIMEOUT_MS = 120_000;
 const DEFAULT_SCRAPING_CACHE_TTL_DAYS = 30;
-/** Where Redis is located by default. */
+
 const DEFAULT_REDIS_HOST = '127.0.0.1';
 const DEFAULT_REDIS_PORT = 6379;
 const DEFAULT_QUEUE_PREFIX = 'media-studio';

@@ -523,7 +523,6 @@ async function onUpload(picked: FileList | null) {
               <UButton
                 label="Delete selected"
                 color="error"
-                variant="ghost"
                 size="sm"
                 @click="onRemoveSelected"
               />

@@ -53,11 +53,21 @@ export class FirebaseAdminService implements OnModuleInit {
       process.env.FIREBASE_DATABASE_EMULATOR_HOST = emulators.databaseHost;
     }
 
+    const credential = this.credential();
+
+    // Without a credential there is nothing for the Google auth libraries to
+    // resolve, so stop them probing a GCE metadata server that is not there. The
+    // probe fails as a `MetadataLookupWarning` on the console, minutes after
+    // whatever request set it off.
+    if (!credential.credential) {
+      process.env.METADATA_SERVER_DETECTION ??= 'none';
+    }
+
     // `getApp` rather than a second `initializeApp`, which would throw: a watch
     // reload can run this twice in one process.
     const initialised = getApps().length > 0;
 
-    this.app = initialised ? getApp() : initializeApp({ projectId, databaseURL: databaseUrl, ...this.credential() });
+    this.app = initialised ? getApp() : initializeApp({ projectId, databaseURL: databaseUrl, ...credential });
     this.db = getFirestore(this.app);
 
     if (!initialised) {
@@ -74,11 +84,7 @@ export class FirebaseAdminService implements OnModuleInit {
     this.logger.log(emulators.authenticationHost ? `Firebase project ${projectId} via the auth emulator at ${emulators.authenticationHost}` : `Firebase project ${projectId}`);
     this.logger.log(emulators.firestoreHost ? `Firestore via the emulator at ${emulators.firestoreHost}` : 'Firestore in the cloud');
     this.logger.log(emulators.storageHost ? `Storage via the emulator at ${emulators.storageHost}` : 'Storage in the cloud');
-    // The URL and not just the host: its subdomain is the namespace, and a namespace
-    // this end does not share with the browser is the one misconfiguration that raises
-    // nothing anywhere — both sides simply read an empty database. This line is where
-    // it shows.
-    this.logger.log(emulators.databaseHost ? `Realtime Database ${databaseUrl} via the emulator at ${emulators.databaseHost}` : `Realtime Database ${databaseUrl}`);
+    this.logger.log(emulators.databaseHost ? `Realtime Database via the emulator at ${emulators.databaseHost}` : `Realtime Database ${databaseUrl}`);
   }
 
   get auth(): Auth {

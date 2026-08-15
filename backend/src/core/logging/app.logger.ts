@@ -6,6 +6,8 @@ import { currentRequestId } from './request-context';
 /** Longer than this in the console and the id is shortened to its first 8. */
 const CONSOLE_REQUEST_ID_LIMIT = 12;
 
+const pad = (value: number): string => value.toString().padStart(2, '0');
+
 /**
  * Every level at or above the configured one.
  *
@@ -69,6 +71,19 @@ export class AppLogger extends ConsoleLogger {
     const requestId = currentRequestId();
 
     return requestId ? { ...base, requestId } : base;
+  }
+
+  /** No `[Nest] <pid>` in front of the line: one process per container, and the prefix says nothing about the line it opens. */
+  protected formatPid(): string {
+    return '';
+  }
+
+  /** `YYYY-MM-DD HH:mm:ss` in local time, sortable and the same shape everywhere — not the locale's own, which Nest's default follows. */
+  protected getTimestamp(): string {
+    const at = new Date();
+    const date = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+
+    return `${date} ${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
   }
 
   protected formatContext(context: string): string {
