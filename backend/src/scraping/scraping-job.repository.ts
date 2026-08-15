@@ -19,6 +19,9 @@ const BATCH_LIMIT = 500;
 /** The states a job still owes an answer for — what `pending` counts. */
 const OWED_STATUSES = [ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued, ScrapingJobStatus.Running];
 
+/** The two a person put a task in. Neither is owed, and neither is finished. */
+const HALTED_STATUSES = [ScrapingJobStatus.Paused, ScrapingJobStatus.Stopped];
+
 /** What narrows a listing. Nothing else does — see the GET's query table. */
 export interface ScrapingJobFilter {
   statuses?: ScrapingJobStatus[];
@@ -33,6 +36,12 @@ export interface ScrapingTaskCounts {
   failed: number;
   /** Not yet finished with, and not deliberately halted — what decides a drain. */
   pending: number;
+  /**
+   * Paused or stopped. Held apart from `pending` because these are not owed, and apart
+   * from a drain because they are not done: a job with one of these has been halted by
+   * a person and is not something a chapter completing may settle.
+   */
+  halted: number;
 }
 
 /** The few fields a runner writes as a job goes. Everything else is settled at creation. */
@@ -225,11 +234,12 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
   async counts(jobId: string): Promise<ScrapingTaskCounts> {
     const tasks = this.tasksOf(jobId);
 
-    const [total, completed, failed, pending] = await Promise.all([
+    const [total, completed, failed, pending, halted] = await Promise.all([
       tasks.count().get(),
       tasks.where('status', '==', ScrapingJobStatus.Completed).count().get(),
       tasks.where('status', '==', ScrapingJobStatus.Failed).count().get(),
       tasks.where('status', 'in', OWED_STATUSES).count().get(),
+      tasks.where('status', 'in', HALTED_STATUSES).count().get(),
     ]);
 
     return {
@@ -237,6 +247,7 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
       completed: completed.data().count,
       failed: failed.data().count,
       pending: pending.data().count,
+      halted: halted.data().count,
     };
   }
 

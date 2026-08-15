@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { SCRAPING_JOBS_PATH, SCRAPING_PATH } from '../core/api.constants';
@@ -6,7 +6,7 @@ import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { DiscoverDto } from './dto/discover.dto';
 import { PreviewDto } from './dto/preview.dto';
 import { QueryListScrapingJobsDto } from './dto/query-list-scraping-jobs.dto';
-import { CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
+import { CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto, UpdateScrapingJobStatusDto } from './dto/scraping-job.dto';
 import { QueryValidateDto, ValidateDto } from './dto/validate.dto';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingManager } from './scraping.manager';
@@ -75,5 +75,17 @@ export class ScrapingController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
   listJobs(@Query() query: QueryListScrapingJobsDto): Promise<ScrapingJobPageDto> {
     return this.jobs.list(query);
+  }
+
+  @Patch(`${SCRAPING_JOBS_PATH}/:id/status`)
+  // A PATCH rather than a PUT of the whole job: status is the one field a client may
+  // move, and the other thirteen are the server's.
+  @ApiOperation({ summary: 'Start, pause, resume or cancel a job' })
+  @ApiOkResponse({ type: ScrapingJobDto, description: 'Written, published where the new status is `queued`, and mirrored.' })
+  @ApiBadRequestResponse({ description: 'A status this job cannot reach from where it stands — including anything at all asked of a settled job.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
+  @ApiNotFoundResponse({ description: 'No job under that id.' })
+  updateJobStatus(@Param('id') id: string, @Body() input: UpdateScrapingJobStatusDto): Promise<ScrapingJobDto> {
+    return this.jobs.setStatus(id, input.status);
   }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScrapingJob } from '~/types/scraping-job'
+import type { RequestableJobStatus, ScrapingJob } from '~/types/scraping-job'
 
 /**
  * The selected job, beside the list: the big figure over its bar, what the job was
@@ -9,7 +9,16 @@ import type { ScrapingJob } from '~/types/scraping-job'
  * title, which is a read per row into the item's content — and the item screen
  * already lists its failed chapters, one click away.
  */
-defineProps<{ job: ScrapingJob | null }>()
+const props = defineProps<{
+  job: ScrapingJob | null
+  /** True while a request for this job is in the air. */
+  busy: boolean
+}>()
+
+defineEmits<{ control: [status: RequestableJobStatus] }>()
+
+/** The same control the card draws, spelled out rather than an icon. */
+const primary = computed(() => props.job ? jobPrimaryControl(props.job) : null)
 </script>
 
 <template>
@@ -77,25 +86,28 @@ defineProps<{ job: ScrapingJob | null }>()
 
     <!-- Gone once the job has settled, for the card's reason: there is nothing left to stop. -->
     <div v-if="!jobSettled(job)" class="flex gap-2 mt-6">
-      <UTooltip :text="JOB_CONTROLS_DEFERRED" class="flex-1">
-        <UButton
-          label="Pause"
-          color="neutral"
-          variant="subtle"
-          block
-          disabled
-        />
-      </UTooltip>
+      <UButton
+        v-if="primary"
+        :label="primary.label"
+        :icon="primary.icon"
+        :loading="busy"
+        color="neutral"
+        variant="subtle"
+        class="flex-1"
+        block
+        @click="$emit('control', primary.status)"
+      />
 
-      <UTooltip :text="JOB_CONTROLS_DEFERRED" class="flex-1">
-        <UButton
-          label="Cancel"
-          color="neutral"
-          variant="subtle"
-          block
-          disabled
-        />
-      </UTooltip>
+      <UButton
+        label="Cancel"
+        icon="i-lucide-x"
+        :disabled="busy"
+        color="neutral"
+        variant="subtle"
+        class="flex-1"
+        block
+        @click="$emit('control', 'stopped')"
+      />
     </div>
 
     <div v-if="job.failed" class="mt-6 pt-4 border-t border-default">
@@ -104,7 +116,7 @@ defineProps<{ job: ScrapingJob | null }>()
           Failed ({{ countLabel(job.failed) }})
         </h5>
 
-        <UTooltip :text="JOB_CONTROLS_DEFERRED" class="ms-auto">
+        <UTooltip :text="JOB_RETRY_DEFERRED" class="ms-auto">
           <span class="block">
             <UButton
               label="Retry all"

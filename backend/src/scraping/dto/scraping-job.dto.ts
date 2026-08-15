@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { LibraryItemType } from '../../library/entities/library-item.entity';
 import { ScrapingJob, ScrapingJobStatus, ScrapingTask } from '../entities/scraping-job.entity';
 
@@ -146,6 +146,27 @@ export class ScrapingJobDto implements ScrapingJob {
 
   @ApiProperty({ type: [ScrapingTaskDto], description: 'One per piece of content in range, by its number.' })
   tasks!: ScrapingTaskDto[];
+}
+
+/**
+ * The statuses a client may ask a job for. The other four are the runner's — a job
+ * reaches `scheduled`, `running`, `completed` and `failed` by doing the work, not by
+ * being told to, which is the rule `library-item-update.dto.ts` states about its own.
+ *
+ * `queued` is both *start this booked job now* and *resume this paused one*: they are
+ * the same act — republish everything unfinished — so they are the same request.
+ */
+export const REQUESTABLE_JOB_STATUSES = [ScrapingJobStatus.Queued, ScrapingJobStatus.Paused, ScrapingJobStatus.Stopped];
+
+/** The one field a client may move on a job. The other thirteen are the server's. */
+export class UpdateScrapingJobStatusDto {
+  @ApiProperty({
+    description: 'Where to take the job. A status it cannot reach from where it stands is a 400.',
+    enum: REQUESTABLE_JOB_STATUSES,
+    enumName: 'RequestedScrapingJobStatus',
+  })
+  @IsIn(REQUESTABLE_JOB_STATUSES)
+  status!: ScrapingJobStatus;
 }
 
 /** One page of the job records, matching `LibraryItemPageDto` field for field. */

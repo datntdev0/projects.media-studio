@@ -17,7 +17,7 @@ import { LibraryManager } from '../library/library.manager';
 import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
 import { CreateScrapingJobDto } from './dto/scraping-job.dto';
 import { ScrapingJob, ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
-import { ScrapingJobDraft, ScrapingJobRepository, ScrapingTaskCounts, ScrapingTaskDraft } from './scraping-job.repository';
+import { ScrapingJobDraft, ScrapingJobPatch, ScrapingJobRepository, ScrapingTaskCounts, ScrapingTaskDraft } from './scraping-job.repository';
 import { ScrapingJobManager, selectByRange, wordCount } from './scraping-job.manager';
 
 const NOW = '2026-08-11T09:12:04.113Z';
@@ -31,7 +31,7 @@ const COUNTS: LibraryContentCounts = { total: 3, completed: 1, failed: 0, pendin
 const DRAINED: LibraryContentCounts = { total: 3, completed: 3, failed: 0, pending: 0, bytes: 0 };
 
 /** The job's own tasks, with two still owed. */
-const OWED: ScrapingTaskCounts = { total: 3, completed: 1, failed: 0, pending: 2 };
+const OWED: ScrapingTaskCounts = { total: 3, completed: 1, failed: 0, pending: 2, halted: 0 };
 
 const CRAWLER = 'novel543';
 
@@ -146,11 +146,19 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     patch: jest.fn().mockResolvedValue(undefined),
     patchTask: jest.fn().mockResolvedValue(undefined),
     startTask: jest.fn().mockResolvedValue(undefined),
-    setTaskStatus: jest.fn().mockResolvedValue(undefined),
+    // Moves the stored tasks rather than only recording the call: the consumer's gate
+    // reads a task's status back, so a double that did not would let `scrape` run on
+    // rows the publish had never moved out of `scheduled`.
+    setTaskStatus: jest.fn().mockImplementation((jobId: string, contentIds: string[], status: ScrapingJobStatus) => {
+      tasks.filter((task) => contentIds.includes(task.contentId)).forEach((task) => { task.status = status; });
+
+      return Promise.resolve();
+    }),
     counts: jest.fn().mockResolvedValue(OWED),
     findScheduled: jest.fn().mockResolvedValue([]),
     claim: jest.fn().mockResolvedValue(null),
     findMatching: jest.fn().mockResolvedValue([]),
+    findById: jest.fn().mockResolvedValue(null),
   };
 
   const producer = { sendMany: jest.fn().mockResolvedValue(undefined) };
@@ -518,6 +526,101 @@ describe('ScrapingJobManager.runDue', () => {
   });
 });
 
+describe('ScrapingJobManager.setStatus', () => {
+  /** A stored job in a given state, with three tasks the caller can restate. */
+  function stored(status: ScrapingJobStatus, taskStatuses: ScrapingJobStatus[] = [ScrapingJobStatus.Queued, ScrapingJobStatus.Queued, ScrapingJobStatus.Queued]) {
+    const context = fixture();
+
+    context.jobs.findById.mockResolvedValue(record({ status }));
+    context.tasks.push(...taskStatuses.map((each, at) => ({
+      id: `chapter-${at + 1}`,
+      contentId: `chapter-${at + 1}`,
+      libraryId: 'novel-1',
+      index: at + 1,
+      sourceUrl: CHAPTER_URL,
+      status: each,
+      refetch: false,
+      retry: 3,
+      startAt: null,
+      completedAt: null,
+      error: null,
+    })));
+
+    return context;
+  }
+
+  it.each([
+    ['queued', ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued],
+    ['resumed', ScrapingJobStatus.Paused, ScrapingJobStatus.Queued],
+    ['paused', ScrapingJobStatus.Queued, ScrapingJobStatus.Paused],
+    ['paused mid-run', ScrapingJobStatus.Running, ScrapingJobStatus.Paused],
+    ['stopped', ScrapingJobStatus.Running, ScrapingJobStatus.Stopped],
+    ['stopped before it ran', ScrapingJobStatus.Scheduled, ScrapingJobStatus.Stopped],
+  ])('a %s job is written and mirrored', async (_name, from, to) => {
+    const { manager, jobs, realtime } = stored(from);
+
+    await expect(manager.setStatus(JOB_ID, to)).resolves.toMatchObject({ id: JOB_ID });
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: to }));
+    expect(realtime.publishJob).toHaveBeenCalledWith(expect.objectContaining({ id: JOB_ID, status: to }));
+  });
+
+  it.each([
+    ['queued from running', ScrapingJobStatus.Running, ScrapingJobStatus.Queued],
+    ['paused from paused', ScrapingJobStatus.Paused, ScrapingJobStatus.Paused],
+    ['paused from scheduled', ScrapingJobStatus.Scheduled, ScrapingJobStatus.Paused],
+    ['anything of a completed job', ScrapingJobStatus.Completed, ScrapingJobStatus.Paused],
+    ['anything of a stopped job', ScrapingJobStatus.Stopped, ScrapingJobStatus.Queued],
+    ['anything of a failed job', ScrapingJobStatus.Failed, ScrapingJobStatus.Stopped],
+  ])('refuses %s, naming what it can come from', async (_name, from, to) => {
+    const { manager, jobs } = stored(from);
+
+    await expect(manager.setStatus(JOB_ID, to)).rejects.toThrow(BadRequestException);
+    expect(jobs.patch).not.toHaveBeenCalled();
+  });
+
+  it('is a 404 for a job that is not there', async () => {
+    const { manager } = fixture();
+
+    await expect(manager.setStatus('missing', ScrapingJobStatus.Stopped)).rejects.toThrow(NotFoundException);
+  });
+
+  it('pauses the tasks nobody has picked up, and leaves the one in flight', async () => {
+    const { manager, jobs } = stored(ScrapingJobStatus.Running, [ScrapingJobStatus.Completed, ScrapingJobStatus.Running, ScrapingJobStatus.Queued]);
+
+    await manager.setStatus(JOB_ID, ScrapingJobStatus.Paused);
+
+    // Only the third: a completed task is settled, and a running one has a fetch in the
+    // air that will write its own completion a chapter later.
+    expect(jobs.setTaskStatus).toHaveBeenCalledWith(JOB_ID, ['chapter-3'], ScrapingJobStatus.Paused);
+  });
+
+  it('stamps a stopped job as settled, and a paused one not', async () => {
+    const stopped = stored(ScrapingJobStatus.Running);
+
+    await stopped.manager.setStatus(JOB_ID, ScrapingJobStatus.Stopped);
+
+    const [, fields] = stopped.jobs.patch.mock.calls[0] as [string, ScrapingJobPatch];
+
+    // Stopping is where a job ends; pausing is a state it is expected to leave again,
+    // so only one of the two is stamped.
+    expect(fields.status).toBe(ScrapingJobStatus.Stopped);
+    expect(typeof fields.completedAt).toBe('string');
+
+    const paused = stored(ScrapingJobStatus.Running);
+
+    await paused.manager.setStatus(JOB_ID, ScrapingJobStatus.Paused);
+    expect(paused.jobs.patch).toHaveBeenCalledWith(JOB_ID, { status: ScrapingJobStatus.Paused });
+  });
+
+  it('republishes only what is unfinished when a paused job resumes', async () => {
+    const { manager, producer } = stored(ScrapingJobStatus.Paused, [ScrapingJobStatus.Completed, ScrapingJobStatus.Paused, ScrapingJobStatus.Paused]);
+
+    await manager.setStatus(JOB_ID, ScrapingJobStatus.Queued);
+
+    expect(published(producer).payloads.map((payload) => payload.contentId)).toEqual(['chapter-2', 'chapter-3']);
+  });
+});
+
 describe('ScrapingJobManager.sweep', () => {
   it('takes the settled nodes out of the live tree, and leaves the rest', async () => {
     const { manager, realtime } = fixture();
@@ -606,7 +709,7 @@ describe('ScrapingJobManager.scrape', () => {
   it('settles the job on its own tasks once none is owed', async () => {
     const { manager, jobs } = await started();
 
-    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0 });
+    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0, halted: 0 });
     await manager.scrape(message());
 
     expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Completed, completed: 3 }));
@@ -615,7 +718,7 @@ describe('ScrapingJobManager.scrape', () => {
   it('settles the job failed where one of its tasks failed', async () => {
     const { manager, jobs } = await started();
 
-    jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0 });
+    jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, halted: 0 });
     await manager.scrape(message());
 
     expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Failed }));
@@ -634,11 +737,25 @@ describe('ScrapingJobManager.scrape', () => {
     await expect(manager.scrape(message())).resolves.toBeUndefined();
   });
 
+  it('does not settle a halted job when its last chapter in flight lands', async () => {
+    const { manager, jobs } = await started();
+
+    // What a pause leaves behind: its queued tasks moved to `paused`, and one chapter
+    // still fetching. Those tasks are no longer *owed*, so a test on `pending` alone
+    // reads the job as drained and stamps `completed` over the status just asked for.
+    // A stopped job loses its own status the same way — `halted` covers both.
+    jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 0, pending: 0, halted: 1 });
+    await manager.scrape(message());
+
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, { completed: 2, failed: 0 });
+    expect(jobs.patch).not.toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Completed }));
+  });
+
   it('leaves the settled job in the live tree, for the sweep to take a tick later', async () => {
     const { manager, contents, jobs, realtime } = await started();
 
     contents.completeScrape.mockResolvedValue(DRAINED);
-    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0 });
+    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0, halted: 0 });
     await manager.scrape(message());
 
     // Removing the node in the same act would race the refetch the screen makes when
@@ -657,6 +774,18 @@ describe('ScrapingJobManager.scrape', () => {
     // The counters the Library listing draws for the item ride on the job's node — and
     // carry no status, because the item's own is not the runner's to state.
     expect(realtime.publishJob).toHaveBeenLastCalledWith(expect.objectContaining({ library: { total: 3, completed: 1, failed: 0, pending: 2 } }));
+  });
+
+  it('skips a task the record no longer wants, whatever the queue still holds', async () => {
+    const { manager, jobs, tasks, scraping } = await started();
+
+    // What a pause leaves behind: the messages are already in Redis and cannot be
+    // recalled, so the task is the authority and the consumer costs two small reads.
+    tasks.forEach((task) => { task.status = ScrapingJobStatus.Paused; });
+
+    await expect(manager.scrape(message())).resolves.toBeUndefined();
+    expect(jobs.startTask).not.toHaveBeenCalled();
+    expect(scraping.content).not.toHaveBeenCalled();
   });
 
   it('is quiet about a job deleted between the send and the delivery', async () => {

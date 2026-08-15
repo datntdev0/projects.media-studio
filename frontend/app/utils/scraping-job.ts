@@ -1,7 +1,7 @@
 import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryFilterOption } from '~/types/library'
 import type { LibraryContentStatus } from '~/types/library-content'
-import type { ScrapingJob, ScrapingJobFilters, ScrapingJobPage, ScrapingJobStatus, ScrapingJobTab } from '~/types/scraping-job'
+import type { RequestableJobStatus, ScrapingJob, ScrapingJobFilters, ScrapingJobPage, ScrapingJobStatus, ScrapingJobTab } from '~/types/scraping-job'
 import type { RunningJob } from '~/types/scraping-status'
 import type { ScrapingJobPageDto } from './api.clients'
 
@@ -17,8 +17,34 @@ import type { ScrapingJobPageDto } from './api.clients'
 /** A generated page, read as the hand-mirrored shape everything below narrows on. */
 export const asScrapingJobPage = (page: ScrapingJobPageDto): ScrapingJobPage => page as unknown as ScrapingJobPage
 
-/** Until step 5 the three controls have nothing behind them. */
-export const JOB_CONTROLS_DEFERRED = 'Pause, resume and cancel arrive with the job controls.'
+/** The bulk controls are still deferred — each is a loop over the single-job one below. */
+export const JOB_CONTROLS_DEFERRED = 'Acting on every job at once is not built yet.'
+
+/** A retry of a settled job is a request with its own semantics, and is not built. */
+export const JOB_RETRY_DEFERRED = 'Retrying the failed chapters of a job is not built yet.'
+
+/**
+ * What the first control means here, which depends on where the job stands.
+ *
+ * *Start now* and *Resume* are the same request — `queued`, which republishes every
+ * unfinished task — and differ only in what the person is looking at. A settled job
+ * has no control at all, so this answers null and the card draws nothing.
+ */
+export function jobPrimaryControl(job: ScrapingJob): { label: string, icon: string, status: RequestableJobStatus } | null {
+  if (job.status === 'scheduled') {
+    return { label: 'Start now', icon: 'i-lucide-play', status: 'queued' }
+  }
+
+  if (job.status === 'paused') {
+    return { label: 'Resume', icon: 'i-lucide-play', status: 'queued' }
+  }
+
+  if (job.status === 'queued' || job.status === 'running') {
+    return { label: 'Pause', icon: 'i-lucide-pause', status: 'paused' }
+  }
+
+  return null
+}
 
 const MINUTE = 60_000
 

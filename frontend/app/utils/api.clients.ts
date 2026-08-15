@@ -1032,6 +1032,63 @@ export class ScrapingClient {
         }
         return Promise.resolve<ScrapingJobPageDto>(null as any);
     }
+
+    /**
+     * Start, pause, resume or cancel a job
+     * @return Written, published where the new status is `queued`, and mirrored.
+     */
+    updateJobStatus(id: string, body: UpdateScrapingJobStatusDto, signal?: AbortSignal): Promise<ScrapingJobDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/jobs/{id}/status";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateJobStatus(_response);
+        });
+    }
+
+    protected processUpdateJobStatus(response: Response): Promise<ScrapingJobDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A status this job cannot reach from where it stands \u2014 including anything at all asked of a settled job.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No job under that id.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScrapingJobDto>(null as any);
+    }
 }
 
 /** The environment that build was configured for, as recorded on boot. */
@@ -1496,6 +1553,14 @@ export interface ScrapingJobPageDto {
     total: number;
     page: number;
     pageSize: number;
+}
+
+/** Where to take the job. A status it cannot reach from where it stands is a 400. */
+export type RequestedScrapingJobStatus = "queued" | "paused" | "stopped";
+
+export interface UpdateScrapingJobStatusDto {
+    /** Where to take the job. A status it cannot reach from where it stands is a 400. */
+    status: RequestedScrapingJobStatus;
 }
 
 export class ApiException extends Error {

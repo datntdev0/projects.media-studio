@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScrapingJob, ScrapingJobFilters } from '~/types/scraping-job'
+import type { RequestableJobStatus, ScrapingJob, ScrapingJobFilters } from '~/types/scraping-job'
 
 /**
  * The jobs. Owns the tab and the library filter, fetches a page through them, and
@@ -11,7 +11,11 @@ import type { ScrapingJob, ScrapingJobFilters } from '~/types/scraping-job'
  */
 const PAGE_SIZE = 20
 
+const FALLBACK_ERROR = 'Could not change the job. Try again.'
+
 const { scrapingClient } = useApiClient()
+
+const toast = useToast()
 
 const filters = reactive<ScrapingJobFilters>({
   tab: 'active',
@@ -95,6 +99,32 @@ const EMPTY_TAB_LINES: Record<ScrapingJobFilters['tab'], { title: string, hint: 
 }
 
 const empty = computed(() => EMPTY_TAB_LINES[filters.tab])
+
+/** The job a control is in flight for, so its own buttons hold still until it lands. */
+const acting = ref<string | null>(null)
+
+/**
+ * Start, pause, resume or cancel — one request, then a refetch.
+ *
+ * The endpoint answers with the record it wrote, but the listing is refetched rather
+ * than patched: the new status may well have moved the job to another tab, which is a
+ * question about the page rather than about the job.
+ */
+async function onControl(job: ScrapingJob, status: RequestableJobStatus) {
+  acting.value = job.id
+
+  try {
+    await scrapingClient.updateJobStatus(job.id, { status })
+  } catch (cause) {
+    toast.add({ title: apiMessage(cause, FALLBACK_ERROR), icon: 'i-lucide-triangle-alert', color: 'error' })
+
+    return
+  } finally {
+    acting.value = null
+  }
+
+  await Promise.all([refresh(), refreshActive()])
+}
 </script>
 
 <template>
@@ -165,7 +195,9 @@ const empty = computed(() => EMPTY_TAB_LINES[filters.tab])
               :key="job.id"
               :job="job"
               :selected="selected?.id === job.id"
+              :busy="acting === job.id"
               @select="selectedId = job.id"
+              @control="onControl(job, $event)"
             />
 
             <UPagination
@@ -204,7 +236,11 @@ const empty = computed(() => EMPTY_TAB_LINES[filters.tab])
         </div>
 
         <div class="w-95 flex-none border-s border-default overflow-y-auto">
-          <AppScrapingJobPanel :job="selected" />
+          <AppScrapingJobPanel
+            :job="selected"
+            :busy="acting === selected?.id"
+            @control="selected && onControl(selected, $event)"
+          />
         </div>
       </div>
     </div>

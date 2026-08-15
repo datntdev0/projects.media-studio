@@ -12,6 +12,12 @@ export type ScrapingJobStatus = 'scheduled' | 'queued' | 'running' | 'paused' | 
 /** The three tabs, each a group of statuses the endpoint knows by name. */
 export type ScrapingJobTab = 'active' | 'scheduled' | 'history'
 
+/**
+ * The three a client may ask a job for. The other four are the runner's — a job
+ * reaches them by doing the work, not by being told to.
+ */
+export type RequestableJobStatus = Extract<ScrapingJobStatus, 'queued' | 'paused' | 'stopped'>
+
 /** One piece of content the job was asked to fetch. */
 export interface ScrapingTask {
   id: string

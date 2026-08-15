@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
 import { RealtimeProvider, ScrapingJobSnapshot } from '../core/providers/realtime.provider';
 import { ScrapingProvider } from '../core/providers/scraping.provider';
@@ -18,6 +18,31 @@ import { ScrapingJobDraft, ScrapingJobPatch, ScrapingJobRepository, ScrapingTask
 
 /** Every character range whose script is written without spaces, so words cannot be counted by them. */
 const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
+
+/**
+ * What each status may be reached from — the whole transition rule, as a lookup
+ * rather than a chain of `if`s, and what the `400`'s sentence is built from.
+ *
+ * The four with no way in are the runner's own: a job reaches them by doing the work.
+ */
+const REACHABLE_FROM: Record<ScrapingJobStatus, ScrapingJobStatus[]> = {
+  [ScrapingJobStatus.Scheduled]: [],
+  [ScrapingJobStatus.Queued]: [ScrapingJobStatus.Scheduled, ScrapingJobStatus.Paused],
+  [ScrapingJobStatus.Running]: [],
+  [ScrapingJobStatus.Paused]: [ScrapingJobStatus.Queued, ScrapingJobStatus.Running],
+  [ScrapingJobStatus.Stopped]: [ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued, ScrapingJobStatus.Running, ScrapingJobStatus.Paused],
+  [ScrapingJobStatus.Completed]: [],
+  [ScrapingJobStatus.Failed]: [],
+};
+
+/**
+ * The task states a pause or a stop may move.
+ *
+ * A `running` task is left in all three: its fetch is already in the air, and marking
+ * it would either be overwritten by the completion or throw away work already paid
+ * for. So a pause takes effect within one chapter rather than instantly.
+ */
+const HALTABLE_TASK_STATUSES: ScrapingJobStatus[] = [ScrapingJobStatus.Scheduled, ScrapingJobStatus.Queued];
 
 /** Each tab, as the statuses it names. The one place the three groups are joined up. */
 const STATE_STATUSES: Record<ScrapingJobState, readonly ScrapingJobStatus[]> = {
@@ -168,6 +193,16 @@ export class ScrapingJobManager {
       return;
     }
 
+    // The gate the whole pause story rests on, and it is one comparison. A pause cannot
+    // reach into Redis and remove the messages already published, so the record is the
+    // authority instead: anything not `queued` is paused, stopped, or already taken, and
+    // the remaining messages drain in seconds at two small reads each.
+    if (task.status !== ScrapingJobStatus.Queued) {
+      this.logger.debug(`Task ${message.contentId} of job ${message.jobId} is ${task.status} — skipped`);
+
+      return;
+    }
+
     await this.jobs.startTask(message.jobId, message.contentId, nowIso());
     await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Running);
     await this.realtime.publishJob({ id: message.jobId, status: ScrapingJobStatus.Running });
@@ -215,6 +250,52 @@ export class ScrapingJobManager {
     const counts = await this.contents.markFailed(message.itemId, message.contentId);
 
     await this.settleJob(message.jobId, counts);
+  }
+
+  /**
+   * The one field a client may move: where the job is.
+   *
+   * `queued` is `publish()` unchanged — republishing every unfinished task is exactly
+   * what starting a booked job and resuming a paused one both mean, which is why they
+   * are one branch rather than two endpoints.
+   *
+   * A pause does not drain the queue. It marks the record, and the consumer skips what
+   * the record no longer wants — see the gate at the top of `scrape`.
+   */
+  async setStatus(id: string, status: ScrapingJobStatus): Promise<ScrapingJobDto> {
+    const job = await this.require(id);
+    const from = REACHABLE_FROM[status];
+
+    if (!from.includes(job.status)) {
+      throw new BadRequestException(`A job that is \`${job.status}\` cannot be asked for \`${status}\`. That is reachable from: ${from.join(', ') || 'nothing'}.`);
+    }
+
+    if (status === ScrapingJobStatus.Queued) {
+      return this.detail(await this.publish(job));
+    }
+
+    return this.detail(await this.halt(job, status));
+  }
+
+  /**
+   * Paused or stopped: the tasks that have not been picked up move with the job, and
+   * the ones in flight are left to write their own completion a chapter later.
+   */
+  private async halt(job: ScrapingJob, status: ScrapingJobStatus): Promise<ScrapingJob> {
+    const moving = (await this.jobs.tasks(job.id)).filter((task) => HALTABLE_TASK_STATUSES.includes(task.status));
+    const contentIds = moving.map((task) => task.contentId);
+    // Stopping settles the job; pausing is a state it is expected to leave again.
+    const completedAt = status === ScrapingJobStatus.Stopped ? nowIso() : undefined;
+
+    await this.jobs.setTaskStatus(job.id, contentIds, status);
+    await this.jobs.patch(job.id, completedAt ? { status, completedAt } : { status });
+
+    await this.realtime.publishTasks(job.id, moving.map((task) => ({ contentId: task.contentId, status, index: task.index })));
+    await this.realtime.publishJob({ id: job.id, status });
+
+    this.logger.log(`Job ${job.id} is ${status} — ${contentIds.length} task(s) moved with it`);
+
+    return { ...job, status, completedAt: completedAt ?? job.completedAt };
   }
 
   /**
@@ -284,7 +365,13 @@ export class ScrapingJobManager {
 
     // Its own tasks, not the item's rows — a job over chapters 1–20 knows nothing
     // about the other 1,285.
-    if (counts.pending === 0) {
+    //
+    // `halted` is the other half of the test, and it is what a pause rests on: the
+    // tasks a pause moved are no longer *owed*, so `pending` alone reads a paused job
+    // as drained the moment its last in-flight chapter lands — and stamps `completed`
+    // over the `paused` somebody just asked for. A stopped job would lose its status
+    // the same way.
+    if (counts.pending === 0 && counts.halted === 0) {
       fields.status = counts.failed > 0 ? ScrapingJobStatus.Failed : ScrapingJobStatus.Completed;
       fields.completedAt = nowIso();
     }
@@ -306,6 +393,17 @@ export class ScrapingJobManager {
   /** The record as it is answered with: its own fields, and the tasks it described. */
   private async detail(job: ScrapingJob): Promise<ScrapingJobDto> {
     return { ...job, tasks: await this.jobs.tasks(job.id) };
+  }
+
+  /** The job, or the 404 every route that names one owes. */
+  private async require(id: string): Promise<ScrapingJob> {
+    const job = await this.jobs.findById(id);
+
+    if (!job) {
+      throw new NotFoundException(`No scraping job ${id}`);
+    }
+
+    return job;
   }
 }
 

@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import type { ScrapingJob } from '~/types/scraping-job'
+import type { RequestableJobStatus, ScrapingJob } from '~/types/scraping-job'
 
 /**
  * One job in the listing: what was scraped, how far it has got, and the two controls
  * over it. Selecting it fills the panel beside the list.
  *
- * The two icon buttons are drawn disabled until the status endpoint exists — the
- * tooltip pattern the library's deferred controls already use.
+ * The controls are drawn but not called here: the screen owns the request and the
+ * refetch, as the item screen owns its own.
  */
-defineProps<{
+const props = defineProps<{
   job: ScrapingJob
   selected: boolean
+  /** True while a request for this job is in the air. */
+  busy: boolean
 }>()
 
-defineEmits<{ select: [] }>()
+defineEmits<{ select: [], control: [status: RequestableJobStatus] }>()
+
+/** **Start now**, **Resume** or **Pause**, depending on where the job stands. */
+const primary = computed(() => jobPrimaryControl(props.job))
 </script>
 
 <template>
@@ -53,35 +58,32 @@ defineEmits<{ select: [] }>()
       <!--
         Not drawn on a settled job: there is nothing left to pause or cancel, and a
         control that could never do anything is worse than no control.
-        `span` inside the tooltip: a disabled button emits no pointer events of its own.
       -->
       <div v-if="!jobSettled(job)" class="flex gap-1" @click.stop>
-        <UTooltip :text="JOB_CONTROLS_DEFERRED">
-          <span class="block">
-            <UButton
-              icon="i-lucide-pause"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              square
-              disabled
-              aria-label="Pause the job"
-            />
-          </span>
+        <UTooltip v-if="primary" :text="primary.label">
+          <UButton
+            :icon="primary.icon"
+            :aria-label="`${primary.label} the job`"
+            :disabled="busy"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            @click="$emit('control', primary.status)"
+          />
         </UTooltip>
 
-        <UTooltip :text="JOB_CONTROLS_DEFERRED">
-          <span class="block">
-            <UButton
-              icon="i-lucide-x"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              square
-              disabled
-              aria-label="Cancel the job"
-            />
-          </span>
+        <UTooltip text="Cancel">
+          <UButton
+            icon="i-lucide-x"
+            aria-label="Cancel the job"
+            :disabled="busy"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            @click="$emit('control', 'stopped')"
+          />
         </UTooltip>
       </div>
     </div>
