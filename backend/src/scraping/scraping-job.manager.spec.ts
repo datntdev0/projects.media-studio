@@ -6,7 +6,6 @@ jest.mock('firebase-admin/auth', () => ({}));
 import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
 import { RealtimeProvider } from '../core/providers/realtime.provider';
-import { ScheduledTask, ScheduleProvider } from '../core/providers/schedule.provider';
 import { ScrapedContent, ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
 import { QueueProducer, QueueSendOptions } from '../core/queues/queue.producer';
@@ -16,7 +15,7 @@ import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryContentManager, ScrapedRow } from '../library/library-content.manager';
 import { LibraryManager } from '../library/library.manager';
 import { CreateScrapingJobDto } from './dto/scraping-job.dto';
-import { ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
+import { ScrapingJob, ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
 import { ScrapingJobDraft, ScrapingJobRepository, ScrapingTaskCounts, ScrapingTaskDraft } from './scraping-job.repository';
 import { ScrapingJobManager, selectByRange, wordCount } from './scraping-job.manager';
 
@@ -155,12 +154,11 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     patchTask: jest.fn().mockResolvedValue(undefined),
     setTaskStatus: jest.fn().mockResolvedValue(undefined),
     counts: jest.fn().mockResolvedValue(OWED),
+    findScheduled: jest.fn().mockResolvedValue([]),
+    claim: jest.fn().mockResolvedValue(null),
   };
 
   const producer = { sendMany: jest.fn().mockResolvedValue(undefined) };
-  // The task is kept rather than run, so a test can see that booking published nothing
-  // and then fire it by hand.
-  const schedule = { runAt: jest.fn<void, [string, Date, ScheduledTask]>(), booked: (): ScheduledTask => schedule.runAt.mock.calls[0][2] };
   const scraping = { content: jest.fn().mockResolvedValue(options.scraped ?? { title: '第五百二十七章', content: ['一', '二'] }) };
   const files = {
     saveText: jest.fn().mockImplementation(() => {
@@ -188,18 +186,22 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     contents as unknown as LibraryContentManager,
     jobs as unknown as ScrapingJobRepository,
     producer as unknown as QueueProducer,
-    schedule as unknown as ScheduleProvider,
     scraping as unknown as ScrapingProvider,
     files as unknown as ContentFileProvider,
     realtime as unknown as RealtimeProvider,
   );
 
-  return { manager, library, contents, jobs, producer, schedule, scraping, files, realtime, order, rows, tasks };
+  return { manager, library, contents, jobs, producer, scraping, files, realtime, order, rows, tasks };
 }
 
 /** The record one `create` wrote, as it went to the repository. */
 function recorded(jobs: { create: jest.Mock }): ScrapingJobDraft {
-  return jobs.create.mock.calls[0][0] as ScrapingJobDraft;
+  return (jobs.create.mock.calls[0] as [ScrapingJobDraft])[0];
+}
+
+/** That record as the repository handed it back — what a later tick finds. */
+function stored(jobs: { create: jest.Mock }): ScrapingJob {
+  return { ...recorded(jobs), id: JOB_ID, createdAt: NOW, updatedAt: NOW };
 }
 
 /** The payloads one `sendMany` was handed, and the options that went with them. */
@@ -333,22 +335,17 @@ describe('ScrapingJobManager.create', () => {
     expect(producer.sendMany).not.toHaveBeenCalled();
   });
 
-  it('books a start time, and leaves the library alone until it fires', async () => {
-    const { manager, jobs, contents, library, producer, schedule } = fixture();
+  it('leaves a booked job scheduled, and the library exactly as it found it', async () => {
+    const { manager, contents, library, producer } = fixture();
     const startAt = soon();
     const created = await manager.create(job({ startAt }));
 
     expect(created).toMatchObject({ status: ScrapingJobStatus.Scheduled, startAt, total: 3 });
+    // The change the cron buys: a job booked for 03:00 no longer flips 1,305 rows to
+    // pending at lunchtime.
     expect(contents.markQueued).not.toHaveBeenCalled();
     expect(library.markScraping).not.toHaveBeenCalled();
     expect(producer.sendMany).not.toHaveBeenCalled();
-    expect(schedule.runAt).toHaveBeenCalledWith(`scrape:${JOB_ID}`, new Date(startAt), expect.any(Function));
-
-    await schedule.booked()();
-
-    expect(published(producer).payloads).toHaveLength(3);
-    expect(contents.markQueued).toHaveBeenCalled();
-    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Queued }));
   });
 
   it('refuses a start time that has passed, before a record is written', async () => {
@@ -379,6 +376,62 @@ describe('ScrapingJobManager.create', () => {
     const items = [novel({ sourceUrl: 'https://example.com/0413553971' })];
 
     await expect(fixture({ items }).manager.create(job())).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('ScrapingJobManager.runDue', () => {
+  /** A job described for later: the record written and its tasks stored, nothing published. */
+  async function booked() {
+    const context = fixture();
+
+    await context.manager.create(job({ startAt: soon() }));
+
+    return { ...context, due: stored(context.jobs) };
+  }
+
+  it('asks for what has come due, and publishes what it claims', async () => {
+    const { manager, jobs, contents, producer, due } = await booked();
+
+    jobs.findScheduled.mockResolvedValue([due]);
+    jobs.claim.mockResolvedValue({ ...due, status: ScrapingJobStatus.Queued });
+    await manager.runDue();
+
+    expect(jobs.findScheduled).toHaveBeenCalledWith(expect.any(Date));
+    expect(jobs.claim).toHaveBeenCalledWith(JOB_ID);
+    expect(contents.markQueued).toHaveBeenCalled();
+    expect(published(producer).payloads).toHaveLength(3);
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Queued }));
+  });
+
+  it('skips a job a second instance claimed first', async () => {
+    const { manager, jobs, producer, due } = await booked();
+
+    // What the transaction answers the instance that lost: the job it did not get.
+    jobs.findScheduled.mockResolvedValue([due]);
+    jobs.claim.mockResolvedValue(null);
+    await manager.runDue();
+
+    expect(producer.sendMany).not.toHaveBeenCalled();
+  });
+
+  it('carries on after a job that will not publish', async () => {
+    const { manager, jobs, producer, due } = await booked();
+
+    jobs.findScheduled.mockResolvedValue([due, { ...due, id: 'job-2' }]);
+    jobs.claim.mockImplementation((id: string) => Promise.resolve({ ...due, id, status: ScrapingJobStatus.Queued }));
+    producer.sendMany.mockRejectedValueOnce(new Error('Redis is down'));
+
+    await expect(manager.runDue()).resolves.toBeUndefined();
+    expect(producer.sendMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('is quiet when nothing is due', async () => {
+    const { manager, jobs, producer } = fixture();
+
+    await manager.runDue();
+
+    expect(jobs.claim).not.toHaveBeenCalled();
+    expect(producer.sendMany).not.toHaveBeenCalled();
   });
 });
 
@@ -514,7 +567,7 @@ describe('ScrapingJobManager.scrape', () => {
     await manager.scrape(message());
 
     expect(scraping.content).not.toHaveBeenCalled();
-    expect(jobs.patchTask).toHaveBeenLastCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Failed, error: expect.any(String) }));
+    expect(jobs.patchTask).toHaveBeenLastCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Failed, error: 'The library row is gone' }));
     expect(jobs.patch).toHaveBeenCalled();
   });
 

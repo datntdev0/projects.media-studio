@@ -3,6 +3,7 @@ import { LibraryModule } from '../library/library.module';
 import { ContentScrapeConsumer } from './content-scrape.handler';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingJobRepository } from './scraping-job.repository';
+import { ScrapingJobScheduler } from './scraping-job.scheduler';
 import { ScrapingController } from './scraping.controller';
 import { ScrapingManager } from './scraping.manager';
 
@@ -18,6 +19,6 @@ import { ScrapingManager } from './scraping.manager';
 @Module({
   imports: [LibraryModule],
   controllers: [ScrapingController],
-  providers: [ScrapingManager, ScrapingJobManager, ScrapingJobRepository, ContentScrapeConsumer],
+  providers: [ScrapingManager, ScrapingJobManager, ScrapingJobRepository, ScrapingJobScheduler, ContentScrapeConsumer],
 })
 export class ScrapingModule {}

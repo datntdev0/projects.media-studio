@@ -10,7 +10,6 @@ import { AppLogger } from './logging/app.logger';
 import { CacheProvider } from './providers/cache.provider';
 import { ContentFileProvider } from './providers/content-file.provider';
 import { RealtimeProvider } from './providers/realtime.provider';
-import { ScheduleProvider } from './providers/schedule.provider';
 import { ScrapingProvider } from './providers/scraping.provider';
 import { allConsumerQueues } from './queues/queue.messages';
 import { QueueProducer } from './queues/queue.producer';
@@ -42,7 +41,7 @@ const ConsumerQueues = BullModule.registerQueue(...allConsumerQueues().map((name
       cache: true,
       envFilePath: ['.env.local', '.env'],
     }),
-    // Sets up the scheduler ScheduleProvider books its jobs with.
+    // What `@Cron` needs: it discovers the decorated methods and drives them.
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       // The namespaced config rather than AppConfigService: that one is a provider
@@ -67,9 +66,9 @@ const ConsumerQueues = BullModule.registerQueue(...allConsumerQueues().map((name
     }),
     ConsumerQueues,
   ],
-  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScheduleProvider, ScrapingProvider, QueueProducer],
+  providers: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScrapingProvider, QueueProducer],
   // The queues are re-exported so a feature module's consumer resolves the one it
   // processes, and so anything holding a queue directly can still reach it.
-  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScheduleProvider, ScrapingProvider, QueueProducer, ConsumerQueues],
+  exports: [AppConfigService, AppLogger, FirebaseAdminService, CacheProvider, ContentFileProvider, RealtimeProvider, ScrapingProvider, QueueProducer, ConsumerQueues],
 })
 export class CoreModule {}

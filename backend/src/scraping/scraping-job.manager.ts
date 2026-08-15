@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
 import { RealtimeProvider } from '../core/providers/realtime.provider';
-import { ScheduleProvider } from '../core/providers/schedule.provider';
 import { ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
 import { QueueProducer } from '../core/queues/queue.producer';
@@ -39,15 +38,14 @@ export class ScrapingJobManager {
     private readonly contents: LibraryContentManager,
     private readonly jobs: ScrapingJobRepository,
     private readonly producer: QueueProducer,
-    private readonly schedule: ScheduleProvider,
     private readonly scraping: ScrapingProvider,
     private readonly files: ContentFileProvider,
     private readonly realtime: RealtimeProvider,
   ) {}
 
   /**
-   * Describes a job, writes it down, and publishes it — or books the publishing for
-   * a wall-clock time.
+   * Describes a job, writes it down, and publishes it — or leaves it `scheduled` for
+   * the cron, which is the whole of booking now that the record is durable.
    *
    * Everything that can be refused is refused before a document is written, so a job
    * that will not run leaves no record claiming it would.
@@ -78,23 +76,41 @@ export class ScrapingJobManager {
 
     await this.jobs.createTasks(job.id, wanted.map((chapter) => taskDraft(job, chapter)));
 
-    // A record of an ask that matched nothing, rather than a failure: a range can
-    // legitimately name chapters we already hold.
-    if (wanted.length === 0) {
-      return this.detail(job);
-    }
-
-    if (at) {
-      // Booked under the job's own id — the record is what the cron will replace this
-      // timer with, and it is already durable in a way the timer is not.
-      this.schedule.runAt(`scrape:${job.id}`, at, async () => {
-        await this.publish(job);
-      });
-
+    // Nothing to publish now, for one of two reasons: a range that matched nothing is
+    // already a settled record, and a booked job waits for the cron. Both leave the
+    // library exactly as they found it.
+    if (wanted.length === 0 || at) {
       return this.detail(job);
     }
 
     return this.detail(await this.publish(job));
+  }
+
+  /**
+   * The bookings that have come due, published.
+   *
+   * The claim is what makes a second instance harmless: it reads the status and writes
+   * it in one act, so exactly one instance sees `scheduled` and the other sees the job
+   * it did not get.
+   *
+   * One job that will not publish does not take the rest of the tick with it.
+   */
+  async runDue(): Promise<void> {
+    const due = await this.jobs.findScheduled(new Date());
+
+    for (const job of due) {
+      const claimed = await this.jobs.claim(job.id);
+
+      if (!claimed) {
+        continue;
+      }
+
+      try {
+        await this.publish(claimed);
+      } catch (cause: unknown) {
+        this.logger.error(`Could not publish scheduled job ${job.id}`, cause);
+      }
+    }
   }
 
   /**
