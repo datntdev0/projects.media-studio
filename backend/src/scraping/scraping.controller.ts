@@ -1,11 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { SCRAPING_JOBS_PATH, SCRAPING_PATH } from '../core/api.constants';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { DiscoverDto } from './dto/discover.dto';
 import { PreviewDto } from './dto/preview.dto';
-import { CreateScrapingJobDto, ScrapingJobDto } from './dto/scraping-job.dto';
+import { QueryListScrapingJobsDto } from './dto/query-list-scraping-jobs.dto';
+import { CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
 import { QueryValidateDto, ValidateDto } from './dto/validate.dto';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingManager } from './scraping.manager';
@@ -66,5 +67,13 @@ export class ScrapingController {
   @ApiNotImplementedResponse({ description: 'A crawler item that is not a novel.' })
   createJob(@Body() input: CreateScrapingJobDto): Promise<ScrapingJobDto> {
     return this.jobs.create(input);
+  }
+
+  @Get(SCRAPING_JOBS_PATH)
+  @ApiOperation({ summary: 'One page of the job records — a tab of the Scrapings screen' })
+  @ApiOkResponse({ type: ScrapingJobPageDto, description: 'Newest first, each with the tasks it described.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
+  listJobs(@Query() query: QueryListScrapingJobsDto): Promise<ScrapingJobPageDto> {
+    return this.jobs.list(query);
   }
 }

@@ -11,12 +11,20 @@ import { LibraryContentManager } from '../library/library-content.manager';
 import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryManager } from '../library/library.manager';
 import { checkHost, Crawler, requireCrawler } from './crawlers';
-import { attemptsFor, CreateScrapingJobDto, ScrapingJobDto } from './dto/scraping-job.dto';
-import { ScrapingJob, ScrapingJobStatus } from './entities/scraping-job.entity';
+import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
+import { attemptsFor, CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
+import { ACTIVE_JOB_STATUSES, ScrapingJob, ScrapingJobStatus, TERMINAL_JOB_STATUSES } from './entities/scraping-job.entity';
 import { ScrapingJobDraft, ScrapingJobPatch, ScrapingJobRepository, ScrapingTaskDraft } from './scraping-job.repository';
 
 /** Every character range whose script is written without spaces, so words cannot be counted by them. */
 const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
+
+/** Each tab, as the statuses it names. The one place the three groups are joined up. */
+const STATE_STATUSES: Record<ScrapingJobState, readonly ScrapingJobStatus[]> = {
+  [ScrapingJobState.Active]: ACTIVE_JOB_STATUSES,
+  [ScrapingJobState.Scheduled]: [ScrapingJobStatus.Scheduled],
+  [ScrapingJobState.History]: TERMINAL_JOB_STATUSES,
+};
 
 /**
  * Work that outlives the request.
@@ -87,6 +95,30 @@ export class ScrapingJobManager {
   }
 
   /**
+   * One page of the records.
+   *
+   * Firestore narrows by the tab's status group and the library; the ordering and the
+   * slice happen here, over what comes back — part 1's shape, and what keeps the
+   * collection free of composite indexes.
+   *
+   * Tasks are answered with each job, which is the one place this listing costs more
+   * than the library's: a page of twenty is twenty-one queries. The panel needs them.
+   */
+  async list(query: QueryListScrapingJobsDto): Promise<ScrapingJobPageDto> {
+    const statuses = query.state ? [...STATE_STATUSES[query.state]] : undefined;
+    const matching = await this.jobs.findMatching({ statuses, libraryType: query.libraryType, libraryId: query.libraryId });
+    const found = matching.sort(byNewest);
+    const from = (query.page - 1) * query.pageSize;
+
+    return {
+      items: await Promise.all(found.slice(from, from + query.pageSize).map((job) => this.detail(job))),
+      total: found.length,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  }
+
+  /**
    * The bookings that have come due, published.
    *
    * The claim is what makes a second instance harmless: it reads the status and writes
@@ -130,7 +162,7 @@ export class ScrapingJobManager {
       return;
     }
 
-    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Running, startAt: nowIso() });
+    await this.jobs.startTask(message.jobId, message.contentId, nowIso());
 
     const content = await this.contents.find(message.itemId, message.contentId);
 
@@ -306,6 +338,11 @@ function taskDraft(job: ScrapingJob, chapter: NovelChapter): ScrapingTaskDraft {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Newest first, which is the order a listing of work reads in. ISO strings compare as instants. */
+function byNewest(one: ScrapingJob, two: ScrapingJob): number {
+  return two.createdAt.localeCompare(one.createdAt);
 }
 
 /**

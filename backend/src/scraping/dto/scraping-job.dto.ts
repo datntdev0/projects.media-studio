@@ -148,6 +148,21 @@ export class ScrapingJobDto implements ScrapingJob {
   tasks!: ScrapingTaskDto[];
 }
 
+/** One page of the job records, matching `LibraryItemPageDto` field for field. */
+export class ScrapingJobPageDto {
+  @ApiProperty({ type: [ScrapingJobDto], description: 'Newest first, each with the tasks it described.' })
+  items!: ScrapingJobDto[];
+
+  @ApiProperty({ description: 'What matches the filter, not what this page holds.', example: 12 })
+  total!: number;
+
+  @ApiProperty({ example: 1 })
+  page!: number;
+
+  @ApiProperty({ example: 20 })
+  pageSize!: number;
+}
+
 /** BullMQ counts attempts, not retries. The one place the two are reconciled. */
 export function attemptsFor(retry: number): number {
   return retry + 1;

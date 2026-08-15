@@ -14,6 +14,7 @@ import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, Nov
 import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryContentManager, ScrapedRow } from '../library/library-content.manager';
 import { LibraryManager } from '../library/library.manager';
+import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
 import { CreateScrapingJobDto } from './dto/scraping-job.dto';
 import { ScrapingJob, ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
 import { ScrapingJobDraft, ScrapingJobRepository, ScrapingTaskCounts, ScrapingTaskDraft } from './scraping-job.repository';
@@ -152,10 +153,12 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
     task: jest.fn().mockImplementation((jobId: string, contentId: string) => Promise.resolve(tasks.find((each) => each.contentId === contentId) ?? null)),
     patch: jest.fn().mockResolvedValue(undefined),
     patchTask: jest.fn().mockResolvedValue(undefined),
+    startTask: jest.fn().mockResolvedValue(undefined),
     setTaskStatus: jest.fn().mockResolvedValue(undefined),
     counts: jest.fn().mockResolvedValue(OWED),
     findScheduled: jest.fn().mockResolvedValue([]),
     claim: jest.fn().mockResolvedValue(null),
+    findMatching: jest.fn().mockResolvedValue([]),
   };
 
   const producer = { sendMany: jest.fn().mockResolvedValue(undefined) };
@@ -202,6 +205,31 @@ function recorded(jobs: { create: jest.Mock }): ScrapingJobDraft {
 /** That record as the repository handed it back — what a later tick finds. */
 function stored(jobs: { create: jest.Mock }): ScrapingJob {
   return { ...recorded(jobs), id: JOB_ID, createdAt: NOW, updatedAt: NOW };
+}
+
+/** A record as the store holds it, for the paths that do not write one first. */
+function record(over: Partial<ScrapingJob> = {}): ScrapingJob {
+  return {
+    id: JOB_ID,
+    libraryId: 'novel-1',
+    libraryType: LibraryItemType.Novel,
+    libraryTitle: 'The Silent Cartographer',
+    crawler: CRAWLER,
+    status: ScrapingJobStatus.Queued,
+    range: 'all',
+    refetch: false,
+    retry: 3,
+    startAt: null,
+    queuedAt: NOW,
+    completedAt: null,
+    total: 3,
+    completed: 0,
+    failed: 0,
+    skipped: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...over,
+  };
 }
 
 /** The payloads one `sendMany` was handed, and the options that went with them. */
@@ -379,6 +407,53 @@ describe('ScrapingJobManager.create', () => {
   });
 });
 
+describe('ScrapingJobManager.list', () => {
+  const query = (over: Partial<QueryListScrapingJobsDto> = {}): QueryListScrapingJobsDto => ({ page: 1, pageSize: 20, ...over });
+
+  it.each([
+    [ScrapingJobState.Active, [ScrapingJobStatus.Queued, ScrapingJobStatus.Running, ScrapingJobStatus.Paused]],
+    [ScrapingJobState.Scheduled, [ScrapingJobStatus.Scheduled]],
+    [ScrapingJobState.History, [ScrapingJobStatus.Stopped, ScrapingJobStatus.Completed, ScrapingJobStatus.Failed]],
+  ])('maps the %s tab to the statuses it names', async (state, statuses) => {
+    const { manager, jobs } = fixture();
+
+    await manager.list(query({ state }));
+
+    expect(jobs.findMatching).toHaveBeenCalledWith(expect.objectContaining({ statuses }));
+  });
+
+  it('narrows on no status at all where no tab was asked for', async () => {
+    const { manager, jobs } = fixture();
+
+    await manager.list(query({ libraryType: LibraryItemType.Novel, libraryId: 'novel-1' }));
+
+    expect(jobs.findMatching).toHaveBeenCalledWith({ statuses: undefined, libraryType: LibraryItemType.Novel, libraryId: 'novel-1' });
+  });
+
+  it('answers newest first, each job carrying its tasks', async () => {
+    const { manager, jobs } = fixture();
+
+    jobs.findMatching.mockResolvedValue([record({ id: 'older', createdAt: '2026-08-10T00:00:00.000Z' }), record({ id: 'newer', createdAt: '2026-08-12T00:00:00.000Z' })]);
+    jobs.tasks.mockResolvedValue([{ id: 'chapter-1', contentId: 'chapter-1' }]);
+
+    const page = await manager.list(query());
+
+    expect(page.items.map((job) => job.id)).toEqual(['newer', 'older']);
+    expect(page.items[0].tasks).toHaveLength(1);
+  });
+
+  it('pages over what Firestore answered, and says how many matched', async () => {
+    const { manager, jobs } = fixture();
+
+    jobs.findMatching.mockResolvedValue([record({ id: 'a' }), record({ id: 'b' }), record({ id: 'c' })]);
+
+    const page = await manager.list(query({ page: 2, pageSize: 2 }));
+
+    expect(page).toMatchObject({ total: 3, page: 2, pageSize: 2 });
+    expect(page.items).toHaveLength(1);
+  });
+});
+
 describe('ScrapingJobManager.runDue', () => {
   /** A job described for later: the record written and its tasks stored, nothing published. */
   async function booked() {
@@ -461,8 +536,18 @@ describe('ScrapingJobManager.scrape', () => {
 
     await manager.scrape(message());
 
-    expect(jobs.patchTask).toHaveBeenNthCalledWith(1, JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Running }));
-    expect(jobs.patchTask).toHaveBeenNthCalledWith(2, JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Completed }));
+    expect(jobs.startTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', expect.any(String));
+    expect(jobs.patchTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Completed }));
+  });
+
+  it('starts the task before it reads the source, so the job reads as running while it fetches', async () => {
+    const { manager, jobs, scraping } = await started();
+
+    await manager.scrape(message());
+
+    // `startTask` moves the job as well as the task — a job left at `queued` for the
+    // whole run reads as waiting for a worker that already has it.
+    expect(jobs.startTask.mock.invocationCallOrder[0]).toBeLessThan(scraping.content.mock.invocationCallOrder[0]);
   });
 
   it('writes the file, then the row, then discards what the row no longer points at', async () => {

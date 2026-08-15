@@ -965,6 +965,73 @@ export class ScrapingClient {
         }
         return Promise.resolve<ScrapingJobDto>(null as any);
     }
+
+    /**
+     * One page of the job records — a tab of the Scrapings screen
+     * @param state (optional) One of the screen's three tabs. Omitted lists every job.
+     * @param libraryType (optional) The type of the item scraped, as it was when the job was described.
+     * @param libraryId (optional) Every job over one item — what an item screen asks for.
+     * @param page (optional) 
+     * @param pageSize (optional) 
+     * @return Newest first, each with the tasks it described.
+     */
+    listJobs(state?: ScrapingJobState | undefined, libraryType?: LibraryItemType | undefined, libraryId?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<ScrapingJobPageDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/jobs?";
+        if (state === null)
+            throw new globalThis.Error("The parameter 'state' cannot be null.");
+        else if (state !== undefined)
+            url_ += "state=" + encodeURIComponent("" + state) + "&";
+        if (libraryType === null)
+            throw new globalThis.Error("The parameter 'libraryType' cannot be null.");
+        else if (libraryType !== undefined)
+            url_ += "libraryType=" + encodeURIComponent("" + libraryType) + "&";
+        if (libraryId === null)
+            throw new globalThis.Error("The parameter 'libraryId' cannot be null.");
+        else if (libraryId !== undefined)
+            url_ += "libraryId=" + encodeURIComponent("" + libraryId) + "&";
+        if (page === null)
+            throw new globalThis.Error("The parameter 'page' cannot be null.");
+        else if (page !== undefined)
+            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        if (pageSize === null)
+            throw new globalThis.Error("The parameter 'pageSize' cannot be null.");
+        else if (pageSize !== undefined)
+            url_ += "pageSize=" + encodeURIComponent("" + pageSize) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processListJobs(_response);
+        });
+    }
+
+    protected processListJobs(response: Response): Promise<ScrapingJobPageDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobPageDto;
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScrapingJobPageDto>(null as any);
+    }
 }
 
 /** The environment that build was configured for, as recorded on boot. */
@@ -1418,6 +1485,17 @@ export interface ScrapingJobDto {
     updatedAt: string;
     /** One per piece of content in range, by its number. */
     tasks: ScrapingTaskDto[];
+}
+
+export type ScrapingJobState = "active" | "scheduled" | "history";
+
+export interface ScrapingJobPageDto {
+    /** Newest first, each with the tasks it described. */
+    items: ScrapingJobDto[];
+    /** What matches the filter, not what this page holds. */
+    total: number;
+    page: number;
+    pageSize: number;
 }
 
 export class ApiException extends Error {
