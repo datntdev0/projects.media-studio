@@ -1,8 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { API_VERSION } from '../core/api.constants';
 import { AppConfigService } from '../core/config/app-config.service';
-import { QueueTopic } from '../core/queues/queue.messages';
-import { QueueProducer } from '../core/queues/queue.producer';
 import { SERVICE_NAME, SERVICE_VERSION } from '../core/service-metadata';
 import { FirebaseStatus, HealthDto, HealthStatus } from './dto/health.dto';
 import { ServiceInfoDto } from './dto/service-info.dto';
@@ -41,7 +39,6 @@ export class SystemManager implements OnModuleInit {
   constructor(
     private readonly config: AppConfigService,
     private readonly repository: SystemRepository,
-    private readonly producer: QueueProducer,
   ) {}
 
   /**
@@ -55,7 +52,6 @@ export class SystemManager implements OnModuleInit {
    */
   onModuleInit(): void {
     void this.recordStart();
-    void this.announceStart();
   }
 
   async getInfo(): Promise<ServiceInfoDto> {
@@ -111,25 +107,6 @@ export class SystemManager implements OnModuleInit {
       .catch(() => false);
 
     return (await Promise.race([answered, expiresAfter(PROBE_DEADLINE_MS)])) ? FirebaseStatus.Up : FirebaseStatus.Down;
-  }
-
-  /**
-   * The sample send: one message per boot, which both sample consumers pick up —
-   * see `sample.handler.ts`.
-   *
-   * A manager producing a topic it does not own the consequences of is the whole
-   * pattern, and this is the seam to copy. It names no queue and waits on no
-   * handler; what runs is `QUEUE_CONSUMERS`'s business.
-   *
-   * Its failure is a warning rather than a throw. Nothing is waiting on the
-   * message, and a Redis that is not up yet should not be what stops the boot.
-   */
-  private async announceStart(): Promise<void> {
-    try {
-      await this.producer.send(QueueTopic.SamplePinged, { note: `${SERVICE_NAME} ${SERVICE_VERSION} started`, sentBy: SystemManager.name });
-    } catch (cause: unknown) {
-      this.logger.warn('Could not send the sample message — check that Redis is reachable', cause);
-    }
   }
 
   /** Writes the record, and makes sure a failure to is heard either way. */

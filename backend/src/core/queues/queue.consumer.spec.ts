@@ -1,27 +1,27 @@
 import { Job } from 'bullmq';
 import { QueueConsumer } from './queue.consumer';
-import { QueueMessage, QueueTopic, SamplePinged } from './queue.messages';
+import { ContentScrapeRequested, QueueMessage, QueueTopic } from './queue.messages';
 
-const MESSAGE: QueueMessage<SamplePinged> = {
-  topic: QueueTopic.SamplePinged,
-  payload: { note: 'the service started', sentBy: 'SystemManager' },
+const MESSAGE: QueueMessage<ContentScrapeRequested> = {
+  topic: QueueTopic.ContentScrapeRequested,
+  payload: { itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false },
   sentAt: '2026-08-14T00:00:00.000Z',
 };
 
 /** A consumer whose handler is whatever the test needs it to be. */
-class TestConsumer extends QueueConsumer<SamplePinged> {
+class TestConsumer extends QueueConsumer<ContentScrapeRequested> {
   constructor(private readonly handler: jest.Mock) {
     super();
   }
 
-  protected handle(message: QueueMessage<SamplePinged>): Promise<void> {
+  protected handle(message: QueueMessage<ContentScrapeRequested>): Promise<void> {
     return this.handler(message) as Promise<void>;
   }
 }
 
 /** Only the two fields the base class reads — the rest of a Job is BullMQ's. */
-function job(): Job<QueueMessage<SamplePinged>> {
-  return { data: MESSAGE, attemptsMade: 0 } as Job<QueueMessage<SamplePinged>>;
+function job(): Job<QueueMessage<ContentScrapeRequested>> {
+  return { data: MESSAGE, attemptsMade: 0 } as Job<QueueMessage<ContentScrapeRequested>>;
 }
 
 describe('QueueConsumer', () => {
@@ -34,8 +34,8 @@ describe('QueueConsumer', () => {
   });
 
   it('rethrows what the handler throws, so BullMQ retries rather than marking it done', async () => {
-    const handler = jest.fn().mockRejectedValue(new Error('the notify failed'));
+    const handler = jest.fn().mockRejectedValue(new Error('the chapter could not be read'));
 
-    await expect(new TestConsumer(handler).process(job())).rejects.toThrow(/the notify failed/);
+    await expect(new TestConsumer(handler).process(job())).rejects.toThrow(/the chapter could not be read/);
   });
 });

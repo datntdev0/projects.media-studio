@@ -7,14 +7,7 @@
  * reads, which is one layer below this.
  */
 export enum QueueTopic {
-  SamplePinged = 'sample.pinged',
   ContentScrapeRequested = 'content.scrape.requested',
-}
-
-/** The sample's payload. Stands in for a real one — see `system/sample.handler.ts`. */
-export interface SamplePinged {
-  note: string;
-  sentBy: string;
 }
 
 /**
@@ -40,7 +33,6 @@ export interface ContentScrapeRequested {
  * process that wrote it — to a shape free to change under it.
  */
 export interface QueuePayloads {
-  [QueueTopic.SamplePinged]: SamplePinged;
   [QueueTopic.ContentScrapeRequested]: ContentScrapeRequested;
 }
 
@@ -58,10 +50,6 @@ export interface QueueMessage<TPayload> {
  * BullMQ hands a job to exactly one worker, so two parts that must both see a
  * topic need two queues, and the producer sends the same message to each.
  */
-export const SAMPLE_AUDIT_QUEUE = 'sample.pinged.audit';
-
-export const SAMPLE_NOTIFY_QUEUE = 'sample.pinged.notify';
-
 export const CONTENT_SCRAPE_QUEUE = 'content.scrape.requested.scraper';
 
 /**
@@ -73,7 +61,6 @@ export const CONTENT_SCRAPE_QUEUE = 'content.scrape.requested.scraper';
  * serve several.
  */
 export const QUEUE_CONSUMERS: Record<QueueTopic, readonly string[]> = {
-  [QueueTopic.SamplePinged]: [SAMPLE_AUDIT_QUEUE, SAMPLE_NOTIFY_QUEUE],
   [QueueTopic.ContentScrapeRequested]: [CONTENT_SCRAPE_QUEUE],
 };
 

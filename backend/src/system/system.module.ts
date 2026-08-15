@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { SampleAuditConsumer, SampleNotifyConsumer } from './sample.handler';
 import { HealthController } from './health.controller';
 import { SystemController } from './system.controller';
 import { SystemManager } from './system.manager';
@@ -15,15 +14,10 @@ import { SystemRepository } from './system.repository';
  * written on boot, read by `/system`, and probed by `/health`. `/health` reports
  * what the probe found and nothing more: liveness has to stay answerable when
  * the database is not.
- *
- * The two sample consumers are here for the same reason: this is the module
- * already saying what the service is doing, and a boot is the one event it has to
- * announce. They are providers and nothing else — a `@Processor` is bound to its
- * queue by its decorator, and the queues themselves are `CoreModule`'s.
  */
 @Module({
   controllers: [SystemController, HealthController],
-  providers: [SystemManager, SystemRepository, SampleAuditConsumer, SampleNotifyConsumer],
+  providers: [SystemManager, SystemRepository],
   exports: [SystemManager],
 })
 export class SystemModule {}

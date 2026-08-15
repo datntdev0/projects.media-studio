@@ -1,9 +1,11 @@
 import { getQueueToken } from '@nestjs/bullmq';
 import { ModuleRef } from '@nestjs/core';
-import { allConsumerQueues, QUEUE_CONSUMERS, QueueMessage, QueueTopic, SamplePinged, SAMPLE_AUDIT_QUEUE, SAMPLE_NOTIFY_QUEUE } from './queue.messages';
+import { allConsumerQueues, CONTENT_SCRAPE_QUEUE, ContentScrapeRequested, QUEUE_CONSUMERS, QueueMessage, QueueTopic } from './queue.messages';
 import { QueueProducer, QueueSendOptions } from './queue.producer';
 
-const PAYLOAD: SamplePinged = { note: 'the service started', sentBy: 'SystemManager' };
+const TOPIC = QueueTopic.ContentScrapeRequested;
+
+const PAYLOAD: ContentScrapeRequested = { itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false };
 
 /**
  * A container holding one stub queue per registered name, resolved the way the
@@ -32,7 +34,7 @@ function fixture() {
 }
 
 /** What the queue was handed, or undefined if it was not used. `add(jobName, message)`. */
-function sentTo(queue: { add: jest.Mock }): QueueMessage<SamplePinged> | undefined {
+function sentTo(queue: { add: jest.Mock }): QueueMessage<ContentScrapeRequested> | undefined {
   return addCalls(queue)[0]?.[1];
 }
 
@@ -41,43 +43,44 @@ function jobNameOf(queue: { add: jest.Mock }): string | undefined {
   return addCalls(queue)[0]?.[0];
 }
 
-function addCalls(queue: { add: jest.Mock }): [string, QueueMessage<SamplePinged>, QueueSendOptions | undefined][] {
-  return queue.add.mock.calls as [string, QueueMessage<SamplePinged>, QueueSendOptions | undefined][];
+function addCalls(queue: { add: jest.Mock }): [string, QueueMessage<ContentScrapeRequested>, QueueSendOptions | undefined][] {
+  return queue.add.mock.calls as [string, QueueMessage<ContentScrapeRequested>, QueueSendOptions | undefined][];
 }
 
 /** The jobs one `addBulk` was handed, or an empty list if it was never called. */
-function bulkSentTo(queue: { addBulk: jest.Mock }): { name: string; data: QueueMessage<SamplePinged>; opts?: QueueSendOptions }[] {
-  return (queue.addBulk.mock.calls as [{ name: string; data: QueueMessage<SamplePinged>; opts?: QueueSendOptions }[]][])[0]?.[0] ?? [];
+function bulkSentTo(queue: { addBulk: jest.Mock }): { name: string; data: QueueMessage<ContentScrapeRequested>; opts?: QueueSendOptions }[] {
+  return (queue.addBulk.mock.calls as [{ name: string; data: QueueMessage<ContentScrapeRequested>; opts?: QueueSendOptions }[]][])[0]?.[0] ?? [];
 }
 
 describe('QueueProducer', () => {
   it('adds the message to every queue subscribed to the topic', async () => {
     const { queue, producer } = fixture();
 
-    await producer.send(QueueTopic.SamplePinged, PAYLOAD);
+    await producer.send(TOPIC, PAYLOAD);
 
-    expect(sentTo(queue(SAMPLE_AUDIT_QUEUE))?.payload).toEqual(PAYLOAD);
-    expect(sentTo(queue(SAMPLE_NOTIFY_QUEUE))?.payload).toEqual(PAYLOAD);
+    // Read from the registry rather than named here: a second consumer of this
+    // topic is then covered by the test that already exists.
+    QUEUE_CONSUMERS[TOPIC].forEach((name) => expect(sentTo(queue(name))?.payload).toEqual(PAYLOAD));
   });
 
   it('sends one copy per consumer and no more', async () => {
     const { queues, producer } = fixture();
 
-    await producer.send(QueueTopic.SamplePinged, PAYLOAD);
+    await producer.send(TOPIC, PAYLOAD);
 
     const sent = [...queues.values()].filter((each) => each.add.mock.calls.length > 0);
 
-    expect(sent).toHaveLength(QUEUE_CONSUMERS[QueueTopic.SamplePinged].length);
+    expect(sent).toHaveLength(QUEUE_CONSUMERS[TOPIC].length);
     sent.forEach((each) => expect(each.add).toHaveBeenCalledTimes(1));
   });
 
   it('stamps the envelope with the topic and when it was sent', async () => {
     const { queue, producer } = fixture();
 
-    await producer.send(QueueTopic.SamplePinged, PAYLOAD);
-    const message = sentTo(queue(SAMPLE_AUDIT_QUEUE));
+    await producer.send(TOPIC, PAYLOAD);
+    const message = sentTo(queue(CONTENT_SCRAPE_QUEUE));
 
-    expect(message?.topic).toBe(QueueTopic.SamplePinged);
+    expect(message?.topic).toBe(TOPIC);
     // An instant rather than a fixed value: what matters is that it parses.
     expect(Number.isNaN(Date.parse(message?.sentAt ?? ''))).toBe(false);
   });
@@ -85,38 +88,38 @@ describe('QueueProducer', () => {
   it('names the job after the topic, so the queue is readable in Redis', async () => {
     const { queue, producer } = fixture();
 
-    await producer.send(QueueTopic.SamplePinged, PAYLOAD);
+    await producer.send(TOPIC, PAYLOAD);
 
     // The name alone: what follows it is the message and the per-send options, and
     // neither is what this is about.
-    expect(jobNameOf(queue(SAMPLE_AUDIT_QUEUE))).toBe(QueueTopic.SamplePinged);
+    expect(jobNameOf(queue(CONTENT_SCRAPE_QUEUE))).toBe(TOPIC);
   });
 
   it('passes the caller\'s attempts through to the queue', async () => {
     const { queue, producer } = fixture();
 
-    await producer.send(QueueTopic.SamplePinged, PAYLOAD, { attempts: 2 });
+    await producer.send(TOPIC, PAYLOAD, { attempts: 2 });
 
-    expect(addCalls(queue(SAMPLE_AUDIT_QUEUE))[0]?.[2]).toEqual({ attempts: 2 });
+    expect(addCalls(queue(CONTENT_SCRAPE_QUEUE))[0]?.[2]).toEqual({ attempts: 2 });
   });
 
   it('fails the send when a queue will not take the message', async () => {
     const { queue, producer } = fixture();
 
-    queue(SAMPLE_AUDIT_QUEUE).add.mockRejectedValue(new Error('redis is down'));
+    queue(CONTENT_SCRAPE_QUEUE).add.mockRejectedValue(new Error('redis is down'));
 
-    await expect(producer.send(QueueTopic.SamplePinged, PAYLOAD)).rejects.toThrow(/redis is down/);
+    await expect(producer.send(TOPIC, PAYLOAD)).rejects.toThrow(/redis is down/);
   });
 
   describe('sendMany', () => {
-    const PAYLOADS: SamplePinged[] = [PAYLOAD, { note: 'and again', sentBy: 'SystemManager' }];
+    const PAYLOADS: ContentScrapeRequested[] = [PAYLOAD, { ...PAYLOAD, contentId: 'chapter-2', sourceUrl: 'https://example.test/2' }];
 
     it('fans every payload over every queue subscribed to the topic', async () => {
       const { queue, producer } = fixture();
 
-      await producer.sendMany(QueueTopic.SamplePinged, PAYLOADS);
+      await producer.sendMany(TOPIC, PAYLOADS);
 
-      for (const name of [SAMPLE_AUDIT_QUEUE, SAMPLE_NOTIFY_QUEUE]) {
+      for (const name of QUEUE_CONSUMERS[TOPIC]) {
         // One `addBulk` per queue, carrying every payload — not one call per payload.
         expect(queue(name).addBulk).toHaveBeenCalledTimes(1);
         expect(bulkSentTo(queue(name)).map((job) => job.data.payload)).toEqual(PAYLOADS);
@@ -126,26 +129,26 @@ describe('QueueProducer', () => {
     it('stamps each job with the topic as its name and its envelope', async () => {
       const { queue, producer } = fixture();
 
-      await producer.sendMany(QueueTopic.SamplePinged, PAYLOADS);
-      const [first] = bulkSentTo(queue(SAMPLE_AUDIT_QUEUE));
+      await producer.sendMany(TOPIC, PAYLOADS);
+      const [first] = bulkSentTo(queue(CONTENT_SCRAPE_QUEUE));
 
-      expect(first?.name).toBe(QueueTopic.SamplePinged);
-      expect(first?.data.topic).toBe(QueueTopic.SamplePinged);
+      expect(first?.name).toBe(TOPIC);
+      expect(first?.data.topic).toBe(TOPIC);
       expect(Number.isNaN(Date.parse(first?.data.sentAt ?? ''))).toBe(false);
     });
 
     it('puts the caller\'s attempts on every job', async () => {
       const { queue, producer } = fixture();
 
-      await producer.sendMany(QueueTopic.SamplePinged, PAYLOADS, { attempts: 4 });
+      await producer.sendMany(TOPIC, PAYLOADS, { attempts: 4 });
 
-      bulkSentTo(queue(SAMPLE_AUDIT_QUEUE)).forEach((job) => expect(job.opts).toEqual({ attempts: 4 }));
+      bulkSentTo(queue(CONTENT_SCRAPE_QUEUE)).forEach((job) => expect(job.opts).toEqual({ attempts: 4 }));
     });
 
     it('touches no queue when there is nothing to send', async () => {
       const { queues, producer } = fixture();
 
-      await producer.sendMany(QueueTopic.SamplePinged, []);
+      await producer.sendMany(TOPIC, []);
 
       [...queues.values()].forEach((each) => expect(each.addBulk).not.toHaveBeenCalled());
     });
@@ -153,9 +156,9 @@ describe('QueueProducer', () => {
     it('fails the send when a queue will not take the batch', async () => {
       const { queue, producer } = fixture();
 
-      queue(SAMPLE_NOTIFY_QUEUE).addBulk.mockRejectedValue(new Error('redis is down'));
+      queue(CONTENT_SCRAPE_QUEUE).addBulk.mockRejectedValue(new Error('redis is down'));
 
-      await expect(producer.sendMany(QueueTopic.SamplePinged, PAYLOADS)).rejects.toThrow(/redis is down/);
+      await expect(producer.sendMany(TOPIC, PAYLOADS)).rejects.toThrow(/redis is down/);
     });
   });
 });
