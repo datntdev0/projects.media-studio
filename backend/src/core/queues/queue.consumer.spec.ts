@@ -4,7 +4,7 @@ import { ContentScrapeRequested, QueueMessage, QueueTopic } from './queue.messag
 
 const MESSAGE: QueueMessage<ContentScrapeRequested> = {
   topic: QueueTopic.ContentScrapeRequested,
-  payload: { itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false },
+  payload: { jobId: 'job-1', itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false },
   sentAt: '2026-08-14T00:00:00.000Z',
 };
 

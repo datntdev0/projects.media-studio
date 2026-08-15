@@ -33,7 +33,7 @@ export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested>
    * throws is logged here rather than left to become an unhandled rejection.
    */
   @OnWorkerEvent('failed')
-  onFailed(job: Job<QueueMessage<ContentScrapeRequested>>): void {
+  onFailed(job: Job<QueueMessage<ContentScrapeRequested>>, error: Error): void {
     if (job.attemptsMade < (job.opts.attempts ?? 1)) {
       return;
     }
@@ -41,7 +41,7 @@ export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested>
     const { payload } = job.data;
 
     this.jobs
-      .fail(payload)
+      .fail(payload, error.message)
       .then(() => this.logger.warn(`${payload.sourceUrl} failed after ${job.attemptsMade} attempt(s)`))
       .catch((cause: unknown) => this.logger.error(`Could not mark content ${payload.contentId} failed`, cause));
   }

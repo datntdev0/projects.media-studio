@@ -5,27 +5,30 @@ import { ScheduleProvider } from '../core/providers/schedule.provider';
 import { ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
 import { QueueProducer } from '../core/queues/queue.producer';
+import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
 import { LibraryItemType, LibrarySourceMode } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
 import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryManager } from '../library/library.manager';
 import { checkHost, Crawler, requireCrawler } from './crawlers';
-import { attemptsFor, ScrapingJobDto, ScrapingJobStartedDto } from './dto/scraping-job.dto';
+import { attemptsFor, CreateScrapingJobDto, ScrapingJobDto } from './dto/scraping-job.dto';
+import { ScrapingJob, ScrapingJobStatus } from './entities/scraping-job.entity';
+import { ScrapingJobDraft, ScrapingJobPatch, ScrapingJobRepository, ScrapingTaskDraft } from './scraping-job.repository';
 
 /** Every character range whose script is written without spaces, so words cannot be counted by them. */
-const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
+const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
 
 /**
  * Work that outlives the request.
  *
- * Two halves that never run together: `start` describes a job and hands it to the
- * queue, and `scrape` is what a consumer does with one message of it. The selection
- * is made once, at request time, so the count the caller is told is the truth rather
- * than an estimate.
+ * Two halves that never run together: `create` writes the record and hands its tasks
+ * to the queue, and `scrape` is what a consumer does with one message of it. The
+ * selection is made once, at request time, so the record is the truth about the ask
+ * rather than an estimate of it.
  *
- * A manager of its own rather than two more methods on `ScrapingManager`: that one
- * reads a source and caches the answer, and this one moves rows.
+ * The record exists before anything is published, which is the whole point: a restart
+ * between the two leaves a job that something can still see.
  */
 @Injectable()
 export class ScrapingJobManager {
@@ -34,6 +37,7 @@ export class ScrapingJobManager {
   constructor(
     private readonly library: LibraryManager,
     private readonly contents: LibraryContentManager,
+    private readonly jobs: ScrapingJobRepository,
     private readonly producer: QueueProducer,
     private readonly schedule: ScheduleProvider,
     private readonly scraping: ScrapingProvider,
@@ -42,12 +46,13 @@ export class ScrapingJobManager {
   ) {}
 
   /**
-   * Selects, marks, and publishes — or books the publishing for a wall-clock time.
+   * Describes a job, writes it down, and publishes it — or books the publishing for
+   * a wall-clock time.
    *
-   * Everything that can be refused is refused before a row is written, so a job that
-   * will not run leaves nothing marked as though it would.
+   * Everything that can be refused is refused before a document is written, so a job
+   * that will not run leaves no record claiming it would.
    */
-  async start(input: ScrapingJobDto): Promise<ScrapingJobStartedDto> {
+  async create(input: CreateScrapingJobDto): Promise<ScrapingJobDto> {
     const item = await this.library.get(input.libraryId);
 
     if (item.sourceMode !== LibrarySourceMode.Crawler || !item.sourceUrl) {
@@ -67,57 +72,60 @@ export class ScrapingJobManager {
     const candidates = selectByRange(input.range, chapters);
     // A chapter added by hand has no source to read, whatever the range said.
     const fetchable = candidates.filter((chapter) => !!chapter.sourceUrl);
-    const queued = input.refetch ? fetchable : fetchable.filter((chapter) => chapter.status !== LibraryContentStatus.Completed);
-    const skipped = candidates.length - queued.length;
+    const wanted = input.refetch ? fetchable : fetchable.filter((chapter) => chapter.status !== LibraryContentStatus.Completed);
 
-    // An answer rather than a failure: a range can legitimately match nothing.
-    if (queued.length === 0) {
-      return { queued: 0, skipped, startAt: null };
+    const job = await this.jobs.create(draftOf(item, crawler, input, at, candidates.length - wanted.length, wanted.length));
+
+    await this.jobs.createTasks(job.id, wanted.map((chapter) => taskDraft(job, chapter)));
+
+    // A record of an ask that matched nothing, rather than a failure: a range can
+    // legitimately name chapters we already hold.
+    if (wanted.length === 0) {
+      return this.detail(job);
     }
-
-    // Marked before anything is published, so a job booked for 03:00 does not leave
-    // the screen looking untouched.
-    // The whole rows rather than their ids: the live tree wants each one's number, and
-    // this is the one moment the claimed set is in hand.
-    await this.contents.markQueued(item.id, queued.map((chapter) => ({ id: chapter.id, index: chapter.index })));
-    await this.library.markScraping(item.id);
-
-    const publish = () => this.publish(crawler, item.id, queued, input);
 
     if (at) {
-      // Booked under the item's own name, so a second booking for it replaces the
-      // first rather than publishing the work twice.
-      this.schedule.runAt(`scrape:${item.id}`, at, publish);
-    } else {
-      await publish();
+      // Booked under the job's own id — the record is what the cron will replace this
+      // timer with, and it is already durable in a way the timer is not.
+      this.schedule.runAt(`scrape:${job.id}`, at, async () => {
+        await this.publish(job);
+      });
+
+      return this.detail(job);
     }
 
-    return { queued: queued.length, skipped, startAt: at?.toISOString() ?? null };
+    return this.detail(await this.publish(job));
   }
 
   /**
-   * One chapter: read it, store it, and point the row at what was stored.
+   * One chapter: read it, store it, and point both records at what was stored.
    *
    * The old object goes after the row moves, never before — a row pointing at
    * nothing is worse than an object nobody reads, which is the order the browser's
    * own upload takes.
    */
   async scrape(message: ContentScrapeRequested): Promise<void> {
+    const task = await this.jobs.task(message.jobId, message.contentId);
+
+    // A job deleted between the send and the delivery is not a failure.
+    if (!task) {
+      this.logger.warn(`Task ${message.contentId} of job ${message.jobId} is gone — nothing to scrape`);
+
+      return;
+    }
+
+    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Running, startAt: nowIso() });
+
     const content = await this.contents.find(message.itemId, message.contentId);
 
-    // A row deleted between the send and the delivery is not a failure.
+    // Failed rather than returned quietly: a job whose item was deleted mid-run used
+    // to leave a task that never moved, and therefore a job that never drained.
     if (!content || content.type !== LibraryItemType.Novel) {
-      this.logger.warn(`Content ${message.contentId} of ${message.itemId} is gone — nothing to scrape`);
+      await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error: 'The library row is gone' });
+      await this.settleJob(message.jobId);
 
       return;
     }
-
-    // A re-delivered message for work already done costs one read rather than a fetch.
-    if (content.status === LibraryContentStatus.Completed && !message.refetch) {
-      return;
-    }
-
-    await this.contents.markScraping(message.itemId, message.contentId);
 
     const scraped = await this.scraping.content(message.crawler, message.sourceUrl);
     // One newline between lines, which is what the reader splits on and what the
@@ -127,34 +135,92 @@ export class ScrapingJobManager {
     const counts = await this.contents.completeScrape(message.itemId, message.contentId, { contentUrl, words: wordCount(text) });
 
     await this.files.discard(content.contentUrl);
+    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Completed, completedAt: nowIso(), error: null });
 
     // Debug rather than log: one line per chapter is a thousand lines per novel, and
     // the screen is where progress is meant to be read. It is here at all because
     // otherwise a draining queue says nothing at all.
     this.logger.debug(`Stored ${content.index} of ${message.itemId} — ${counts.completed}/${counts.total} done`);
 
-    await this.settle(message.itemId, counts);
+    await this.settleJob(message.jobId);
+    await this.settleItem(message.itemId, counts);
   }
 
-  /** The attempts are spent, and the row says so — and may have been the last one owed. */
-  async fail(message: ContentScrapeRequested): Promise<void> {
+  /** The attempts are spent, and both records say so — and it may have been the last one owed. */
+  async fail(message: ContentScrapeRequested, error: string): Promise<void> {
+    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error });
+
     const counts = await this.contents.markFailed(message.itemId, message.contentId);
 
-    await this.settle(message.itemId, counts);
+    await this.settleJob(message.jobId);
+    await this.settleItem(message.itemId, counts);
+  }
+
+  /**
+   * One message per task, published in bulk. Shared by the immediate path and by a
+   * booking coming due — it is one method because they are one act.
+   *
+   * Each payload is built field by field rather than spread from its task, so a field
+   * the store grows cannot travel through the queue without anyone deciding it should.
+   */
+  private async publish(job: ScrapingJob): Promise<ScrapingJob> {
+    const tasks = (await this.jobs.tasks(job.id)).filter((task) => task.status !== ScrapingJobStatus.Completed);
+    const queuedAt = nowIso();
+
+    // The rows rather than their ids: the live tree wants each one's number, and this
+    // is the one moment the claimed set is in hand.
+    await this.contents.markQueued(job.libraryId, tasks.map((task) => ({ id: task.contentId, index: task.index })));
+    await this.library.markScraping(job.libraryId);
+    await this.jobs.setTaskStatus(job.id, tasks.map((task) => task.contentId), ScrapingJobStatus.Queued);
+
+    const payloads = tasks.map((task) => ({
+      jobId: job.id,
+      itemId: job.libraryId,
+      contentId: task.contentId,
+      crawler: job.crawler,
+      sourceUrl: task.sourceUrl,
+      refetch: job.refetch,
+    }));
+
+    await this.producer.sendMany(QueueTopic.ContentScrapeRequested, payloads, { attempts: attemptsFor(job.retry) });
+    await this.jobs.patch(job.id, { status: ScrapingJobStatus.Queued, queuedAt });
+
+    this.logger.log(`Queued ${payloads.length} chapter(s) of ${job.libraryId} for ${job.crawler}`);
+
+    return { ...job, status: ScrapingJobStatus.Queued, queuedAt };
+  }
+
+  /**
+   * The job's counters, and its status once nothing of it is left owed.
+   *
+   * Recomputed rather than incremented: two consumers finishing at once cannot lose
+   * each other's write, and a counter that is derived cannot drift.
+   */
+  private async settleJob(jobId: string): Promise<void> {
+    const counts = await this.jobs.counts(jobId);
+    const fields: ScrapingJobPatch = { completed: counts.completed, failed: counts.failed };
+
+    // Its own tasks, not the item's rows — a job over chapters 1–20 knows nothing
+    // about the other 1,285.
+    if (counts.pending === 0) {
+      fields.status = counts.failed > 0 ? ScrapingJobStatus.Failed : ScrapingJobStatus.Completed;
+      fields.completedAt = nowIso();
+    }
+
+    await this.jobs.patch(jobId, fields);
   }
 
   /**
    * Where a job leaves the item, once nothing of it is queued or in flight.
    *
-   * `pending === 0` is the whole test. It was `completed === total`, which asks whether
-   * the *novel* is downloaded rather than whether the *job* is over — so scraping
-   * chapters 1–20 of 1,305 left the item at **Scraping** for good, and so did any job
-   * that ended with a row failed.
+   * `pending === 0` asks whether *anything at all* is still owed on the item — a
+   * second, overlapping job included — which is a different question from whether
+   * this job is done, and both are right.
    *
-   * The per-row subtree goes with it: it described work that is over. The summary stays,
-   * because it is what tells the screen the job has settled.
+   * The per-row subtree goes with it: it described work that is over. The summary
+   * stays, because it is what tells the screen the job has settled.
    */
-  private async settle(itemId: string, counts: LibraryContentCounts): Promise<void> {
+  private async settleItem(itemId: string, counts: LibraryContentCounts): Promise<void> {
     if (counts.pending > 0) {
       return;
     }
@@ -168,31 +234,67 @@ export class ScrapingJobManager {
     await this.realtime.clearContents(itemId);
   }
 
-  /**
-   * One message per chapter, published in bulk.
-   *
-   * Each payload is built field by field rather than spread from its row, so a field
-   * the store grows cannot travel through the queue without anyone deciding it should.
-   */
-  private async publish(crawler: Crawler, itemId: string, chapters: NovelChapter[], input: ScrapingJobDto): Promise<void> {
-    const payloads = chapters.map((chapter) => ({
-      itemId,
-      contentId: chapter.id,
-      crawler: crawler.name,
-      sourceUrl: chapter.sourceUrl!,
-      refetch: input.refetch,
-    }));
-
-    await this.producer.sendMany(QueueTopic.ContentScrapeRequested, payloads, { attempts: attemptsFor(input.retry) });
-
-    this.logger.log(`Queued ${payloads.length} chapter(s) of ${itemId} for ${crawler.name}`);
+  /** The record as it is answered with: its own fields, and the tasks it described. */
+  private async detail(job: ScrapingJob): Promise<ScrapingJobDto> {
+    return { ...job, tasks: await this.jobs.tasks(job.id) };
   }
+}
+
+/** The record as it is first written. A job that matched nothing is settled on the spot. */
+function draftOf(item: LibraryItemDto, crawler: Crawler, input: CreateScrapingJobDto, at: Date | null, skipped: number, total: number): ScrapingJobDraft {
+  return {
+    libraryId: item.id,
+    libraryType: item.type,
+    libraryTitle: item.title,
+    crawler: crawler.name,
+    status: statusFor(at, total),
+    range: input.range,
+    refetch: input.refetch,
+    retry: input.retry,
+    startAt: at?.toISOString() ?? null,
+    queuedAt: null,
+    completedAt: total === 0 ? nowIso() : null,
+    total,
+    completed: 0,
+    failed: 0,
+    skipped,
+  };
+}
+
+function statusFor(at: Date | null, total: number): ScrapingJobStatus {
+  if (total === 0) {
+    return ScrapingJobStatus.Completed;
+  }
+
+  return at ? ScrapingJobStatus.Scheduled : ScrapingJobStatus.Queued;
+}
+
+/**
+ * One task. Written `scheduled` whatever the job is, because `queued` is what a
+ * consumer acts on and nothing has been published yet.
+ */
+function taskDraft(job: ScrapingJob, chapter: NovelChapter): ScrapingTaskDraft {
+  return {
+    contentId: chapter.id,
+    libraryId: job.libraryId,
+    index: chapter.index,
+    sourceUrl: chapter.sourceUrl!,
+    status: ScrapingJobStatus.Scheduled,
+    refetch: job.refetch,
+    retry: job.retry,
+    startAt: null,
+    completedAt: null,
+    error: null,
+  };
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
 /**
  * When the work runs, or null for now. A time that has already passed is the
- * caller's mistake and is refused here — `ScheduleProvider` would throw on it after
- * the rows had been marked.
+ * caller's mistake and is refused here, before the record is written.
  */
 function startAtFrom(startAt: string | null): Date | null {
   if (!startAt) {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
 import type { ScrapeScope, ScrapeStart } from '~/types/library-content'
-import type { ScrapingJobStartedDto } from '~/utils/api.clients'
+import type { ScrapingJobDto } from '~/utils/api.clients'
 
 /**
  * What to fetch, what to do with what is already held, and when to start.
@@ -25,7 +25,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  started: [answer: ScrapingJobStartedDto]
+  started: [job: ScrapingJobDto]
 }>()
 
 const { scrapingClient } = useApiClient()
@@ -121,10 +121,10 @@ async function submit() {
   startError.value = null
   starting.value = true
 
-  let answer: ScrapingJobStartedDto
+  let job: ScrapingJobDto
 
   try {
-    answer = await scrapingClient.job({
+    job = await scrapingClient.createJob({
       libraryId: props.itemId,
       range: rangeFor(),
       refetch: refetch.value,
@@ -140,7 +140,7 @@ async function submit() {
   }
 
   open.value = false
-  emit('started', answer)
+  emit('started', job)
 }
 
 /** A selected card takes the accent wash, as the item form's do. */

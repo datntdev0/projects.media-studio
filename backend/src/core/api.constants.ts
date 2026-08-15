@@ -34,6 +34,9 @@ export const LIBRARY_CONTENT_PATH = 'contents';
 /** Versioned. `/api/v1/scrapings/…` */
 export const SCRAPING_PATH = 'scrapings';
 
+/** Under scraping. `/api/v1/scrapings/jobs/…` */
+export const SCRAPING_JOBS_PATH = 'jobs';
+
 /** The generated OpenAPI document. */
 export const OPENAPI_JSON_PATH = 'openapi.json';
 

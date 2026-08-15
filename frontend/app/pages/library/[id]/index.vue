@@ -2,7 +2,7 @@
 import { refDebounced } from '@vueuse/core'
 import type { ImageSetItem, LibraryItemDetail, NovelItem, VideoSetItem } from '~/types/library'
 import type { LibraryAsset, LibraryContent, NovelChapter } from '~/types/library-content'
-import type { ScrapingJobStartedDto } from '~/utils/api.clients'
+import type { ScrapingJobDto } from '~/utils/api.clients'
 
 /**
  * One library item, and what it holds. A novel gets its metadata column beside a
@@ -328,17 +328,17 @@ function onScrapeSelected() {
  * The item is still refetched, quietly: its counters are the server's, and a screen with
  * no realtime channel at all should still show the job has started.
  */
-async function onJobStarted(answer: ScrapingJobStartedDto) {
+async function onJobStarted(job: ScrapingJobDto) {
   await refreshItem()
 
-  if (!answer.queued) {
+  if (!job.total) {
     toast.add({ title: 'Nothing to scrape', icon: 'i-lucide-info', color: 'neutral' })
 
     return
   }
 
-  const what = `${countLabel(answer.queued)} ${contentUnit('novel', answer.queued)}`
-  const when = answer.startAt ? `Scheduled for ${timeLabel(answer.startAt)} · ${what}` : `Queued ${what}`
+  const what = `${countLabel(job.total)} ${contentUnit('novel', job.total)}`
+  const when = job.startAt ? `Scheduled for ${timeLabel(job.startAt)} · ${what}` : `Queued ${what}`
 
   toast.add({ title: when, icon: 'i-lucide-check', color: 'primary' })
 }

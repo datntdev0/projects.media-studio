@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { LibraryModule } from '../library/library.module';
 import { ContentScrapeConsumer } from './content-scrape.handler';
 import { ScrapingJobManager } from './scraping-job.manager';
+import { ScrapingJobRepository } from './scraping-job.repository';
 import { ScrapingController } from './scraping.controller';
 import { ScrapingManager } from './scraping.manager';
 
@@ -17,6 +18,6 @@ import { ScrapingManager } from './scraping.manager';
 @Module({
   imports: [LibraryModule],
   controllers: [ScrapingController],
-  providers: [ScrapingManager, ScrapingJobManager, ContentScrapeConsumer],
+  providers: [ScrapingManager, ScrapingJobManager, ScrapingJobRepository, ContentScrapeConsumer],
 })
 export class ScrapingModule {}

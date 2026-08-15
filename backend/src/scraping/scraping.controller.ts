@@ -1,11 +1,11 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBadGatewayResponse, ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiNotImplementedResponse, ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
-import { SCRAPING_PATH } from '../core/api.constants';
+import { SCRAPING_JOBS_PATH, SCRAPING_PATH } from '../core/api.constants';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { DiscoverDto } from './dto/discover.dto';
 import { PreviewDto } from './dto/preview.dto';
-import { ScrapingJobDto, ScrapingJobStartedDto } from './dto/scraping-job.dto';
+import { CreateScrapingJobDto, ScrapingJobDto } from './dto/scraping-job.dto';
 import { QueryValidateDto, ValidateDto } from './dto/validate.dto';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingManager } from './scraping.manager';
@@ -57,17 +57,14 @@ export class ScrapingController {
     return this.scraping.discover(input);
   }
 
-  @Post('job')
-  // It queues work, and the job is not a resource a caller can address yet — so
-  // 200, and a count of what was published rather than a location.
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Queue the content behind an item's chapters, now or at a set time" })
-  @ApiOkResponse({ type: ScrapingJobStartedDto, description: 'Selected, marked, and published — or booked. `queued: 0` where the range matched nothing.' })
+  @Post(SCRAPING_JOBS_PATH)
+  @ApiOperation({ summary: "Record a job over an item's chapters, and publish it now or at a set time" })
+  @ApiCreatedResponse({ type: ScrapingJobDto, description: 'Persisted, and published or booked. A range that matched nothing is a `completed` record with `total: 0`.' })
   @ApiBadRequestResponse({ description: 'A manual item, a range that will not parse, or a `startAt` that has passed.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid ID token.' })
   @ApiNotFoundResponse({ description: 'No item under that id, or no crawler under its `sourceName`.' })
   @ApiNotImplementedResponse({ description: 'A crawler item that is not a novel.' })
-  job(@Body() input: ScrapingJobDto): Promise<ScrapingJobStartedDto> {
-    return this.jobs.start(input);
+  createJob(@Body() input: CreateScrapingJobDto): Promise<ScrapingJobDto> {
+    return this.jobs.create(input);
   }
 }

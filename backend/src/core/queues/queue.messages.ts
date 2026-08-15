@@ -15,6 +15,8 @@ export enum QueueTopic {
  * outlives the process that wrote it, and the row it names is free to move under it.
  */
 export interface ContentScrapeRequested {
+  /** Which job asked. The task it names is what decides whether this is still wanted. */
+  jobId: string;
   itemId: string;
   contentId: string;
   crawler: string;

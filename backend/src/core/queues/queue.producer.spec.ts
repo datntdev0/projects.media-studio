@@ -5,7 +5,7 @@ import { QueueProducer, QueueSendOptions } from './queue.producer';
 
 const TOPIC = QueueTopic.ContentScrapeRequested;
 
-const PAYLOAD: ContentScrapeRequested = { itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false };
+const PAYLOAD: ContentScrapeRequested = { jobId: 'job-1', itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false };
 
 /**
  * A container holding one stub queue per registered name, resolved the way the

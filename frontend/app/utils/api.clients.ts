@@ -909,11 +909,11 @@ export class ScrapingClient {
     }
 
     /**
-     * Queue the content behind an item's chapters, now or at a set time
-     * @return Selected, marked, and published — or booked. `queued: 0` where the range matched nothing.
+     * Record a job over an item's chapters, and publish it now or at a set time
+     * @return Persisted, and published or booked. A range that matched nothing is a `completed` record with `total: 0`.
      */
-    job(body: ScrapingJobDto, signal?: AbortSignal): Promise<ScrapingJobStartedDto> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/job";
+    createJob(body: CreateScrapingJobDto, signal?: AbortSignal): Promise<ScrapingJobDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/jobs";
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(body);
@@ -929,18 +929,18 @@ export class ScrapingClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processJob(_response);
+            return this.processCreateJob(_response);
         });
     }
 
-    protected processJob(response: Response): Promise<ScrapingJobStartedDto> {
+    protected processCreateJob(response: Response): Promise<ScrapingJobDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        if (status === 201) {
             return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobStartedDto;
-            return result200;
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobDto;
+            return result201;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
@@ -963,7 +963,7 @@ export class ScrapingClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<ScrapingJobStartedDto>(null as any);
+        return Promise.resolve<ScrapingJobDto>(null as any);
     }
 }
 
@@ -1351,7 +1351,7 @@ export interface DiscoverDto {
     libraryId: string;
 }
 
-export interface ScrapingJobDto {
+export interface CreateScrapingJobDto {
     /** The crawler item to scrape. A manual item is a 400. */
     libraryId: string;
     /** `all`, `missing`, or an index expression — `1,3,5,7`, `23-34`, `[23:34]`. Anything else is a 400. */
@@ -1364,13 +1364,60 @@ export interface ScrapingJobDto {
     retry?: number;
 }
 
-export interface ScrapingJobStartedDto {
-    /** How many chapters were published, or booked to be. `0` where the range matched nothing. */
-    queued: number;
+export type ScrapingJobStatus = "scheduled" | "queued" | "running" | "paused" | "stopped" | "completed" | "failed";
+
+export interface ScrapingTaskDto {
+    /** The library content row this task is for — and this task's own id. */
+    id: string;
+    contentId: string;
+    /** Denormalised so a task reads on its own. */
+    libraryId: string;
+    /** The chapter number — what the list is ordered by. */
+    index: number;
+    sourceUrl: string;
+    status: ScrapingJobStatus;
+    /** The job's, copied down: it is what the message carries. */
+    refetch: boolean;
+    /** The job's, copied down, for the same reason. */
+    retry: number;
+    /** When a consumer picked this task up. */
+    startAt: string | null;
+    completedAt: string | null;
+    /** The last failure, in one line. */
+    error: string | null;
+}
+
+export interface ScrapingJobDto {
+    id: string;
+    libraryId: string;
+    /** The item's type, as it was. What the listing's library filter narrows on. */
+    libraryType: LibraryItemType;
+    /** As the item was called when the job was described. */
+    libraryTitle: string;
+    /** The item's `sourceName`, carried so a republish needs no read of it. */
+    crawler: string;
+    status: ScrapingJobStatus;
+    /** The expression as it was sent. Drawn verbatim in the panel. */
+    range: string;
+    refetch: boolean;
+    /** How many times a failed task is tried again. */
+    retry: number;
+    /** When the job is due. Null was queued immediately. */
+    startAt: string | null;
+    /** When its messages actually went out. */
+    queuedAt: string | null;
+    /** When it settled, whichever way. */
+    completedAt: string | null;
+    /** Tasks in the job. What the progress bar divides by. */
+    total: number;
+    completed: number;
+    failed: number;
     /** Candidates dropped as already complete. */
     skipped: number;
-    /** When the work runs. Null where it was published immediately. */
-    startAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    /** One per piece of content in range, by its number. */
+    tasks: ScrapingTaskDto[];
 }
 
 export class ApiException extends Error {
