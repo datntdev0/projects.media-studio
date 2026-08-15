@@ -14,7 +14,7 @@ import { AuthClient, LibraryClient, ScrapingClient } from '~/utils/api.clients'
  */
 export const useApiClient = () => {
   const { apiBase } = useRuntimeConfig().public
-  const { getIdToken } = useAuth()
+  const { getIdToken, expireSession } = useAuth()
 
   // The seam NSwag leaves for exactly this: every generated method goes through
   // `http.fetch`, so one wrapper authenticates all of them. The token is read per
@@ -29,7 +29,15 @@ export const useApiClient = () => {
         headers.set('authorization', `Bearer ${token}`)
       }
 
-      return globalThis.fetch(url, { ...init, headers })
+      const response = await globalThis.fetch(url, { ...init, headers })
+
+      // A token the API refuses is a session that is over, whatever the page was
+      // doing with it. The caller still gets its `ApiException` to render.
+      if (response.status === 401) {
+        await expireSession()
+      }
+
+      return response
     }
   }
 

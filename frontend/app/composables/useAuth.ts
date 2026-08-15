@@ -6,8 +6,14 @@ export const LOGIN_ROUTE = '/auth/login'
 
 const _useAuth = () => {
   const { $firebaseAuth: auth } = useNuxtApp()
+  const router = useRouter()
 
   const user = ref<User | null>(null)
+
+  /* Which account the API has already vouched for. The SDK hands out tokens for an
+     account the backend may have stopped accepting, so a restored session is worth
+     one `/auth/me` — and only one. */
+  let verifiedUid: string | null = null
 
   /* The SDK restores a session from storage after boot, so `currentUser` is null
      for the first few ticks. Anything that branches on "is anybody signed in"
@@ -50,7 +56,44 @@ const _useAuth = () => {
   }
 
   function signOut(): Promise<void> {
+    verifiedUid = null
+
     return firebaseSignOut(auth)
+  }
+
+  /** Whether the API accepts the signed-in account. One it refuses is signed out, which leaves `user` null for whoever asked. */
+  async function verifySession(): Promise<boolean> {
+    const uid = user.value?.uid
+
+    if (!uid) {
+      return false
+    }
+
+    if (uid === verifiedUid) {
+      return true
+    }
+
+    try {
+      await useApiClient().authClient.me()
+      verifiedUid = uid
+
+      return true
+    } catch {
+      await signOut()
+
+      return false
+    }
+  }
+
+  /** Ends a session the API has refused mid-page, where no route change was on its way to notice. */
+  async function expireSession(): Promise<void> {
+    const { path, fullPath } = router.currentRoute.value
+
+    await signOut()
+
+    if (path !== LOGIN_ROUTE) {
+      await navigateTo({ path: LOGIN_ROUTE, query: { redirect: fullPath } })
+    }
   }
 
   /** A usable ID token — the SDK refreshes it when the current one has expired. */
@@ -66,6 +109,8 @@ const _useAuth = () => {
     signIn,
     reauthenticate,
     signOut,
+    verifySession,
+    expireSession,
     getIdToken
   }
 }
