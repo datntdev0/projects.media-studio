@@ -210,7 +210,6 @@ export class LibraryContentRepository {
       contents.count().get(),
       contents.where('status', '==', LibraryContentStatus.Completed).count().get(),
       contents.where('status', '==', LibraryContentStatus.Failed).count().get(),
-      // The two states a job still owes an answer for, in one query rather than two.
       contents.where('status', 'in', [LibraryContentStatus.Pending, LibraryContentStatus.Scraping]).count().get(),
       contents.aggregate({ sum: AggregateField.sum('filesize') }).get(),
     ]);

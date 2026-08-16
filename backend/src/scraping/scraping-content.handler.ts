@@ -1,7 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
-import { CONTENT_SCRAPE_QUEUE, ContentScrapeRequested, QueueMessage } from '../core/queues/queue.messages';
+import { SCRAPING_CONTENT_QUEUE, ScrapingContentRequested, QueueMessage } from '../core/queues/queue.messages';
 import { QueueConsumer } from '../core/queues/queue.consumer';
-import { attemptsFor } from './dto/scraping-job.dto';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingJobRepository } from './scraping-job.repository';
 import { ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
@@ -14,7 +13,7 @@ import { LibraryContentManager } from '../library/library-content.manager';
 const SCRAPE_CONCURRENCY = 2;
 
 /** The first retry's wait. Each further one doubles it. */
-const BACKOFF_MS = 2_000;
+const BACKOFF_MS = 1_000;
 
 /**
  * One chapter per message, two at a time.
@@ -25,8 +24,8 @@ const BACKOFF_MS = 2_000;
  * over once, and both records are written here rather than by a later attempt that
  * would have to find its way back to a task somebody may have paused meanwhile.
  */
-@Processor(CONTENT_SCRAPE_QUEUE, { concurrency: SCRAPE_CONCURRENCY })
-export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested> {
+@Processor(SCRAPING_CONTENT_QUEUE, { concurrency: SCRAPE_CONCURRENCY })
+export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentRequested> {
   constructor(
     private readonly scrapingJobManager: ScrapingJobManager,
     private readonly scrapingJobRepository: ScrapingJobRepository,
@@ -45,35 +44,38 @@ export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested>
    * consumer says the work did not happen and what leaves the message in the failed
    * set. The queue is sent one attempt per message, so nothing is redelivered.
    */
-  protected async handle({ payload }: QueueMessage<ContentScrapeRequested>): Promise<void> {
-    const attempts = attemptsFor(payload.retry);
+  protected async handle({ payload }: QueueMessage<ScrapingContentRequested>): Promise<void> {
     const content = await this.libraryContentManager.find(payload.itemId, payload.contentId);
     const task = await this.scrapingJobRepository.task(payload.jobId, payload.contentId);
 
     if (!this.validate(payload, content, task)) return;
     await this.markTaskRunning(payload);
 
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    for (let attempt = 1; attempt <= payload.retry; attempt += 1) {
       try {
         await this.scrapingJobManager.scrape(payload, content!);
         await this.markTaskCompleted(payload);
+        await this.scrapingJobManager.settleJob(payload.jobId);
+        this.logger.debug(`Scraped ${payload.sourceUrl} of ${payload.itemId}`);
         return;
       } 
       catch (cause: unknown) {
         const error = cause instanceof Error ? cause.message : String(cause);
+        this.logger.warn(`${payload.sourceUrl} failed on attempt ${attempt} of ${payload.retry} — ${error}`);
 
-        if (attempt === attempts) {
+        if (attempt === payload.retry) {
           await this.markTaskFailed(payload, error);
+          await this.scrapingJobManager.settleJob(payload.jobId);
           throw cause;
         }
 
-        this.logger.warn(`${payload.sourceUrl} failed on attempt ${attempt} of ${attempts} — ${error}`);
-        await wait(BACKOFF_MS * 2 ** (attempt - 1));
+        await wait(BACKOFF_MS * 2 ** attempt);
       }
     }
+
   }
 
-  private validate(payload: ContentScrapeRequested, content: LibraryContent | null, task: ScrapingTask | null): boolean {
+  private validate(payload: ScrapingContentRequested, content: LibraryContent | null, task: ScrapingTask | null): boolean {
     if (!content) {
       this.logger.warn(`Content ${payload.contentId} of item ${payload.itemId} is gone — ${payload.sourceUrl} will not be scraped`);
       return false;
@@ -91,19 +93,19 @@ export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested>
     return true;
   }
 
-  private async markTaskRunning(payload: ContentScrapeRequested): Promise<void> {
+  private async markTaskRunning(payload: ScrapingContentRequested): Promise<void> {
     await this.libraryContentManager.markScraping(payload.itemId, [payload.contentId]);
     await this.scrapingJobRepository.startTask(payload.jobId, payload.contentId, nowIso());
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Running);
     await this.realtimeProvider.publishJob({ id: payload.jobId, status: ScrapingJobStatus.Running });
   }
 
-  private async markTaskCompleted(payload: ContentScrapeRequested): Promise<void> {
+  private async markTaskCompleted(payload: ScrapingContentRequested): Promise<void> {
     await this.scrapingJobRepository.completeTask(payload.jobId, payload.contentId, nowIso());
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Completed);
   }
 
-  private async markTaskFailed(payload: ContentScrapeRequested, error: string): Promise<void> {
+  private async markTaskFailed(payload: ScrapingContentRequested, error: string): Promise<void> {
     await this.libraryContentManager.markFailed(payload.itemId, [payload.contentId]);
     await this.scrapingJobRepository.patchTask(payload.jobId, payload.contentId, { status: ScrapingJobStatus.Failed, error });
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Failed);

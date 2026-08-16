@@ -9,38 +9,15 @@ const RUNNING_JOBS_ROOT = 'scrapings/runningJobs';
 const UPDATE_CHUNK = 500;
 
 /**
- * The item the job is over: which one it is, and what it holds as of this write.
- *
- * Identity and aggregate in one block because they describe one thing. They arrive at
- * different moments — the identity when the job is recorded, the counters as chapters
- * land — so every field is optional and `publishJob` merges them field by field.
- *
- * `pending` is carried rather than derived: the four counters are written in a single
- * `update`, so they cannot disagree. Derived on the client it would be right only for
- * as long as the other three happened to arrive together.
- *
- * No status. The item's own is the person's — `draft` or `ready` — and a screen draws
- * **Scraping** from the presence of a running job rather than from anything stored.
- */
-export interface ScrapingLibrarySnapshot {
-  id?: string;
-  type?: string;
-  /** As the item was called when the job was described. */
-  title?: string;
-  /** Every row of the item, not of the job. */
-  total?: number;
-  completed?: number;
-  failed?: number;
-  /** Queued or in flight — what is still owed on the item. */
-  pending?: number;
-}
-
-/**
  * One job's live summary.
  *
  * Only `id` is required. Every write here is an `update`, so a transition sends the
  * fields it moved and leaves the rest of the node where it is — which is what keeps a
  * chapter completing from costing a read of the job it belonged to.
+ *
+ * The counters are the job's own tasks, never the item's rows: a job over chapters
+ * 1–20 knows nothing about the other 1,285, and the Library screens refetch for those.
+ * `libraryId` is here so a screen can find the job running over the item it draws.
  *
  * Timestamps are epoch milliseconds, and ISO strings in Firestore: these are compared
  * and never displayed. Statuses are plain strings, and are the caller's own enum values
@@ -49,6 +26,7 @@ export interface ScrapingLibrarySnapshot {
  */
 export interface ScrapingJobSnapshot {
   id: string;
+  libraryId?: string;
   status?: string;
   range?: string;
   refetch?: boolean;
@@ -57,7 +35,6 @@ export interface ScrapingJobSnapshot {
   total?: number;
   completed?: number;
   failed?: number;
-  library?: ScrapingLibrarySnapshot;
 }
 
 /** One task, as the chapter table reads it. `index` saves the screen a lookup to name it. */
@@ -91,21 +68,9 @@ export class RealtimeProvider {
 
   constructor(private readonly firebase: FirebaseAdminService) {}
 
-  /**
-   * The summary, and whatever of the item the caller has, in one `update`. Stamped,
-   * so a node can be recognised as stale.
-   *
-   * The `library` block goes in as `library/<field>` paths rather than as an object:
-   * an `update` replaces a child it is handed whole, so the identity written when the
-   * job was recorded would be wiped by the first completion's counters.
-   */
+  /** Whatever of the summary the caller has, in one `update`. Stamped, so a node can be recognised as stale. */
   async publishJob(job: ScrapingJobSnapshot): Promise<void> {
-    const { library, ...summary } = job;
-    const fields: Record<string, unknown> = { ...stated(summary), updatedAt: Date.now() };
-
-    Object.entries(stated(library ?? {})).forEach(([field, value]) => {
-      fields[`library/${field}`] = value;
-    });
+    const fields: Record<string, unknown> = { ...stated(job), updatedAt: Date.now() };
 
     await this.attempt(`job ${job.id}`, () => this.jobRef(job.id).update(fields));
   }

@@ -4,11 +4,11 @@ jest.mock('firebase-admin/auth', () => ({}));
 
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { ContentScrapeRequested, QueueMessage, QueueTopic } from '../core/queues/queue.messages';
-import { ContentScrapeConsumer } from './content-scrape.handler';
+import { ScrapingContentRequested, QueueMessage, QueueTopic } from '../core/queues/queue.messages';
+import { ScrapingContentConsumer } from './scraping-content.handler';
 import { ScrapingJobManager } from './scraping-job.manager';
 
-const PAYLOAD: ContentScrapeRequested = {
+const PAYLOAD: ScrapingContentRequested = {
   jobId: 'job-1',
   itemId: 'novel-1',
   contentId: 'chapter-1',
@@ -25,18 +25,21 @@ const WHOLE_RUN_MS = 60_000;
 
 function fixture() {
   const jobs = { scrape: jest.fn().mockResolvedValue(undefined), retry: jest.fn().mockResolvedValue(undefined), fail: jest.fn().mockResolvedValue(undefined) };
+  const repository = {};
+  const contents = {};
+  const realtime = {};
 
-  return { consumer: new ContentScrapeConsumer(jobs as unknown as ScrapingJobManager), jobs };
+  return { consumer: new ScrapingContentConsumer(jobs as unknown as ScrapingJobManager, repository as any, contents as any, realtime as any), jobs };
 }
 
 /** Only what the base class reads. `retry` travels in the payload, not in the job's options. */
-function job(retry = 3): Job<QueueMessage<ContentScrapeRequested>> {
-  const message: QueueMessage<ContentScrapeRequested> = { topic: QueueTopic.ContentScrapeRequested, payload: { ...PAYLOAD, retry }, sentAt: '2026-08-14T00:00:00.000Z' };
+function job(retry = 3): Job<QueueMessage<ScrapingContentRequested>> {
+  const message: QueueMessage<ScrapingContentRequested> = { topic: QueueTopic.ScrapingContentRequested, payload: { ...PAYLOAD, retry }, sentAt: '2026-08-14T00:00:00.000Z' };
 
-  return { data: message, attemptsMade: 0 } as Job<QueueMessage<ContentScrapeRequested>>;
+  return { data: message, attemptsMade: 0 } as Job<QueueMessage<ScrapingContentRequested>>;
 }
 
-describe('ContentScrapeConsumer', () => {
+describe('ScrapingContentConsumer', () => {
   beforeEach(() => {
     // The backoff is waited out inside the run, so the run is driven by the clock here.
     jest.useFakeTimers();

@@ -266,13 +266,14 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
       tasks.where('status', 'in', HALTED_STATUSES).count().get(),
     ]);
 
-    return {
+    const result = {
       total: total.data().count,
       completed: completed.data().count,
       failed: failed.data().count,
       pending: pending.data().count,
       halted: halted.data().count,
     };
+    return result;
   }
 
   private tasksOf(jobId: string): CollectionReference {

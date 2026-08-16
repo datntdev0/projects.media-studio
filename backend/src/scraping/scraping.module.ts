@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LibraryModule } from '../library/library.module';
-import { ContentScrapeConsumer } from './content-scrape.handler';
+import { ScrapingContentConsumer } from './scraping-content.handler';
+import { ScrapingJobPublishConsumer } from './scraping-job.handler';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingJobRepository } from './scraping-job.repository';
 import { ScrapingJobScheduler } from './scraping-job.scheduler';
@@ -8,8 +9,8 @@ import { ScrapingController } from './scraping.controller';
 import { ScrapingManager } from './scraping.manager';
 
 /**
- * Reading a source, and fetching what it holds: one controller and one consumer over
- * two managers.
+ * Reading a source, and fetching what it holds: one controller and two consumers — a
+ * job's fan-out and a chapter — over two managers.
  *
  * The scraping service and the cache are infrastructure and arrive from the global
  * `CoreModule`; the two library managers discovery writes through come from
@@ -19,6 +20,6 @@ import { ScrapingManager } from './scraping.manager';
 @Module({
   imports: [LibraryModule],
   controllers: [ScrapingController],
-  providers: [ScrapingManager, ScrapingJobManager, ScrapingJobRepository, ScrapingJobScheduler, ContentScrapeConsumer],
+  providers: [ScrapingManager, ScrapingJobManager, ScrapingJobRepository, ScrapingJobScheduler, ScrapingContentConsumer, ScrapingJobPublishConsumer],
 })
 export class ScrapingModule {}

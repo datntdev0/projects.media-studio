@@ -1,14 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
-import { RealtimeProvider, ScrapingJobSnapshot } from '../core/providers/realtime.provider';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { ScrapingProvider } from '../core/providers/scraping.provider';
-import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
+import { ScrapingContentRequested, QueueTopic } from '../core/queues/queue.messages';
 import { QueueProducer } from '../core/queues/queue.producer';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryContent, LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
 import { LibraryItemType, LibrarySourceMode } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
-import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryManager } from '../library/library.manager';
 import { validateSourceUrl, Crawler, requireCrawler } from './crawlers';
 import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
@@ -70,9 +69,9 @@ export class ScrapingJobManager {
   private readonly logger = new Logger(ScrapingJobManager.name);
 
   constructor(
-    private readonly library: LibraryManager,
-    private readonly contents: LibraryContentManager,
-    private readonly jobs: ScrapingJobRepository,
+    private readonly libraryManager: LibraryManager,
+    private readonly libraryContentManager: LibraryContentManager,
+    private readonly scrapingJobRepository: ScrapingJobRepository,
     private readonly producer: QueueProducer,
     private readonly scraping: ScrapingProvider,
     private readonly files: ContentFileProvider,
@@ -86,8 +85,8 @@ export class ScrapingJobManager {
    * Everything that can be refused is refused before a document is written, so a job
    * that will not run leaves no record claiming it would.
    */
-  async create(input: CreateScrapingJobDto): Promise<ScrapingJobDto> {
-    const item = await this.library.get(input.libraryId);
+  public async create(input: CreateScrapingJobDto): Promise<ScrapingJobDto> {
+    const item = await this.libraryManager.get(input.libraryId);
 
     if (item.sourceMode !== LibrarySourceMode.Crawler || !item.sourceUrl) {
       throw new BadRequestException('A manual item has no source to scrape. Write its content by hand.');
@@ -100,29 +99,21 @@ export class ScrapingJobManager {
     const crawler = requireCrawler(item.sourceName);
     validateSourceUrl(crawler, item.sourceUrl);
 
-    const at = startAtFrom(input.startAt);
-    const chapters = await this.contents.chapters(item.id);
+    const startAt = startAtFrom(input.startAt);
+    const chapters = await this.libraryContentManager.chapters(item.id);
     const candidates = selectByRange(input.range, chapters);
     const fetchable = candidates.filter((chapter) => !!chapter.sourceUrl);
     const wanted = input.refetch ? fetchable : fetchable.filter((chapter) => chapter.status !== LibraryContentStatus.Completed);
 
-    const job = await this.jobs.create(draftOf(item, crawler, input, at, candidates.length - wanted.length, wanted.length));
+    const job = await this.scrapingJobRepository.create(draftOf(item, crawler, input, startAt, candidates.length - wanted.length, wanted.length));
     const tasks = wanted.map((chapter) => taskDraft(job, chapter));
+    await this.scrapingJobRepository.createTasks(job.id, tasks);
 
-    await this.jobs.createTasks(job.id, tasks);
+    // Skip publishing to job queue if the job is scheduled for later, or if it matched nothing to do.
+    if (wanted.length === 0 || startAt) return this.detail(job);
 
-    // The node exists from the moment the record does, so a booked job is on the
-    // Scheduled tab of a screen nobody has refreshed.
-    await this.realtime.publishJob(nodeOf(job));
-    await this.realtime.publishTasks(job.id, tasks.map((task) => ({ contentId: task.contentId, status: task.status, index: task.index })));
-    // Nothing to publish now, for one of two reasons: a range that matched nothing is
-    // already a settled record, and a booked job waits for the cron. Both leave the
-    // library exactly as they found it.
-    if (wanted.length === 0 || at) {
-      return this.detail(job);
-    }
-
-    return this.detail(await this.publish(job));
+    await this.producer.send(QueueTopic.ScrapingJobRequested, { jobId: job.id }, { attempts: 1 });
+    return this.detail(job);
   }
 
   /**
@@ -135,9 +126,9 @@ export class ScrapingJobManager {
    * Tasks are answered with each job, which is the one place this listing costs more
    * than the library's: a page of twenty is twenty-one queries. The panel needs them.
    */
-  async list(query: QueryListScrapingJobsDto): Promise<ScrapingJobPageDto> {
+  public async list(query: QueryListScrapingJobsDto): Promise<ScrapingJobPageDto> {
     const statuses = query.state ? [...STATE_STATUSES[query.state]] : undefined;
-    const matching = await this.jobs.findMatching({ statuses, libraryType: query.libraryType, libraryId: query.libraryId });
+    const matching = await this.scrapingJobRepository.findMatching({ statuses, libraryType: query.libraryType, libraryId: query.libraryId });
     const found = matching.sort(byNewest);
     const from = (query.page - 1) * query.pageSize;
 
@@ -158,18 +149,16 @@ export class ScrapingJobManager {
    *
    * One job that will not publish does not take the rest of the tick with it.
    */
-  async runDue(): Promise<void> {
-    const due = await this.jobs.findScheduled(new Date());
+  public async runDueToScheduledJobs(): Promise<void> {
+    const dueToJobs = await this.scrapingJobRepository.findScheduled(new Date());
 
-    for (const job of due) {
-      const claimed = await this.jobs.claim(job.id);
+    for (const job of dueToJobs) {
+      const claimed = await this.scrapingJobRepository.claim(job.id);
 
-      if (!claimed) {
-        continue;
-      }
-
+      if (!claimed) continue;
+      
       try {
-        await this.publish(claimed);
+        await this.publishScrapingTaskMessages(claimed);
       } catch (cause: unknown) {
         this.logger.error(`Could not publish scheduled job ${job.id}`, cause);
       }
@@ -183,13 +172,12 @@ export class ScrapingJobManager {
    * nothing is worse than an object nobody reads, which is the order the browser's
    * own upload takes.
    */
-  async scrape(message: ContentScrapeRequested, content: LibraryContent): Promise<void> {
+  async scrape(message: ScrapingContentRequested, content: LibraryContent): Promise<void> {
     const scraped = await this.scraping.content(message.crawler, message.sourceUrl);
     const text = scraped.content.join('\n');
     const contentUrl = await this.files.saveText(message.itemId, text);
-    const counts = await this.contents.completeScrape(message.itemId, message.contentId, { contentUrl, words: wordCount(text) });
+    await this.libraryContentManager.completeScrape(message.itemId, message.contentId, { contentUrl, words: wordCount(text) });
     await this.files.discard(content.contentUrl);
-    await this.settleJob(message.jobId, counts);
   }
 
   /**
@@ -206,23 +194,21 @@ export class ScrapingJobManager {
    * the last attempt means saying it for as long as the backoff and the service's own
    * timeout take. The next attempt writes **Scraping** back at the top of `scrape`.
    */
-  async retry(message: ContentScrapeRequested, error: string): Promise<void> {
-    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Queued, error });
+  async retry(message: ScrapingContentRequested, error: string): Promise<void> {
+    await this.scrapingJobRepository.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Queued, error });
     await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Queued);
 
-    // The counters move with the row, and nothing else does: the job is still owed this
-    // chapter, so its own status and counts are not this method's to touch.
-    await this.realtime.publishJob({ id: message.jobId, library: libraryOf(await this.contents.markFailed(message.itemId, [message.contentId])) });
+    // The row moves, and nothing else does: the job is still owed this chapter, so its
+    // own status and counts are not this method's to touch.
+    await this.libraryContentManager.markFailed(message.itemId, [message.contentId]);
   }
 
   /** The attempts are spent, and both records say so — and it may have been the last one owed. */
-  async fail(message: ContentScrapeRequested, error: string): Promise<void> {
-    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error });
+  async fail(message: ScrapingContentRequested, error: string): Promise<void> {
+    await this.scrapingJobRepository.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error });
     await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Failed);
-
-    const counts = await this.contents.markFailed(message.itemId, [message.contentId]);
-
-    await this.settleJob(message.jobId, counts);
+    await this.libraryContentManager.markFailed(message.itemId, [message.contentId]);
+    await this.settleJob(message.jobId);
   }
 
   /**
@@ -244,7 +230,7 @@ export class ScrapingJobManager {
     }
 
     if (status === ScrapingJobStatus.Queued) {
-      return this.detail(await this.publish(job));
+      return this.detail(await this.publishScrapingTaskMessages(job));
     }
 
     return this.detail(await this.halt(job, status));
@@ -255,13 +241,13 @@ export class ScrapingJobManager {
    * the ones in flight are left to write their own completion a chapter later.
    */
   private async halt(job: ScrapingJob, status: ScrapingJobStatus): Promise<ScrapingJob> {
-    const moving = (await this.jobs.tasks(job.id)).filter((task) => HALTABLE_TASK_STATUSES.includes(task.status));
+    const moving = (await this.scrapingJobRepository.tasks(job.id)).filter((task) => HALTABLE_TASK_STATUSES.includes(task.status));
     const contentIds = moving.map((task) => task.contentId);
     // Stopping settles the job; pausing is a state it is expected to leave again.
     const completedAt = status === ScrapingJobStatus.Stopped ? nowIso() : undefined;
 
-    await this.jobs.setTaskStatus(job.id, contentIds, status);
-    await this.jobs.patch(job.id, completedAt ? { status, completedAt } : { status });
+    await this.scrapingJobRepository.setTaskStatus(job.id, contentIds, status);
+    await this.scrapingJobRepository.patch(job.id, completedAt ? { status, completedAt } : { status });
 
     await this.realtime.publishTasks(job.id, moving.map((task) => ({ contentId: task.contentId, status, index: task.index })));
     await this.realtime.publishJob({ id: job.id, status });
@@ -305,25 +291,24 @@ export class ScrapingJobManager {
       throw new BadRequestException(`A job that is \`${job.status}\` cannot be deleted. Cancel it first, then delete it.`);
     }
 
-    await this.jobs.remove(id);
+    await this.scrapingJobRepository.remove(id);
     await this.realtime.clearJob(id);
 
     this.logger.log(`Job ${id} and its ${job.total} task(s) deleted`);
   }
 
-  /**
-   * One message per task, published in bulk. Shared by the immediate path and by a
-   * booking coming due — it is one method because they are one act.
-   *
-   * Each payload is built field by field rather than spread from its task, so a field
-   * the store grows cannot travel through the queue without anyone deciding it should.
-   */
-  private async publish(job: ScrapingJob): Promise<ScrapingJob> {
-    const tasks = (await this.jobs.tasks(job.id)).filter((task) => task.status !== ScrapingJobStatus.Completed);
+  public async publishScrapingTaskMessages(job: ScrapingJob): Promise<ScrapingJob> {
+    const tasks = (await this.scrapingJobRepository.tasks(job.id)).filter((task) => task.status !== ScrapingJobStatus.Completed);
     const queuedAt = nowIso();
 
-    await this.contents.markQueued(job.libraryId, tasks.map((task) => task.contentId));
-    await this.jobs.setTaskStatus(job.id, tasks.map((task) => task.contentId), ScrapingJobStatus.Queued);
+    await this.libraryContentManager.markQueued(job.libraryId, tasks.map((task) => task.contentId));
+    await this.scrapingJobRepository.setTaskStatus(job.id, tasks.map((task) => task.contentId), ScrapingJobStatus.Queued);
+    await this.scrapingJobRepository.patch(job.id, { status: ScrapingJobStatus.Queued, queuedAt });
+
+    await this.realtime.publishTasks(job.id, tasks.map((task) => ({ contentId: task.contentId, status: ScrapingJobStatus.Queued, index: task.index })));
+    // `libraryId` is written here, where the node first appears: it is what the Library
+    // screens match a running job to the item they draw.
+    await this.realtime.publishJob({ id: job.id, libraryId: job.libraryId, status: ScrapingJobStatus.Queued, queuedAt: Date.parse(queuedAt) });
 
     const payloads = tasks.map((task) => ({
       jobId: job.id,
@@ -334,18 +319,7 @@ export class ScrapingJobManager {
       refetch: job.refetch,
       retry: job.retry,
     }));
-
-    // One attempt per message: the retries happen inside the consumer's own run, so a
-    // redelivery would be a second chapter's worth of work nobody asked for.
-    await this.producer.sendMany(QueueTopic.ContentScrapeRequested, payloads, { attempts: 1 });
-    await this.jobs.patch(job.id, { status: ScrapingJobStatus.Queued, queuedAt });
-
-    // The tasks rather than their ids: this is the one moment the whole claimed set is
-    // in hand, and every later transition writes a status onto a node that already
-    // carries its number.
-    await this.realtime.publishTasks(job.id, tasks.map((task) => ({ contentId: task.contentId, status: ScrapingJobStatus.Queued, index: task.index })));
-    await this.realtime.publishJob({ id: job.id, status: ScrapingJobStatus.Queued, queuedAt: Date.parse(queuedAt) });
-
+    await this.producer.sendMany(QueueTopic.ScrapingContentRequested, payloads, { attempts: 1 });
     this.logger.log(`Queued ${payloads.length} chapter(s) of ${job.libraryId} for ${job.crawler}`);
 
     return { ...job, status: ScrapingJobStatus.Queued, queuedAt };
@@ -357,8 +331,8 @@ export class ScrapingJobManager {
    * Recomputed rather than incremented: two consumers finishing at once cannot lose
    * each other's write, and a counter that is derived cannot drift.
    */
-  private async settleJob(jobId: string, library?: LibraryContentCounts): Promise<void> {
-    const counts = await this.jobs.counts(jobId);
+  public async settleJob(jobId: string): Promise<void> {
+    const counts = await this.scrapingJobRepository.counts(jobId);
     const fields: ScrapingJobPatch = { completed: counts.completed, failed: counts.failed };
 
     // Its own tasks, not the item's rows — a job over chapters 1–20 knows nothing
@@ -374,28 +348,19 @@ export class ScrapingJobManager {
       fields.completedAt = nowIso();
     }
 
-    await this.jobs.patch(jobId, fields);
-
-    // The item's aggregate rides on the job node because the Library listing draws it
-    // for the *item*, and this is the moment the five numbers are already in hand.
-    await this.realtime.publishJob({
-      id: jobId,
-      status: fields.status,
-      completed: counts.completed,
-      failed: counts.failed,
-      library: library && libraryOf(library),
-    });
+    await this.scrapingJobRepository.patch(jobId, fields);
+    await this.realtime.publishJob({ id: jobId, status: fields.status, completed: counts.completed, failed: counts.failed });
   }
 
 
   /** The record as it is answered with: its own fields, and the tasks it described. */
   private async detail(job: ScrapingJob): Promise<ScrapingJobDto> {
-    return { ...job, tasks: await this.jobs.tasks(job.id) };
+    return { ...job, tasks: await this.scrapingJobRepository.tasks(job.id) };
   }
 
   /** The job, or the 404 every route that names one owes. */
   private async require(id: string): Promise<ScrapingJob> {
-    const job = await this.jobs.findById(id);
+    const job = await this.scrapingJobRepository.findById(id);
 
     if (!job) {
       throw new NotFoundException(`No scraping job ${id}`);
@@ -455,32 +420,6 @@ function taskDraft(job: ScrapingJob, chapter: NovelChapter): ScrapingTaskDraft {
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-/**
- * The whole node, as a job that has just been recorded is first mirrored.
- *
- * The item's identity goes under `library` and is written once: it is a snapshot of
- * what the item was called when the job was described, and cannot move afterwards.
- * Its counters join it there as chapters land.
- */
-function nodeOf(job: ScrapingJob): ScrapingJobSnapshot {
-  return {
-    id: job.id,
-    status: job.status,
-    range: job.range,
-    refetch: job.refetch,
-    startAt: job.startAt ? Date.parse(job.startAt) : undefined,
-    total: job.total,
-    completed: job.completed,
-    failed: job.failed,
-    library: { id: job.libraryId, type: job.libraryType, title: job.libraryTitle },
-  };
-}
-
-/** The four the Library listing draws for the item. `bytes` is not one of them. */
-function libraryOf(counts: LibraryContentCounts): ScrapingJobSnapshot['library'] {
-  return { total: counts.total, completed: counts.completed, failed: counts.failed, pending: counts.pending };
 }
 
 /** Newest first, which is the order a listing of work reads in. ISO strings compare as instants. */

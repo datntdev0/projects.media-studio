@@ -220,7 +220,7 @@ export class LibraryContentManager {
    * recomputed cannot drift, and a novel of twelve hundred chapters costs the same
    * as one of twelve.
    */
-  private async recount(item: LibraryItem): Promise<LibraryContentCounts> {
+  public async recount(item: LibraryItem): Promise<LibraryContentCounts> {
     const counts = await this.contents.counts(item.id);
 
     await this.items.updateCounters(item.id, {

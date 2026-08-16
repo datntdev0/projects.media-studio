@@ -183,8 +183,3 @@ export class ScrapingJobPageDto {
   @ApiProperty({ example: 20 })
   pageSize!: number;
 }
-
-/** The consumer counts attempts, the caller asks in retries. The one place the two are reconciled. */
-export function attemptsFor(retry: number): number {
-  return retry + 1;
-}
