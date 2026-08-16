@@ -58,13 +58,13 @@ const { data: page, status: listStatus, error: listError, refresh } = useAsyncDa
 const { forLibrary, settled, reconcile } = useScrapingJobs()
 
 /**
- * The fetched page, with a running job's own numbers over each row it has them for.
+ * The fetched page, each row scraping where a job is running over it.
  * `AppLibraryTable` and `AppLibraryGrid` read the merged rows and are unchanged.
  *
- * The job's `library` block rather than the job's own counters: this listing draws
- * what the *item* holds, and a job over chapters 1–20 knows nothing about the rest.
+ * The counters are the fetch's: a job over chapters 1–20 knows nothing about the rest,
+ * and this listing draws what the *item* holds.
  */
-const items = computed(() => (page.value?.items ?? []).map(item => withLiveStatus(item, forLibrary(item.id)?.library ?? null)))
+const items = computed(() => (page.value?.items ?? []).map(item => withLiveStatus(item, !!forLibrary(item.id))))
 
 /**
  * A job that has just settled, refetched once.

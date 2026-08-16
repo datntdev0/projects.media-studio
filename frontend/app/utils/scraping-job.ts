@@ -100,7 +100,7 @@ export function withLiveJob(job: ScrapingJob, live: RunningJob | undefined): Scr
     return job
   }
 
-  return { ...job, status: live.status, completed: live.completed, failed: live.failed }
+  return { ...job, status: live.status, completed: live.completed ?? job.completed, failed: live.failed ?? job.failed }
 }
 
 export const jobSettled = (job: ScrapingJob): boolean => TERMINAL.includes(job.status)

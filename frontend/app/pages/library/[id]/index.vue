@@ -150,14 +150,11 @@ const { forLibrary, settled, reconcile } = useScrapingJobs()
 /** The running job over this item, or null. One subscription, shared with every screen. */
 const job = computed(() => forLibrary(itemId.value))
 
-/** The item's own aggregate, as the job last published it. */
-const live = computed(() => job.value?.library ?? null)
-
 /** The job's tasks, keyed by the content row each one names. */
 const liveRows = computed(() => job.value?.tasks ?? {})
 
-/** The item, wearing a running job's own counters. Null only before the first fetch lands. */
-const shown = computed(() => item.value ? withLiveStatus(item.value, live.value) : null)
+/** The item, reading as scraping while a job runs over it. Null only before the first fetch lands. */
+const shown = computed(() => item.value ? withLiveStatus(item.value, !!job.value) : null)
 
 /**
  * The two panels want the item narrowed to its own shape. Split rather than cast:

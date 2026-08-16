@@ -1,6 +1,5 @@
 import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryChoice, LibraryFilterOption, LibraryFilters, LibraryItem, LibraryItemDetail, LibraryItemPage, LibraryItemStatus, LibraryItemType, LibrarySourceMode, LibraryView, NovelStatus, WritableLibraryItemStatus } from '~/types/library'
-import type { ScrapingItemStatus } from '~/types/scraping-status'
 import type { LibraryItemDto, LibraryItemPageDto } from './api.clients'
 
 /**
@@ -23,36 +22,21 @@ export const asLibraryItem = (item: LibraryItemDto): LibraryItemDetail => item a
 export const asLibraryItemPage = (page: LibraryItemPageDto): LibraryItemPage => page as unknown as LibraryItemPage
 
 /**
- * An item wearing a running job's own numbers instead of the ones the fetch returned.
+ * An item reading as **Scraping** while a job is running over it.
  *
- * `live` is null wherever there is no job to believe — `useScrapingJobs` decides that,
- * and this only applies what it was handed — so a screen can pass whatever it has and
- * get the API's answer back untouched.
+ * Drawn from the fact that there is a job at all, not read from a stored field: the
+ * item's own status is the person's, `draft` or `ready`, and the runner never writes it.
  *
- * **Scraping** is drawn from the fact that there is a job at all, not read from a
- * stored field: the item's own status is the person's, `draft` or `ready`, and the
- * runner never writes it. The counters come off the job's `library` block.
+ * Its counters stay the ones the fetch returned. A job's live counters are its own
+ * tasks — a job over chapters 1–20 knows nothing about the other 1,285 — so the item's
+ * totals move on the refetch a settled job asks for.
  *
  * `statusTag()` and `contentLabel()` then read the merged row and need no idea any of
  * this happened. The cast is `asLibraryItem`'s, for its reason: `metadata` is correlated
  * with `type` by the union, and a spread loses the correlation without changing a byte.
  */
-export function withLiveStatus<T extends LibraryItem>(item: T, live: ScrapingItemStatus | null): T {
-  if (!live) {
-    return item
-  }
-
-  return {
-    ...item,
-    status: 'scraping',
-    metadata: {
-      ...item.metadata,
-      // The API's own numbers until the job has published its first count: a job that
-      // has queued but fetched nothing knows the item's name and none of its totals.
-      discoveredCount: live.total ?? item.metadata.discoveredCount,
-      downloadedCount: live.completed ?? item.metadata.downloadedCount
-    }
-  } as T
+export function withLiveStatus<T extends LibraryItem>(item: T, scraping: boolean): T {
+  return scraping ? { ...item, status: 'scraping' } as T : item
 }
 
 /** What a piece of content is called, per type. */

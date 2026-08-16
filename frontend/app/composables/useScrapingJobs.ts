@@ -71,7 +71,7 @@ export function useScrapingJobs() {
     for (const id of ids) {
       const job = believed(id)
 
-      if (job?.library?.id === libraryId) {
+      if (job?.libraryId === libraryId) {
         return job
       }
     }
