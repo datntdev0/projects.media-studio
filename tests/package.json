@@ -1,0 +1,28 @@
+{
+  "name": "@media-studio/tests",
+  "version": "0.0.0",
+  "description": "Media Studio end-to-end tests — Playwright driving the web app.",
+  "author": "Dat Nguyen",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:web": "playwright test --project web",
+    "test:e2e:api": "playwright test --project api",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.18.0",
+    "globals": "^17.0.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}

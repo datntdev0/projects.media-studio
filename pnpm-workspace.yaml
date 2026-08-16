@@ -1,6 +1,7 @@
 packages:
   - backend
   - frontend
+  - tests
 
 allowBuilds:
   # Bakes $FIREBASE_WEBAPP_CONFIG into the package at install time. We pass the

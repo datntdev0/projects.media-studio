@@ -32,6 +32,9 @@ Thumbs.db
 # Firebase emulator runtime state and exports
 .firebase
 
+# Jest coverage, written to the repository root by backend/package.json
+coverage
+
 # Temp
 .temp
 .tmp

@@ -5,12 +5,7 @@ on:
 
 jobs:
   ci:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [22]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -22,7 +17,7 @@ jobs:
       - name: Install node
         uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
@@ -35,7 +30,96 @@ jobs:
         run: pnpm run typecheck
 
       - name: Test
-        run: pnpm run test
+        run: |
+          set -o pipefail
+          pnpm run test:cov 2>&1 | tee test.log
+
+      # Runs after a failing suite too — a red run is when the numbers and the
+      # failures are worth reading without opening the log.
+      - name: Report coverage
+        if: ${{ !cancelled() && hashFiles('test.log') != '' }}
+        run: |
+          {
+            echo '## Unit tests and coverage'
+            echo '```'
+            cat test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: pnpm run build
+
+  e2e:
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @media-studio/tests exec playwright install --with-deps chromium
+
+      # The emulators and Redis only. The scraping service is in the same file but
+      # builds a stealth browser image, and nothing under test reaches it.
+      - name: Start infrastructure
+        run: docker compose -f _deploy/dockercompose.local.infrastructure.yml up -d --wait --wait-timeout 300 firebase redis
+
+      # The examples are the local emulator setup, which is what the compose file
+      # above brings up. Both are gitignored, so CI writes its own.
+      - name: Configure the apps
+        run: |
+          cp backend/.env.example backend/.env
+          cp frontend/.env.example frontend/.env
+
+      - name: Start the apps
+        run: pnpm dev > dev.log 2>&1 &
+
+      - name: Wait for the apps
+        run: |
+          for _ in $(seq 60); do
+            if curl -sf http://localhost:3001/health > /dev/null && curl -sf http://localhost:3000 > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'The apps did not come up:'
+          cat dev.log
+          exit 1
+
+      - name: End-to-end tests
+        run: |
+          set -o pipefail
+          pnpm run test:e2e 2>&1 | tee e2e.log
+
+      - name: Report the end-to-end run
+        if: ${{ !cancelled() && hashFiles('e2e.log') != '' }}
+        run: |
+          {
+            echo '## End-to-end tests'
+            echo '```'
+            cat e2e.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The per-test lines are in the summary above; this is the trace and the
+      # failure screenshots behind them.
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: tests/playwright-report
+          retention-days: 7
