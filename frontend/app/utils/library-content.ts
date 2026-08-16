@@ -21,7 +21,7 @@ const CONTENT_STATUS_TAGS: Record<LibraryContentStatus, { label: string, color: 
   pending: { label: 'Pending', color: 'neutral', variant: 'subtle' },
   scraping: { label: 'Scraping', color: 'primary', variant: 'subtle' },
   completed: { label: 'Completed', color: 'primary', variant: 'subtle' },
-  failed: { label: 'Failed', color: 'neutral', variant: 'outline' }
+  failed: { label: 'Failed', color: 'error', variant: 'subtle' }
 }
 
 /** What one piece of content is called, per item type. */

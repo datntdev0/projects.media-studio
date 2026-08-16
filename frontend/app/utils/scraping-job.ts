@@ -49,9 +49,9 @@ export function jobPrimaryControl(job: ScrapingJob): { label: string, icon: stri
 const MINUTE = 60_000
 
 /**
- * The status tag. The same mono scheme the library's uses, so the seven are told
- * apart by weight rather than by colour — `--color-danger` is for destructive
- * actions and nothing else.
+ * The status tag. The same mono scheme the library's uses, so most are told
+ * apart by weight rather than by colour — `failed` is the exception, drawn in
+ * `--color-danger` since it is the one state that means something went wrong.
  */
 const STATUS_TAGS: Record<ScrapingJobStatus, { label: string, color: BadgeProps['color'], variant: BadgeProps['variant'] }> = {
   scheduled: { label: 'Scheduled', color: 'neutral', variant: 'subtle' },
@@ -60,7 +60,7 @@ const STATUS_TAGS: Record<ScrapingJobStatus, { label: string, color: BadgeProps[
   paused: { label: 'Paused', color: 'neutral', variant: 'outline' },
   stopped: { label: 'Stopped', color: 'neutral', variant: 'outline' },
   completed: { label: 'Completed', color: 'primary', variant: 'subtle' },
-  failed: { label: 'Failed', color: 'neutral', variant: 'outline' }
+  failed: { label: 'Failed', color: 'error', variant: 'subtle' }
 }
 
 /** The three a job settles in and never leaves — what the History tab lists. */

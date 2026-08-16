@@ -60,15 +60,15 @@ const TYPE_LABELS: Record<LibraryItemType, string> = {
 }
 
 /**
- * The status tag. A mono scheme, so the four are told apart by weight rather than
- * by colour — `--color-danger` is for destructive actions and nothing else, which
- * is why a failed item is an outline and not a red tag.
+ * The status tag. A mono scheme, so most are told apart by weight rather than by
+ * colour — `failed` is the exception, drawn in `--color-danger` since it is the
+ * one state that means something went wrong.
  */
 const STATUS_TAGS: Record<LibraryItemStatus, { label: string, color: BadgeProps['color'], variant: BadgeProps['variant'] }> = {
   draft: { label: 'Draft', color: 'neutral', variant: 'subtle' },
   scraping: { label: 'Scraping', color: 'primary', variant: 'solid' },
   ready: { label: 'Ready', color: 'primary', variant: 'subtle' },
-  failed: { label: 'Failed', color: 'neutral', variant: 'outline' }
+  failed: { label: 'Failed', color: 'error', variant: 'subtle' }
 }
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
