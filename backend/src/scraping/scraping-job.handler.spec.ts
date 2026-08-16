@@ -39,7 +39,7 @@ function record(status: ScrapingJobStatus): ScrapingJob {
 }
 
 function fixture(job: ScrapingJob | null = record(ScrapingJobStatus.Queued)) {
-  const manager = { publish: jest.fn().mockResolvedValue(undefined) };
+  const manager = { publishScrapingTaskMessages: jest.fn().mockResolvedValue(undefined) };
   const jobs = { findById: jest.fn().mockResolvedValue(job) };
   const consumer = new ScrapingJobPublishConsumer(manager as unknown as ScrapingJobManager, jobs as unknown as ScrapingJobRepository);
 
@@ -66,14 +66,14 @@ describe('ScrapingJobPublishConsumer', () => {
     await consumer.process(message());
 
     expect(jobs.findById).toHaveBeenCalledWith('job-1');
-    expect(manager.publish).toHaveBeenCalledWith(record(ScrapingJobStatus.Queued));
+    expect(manager.publishScrapingTaskMessages).toHaveBeenCalledWith(record(ScrapingJobStatus.Queued));
   });
 
   it('is quiet about a job deleted between the send and the delivery', async () => {
     const { consumer, manager } = fixture(null);
 
     await expect(consumer.process(message())).resolves.toBeUndefined();
-    expect(manager.publish).not.toHaveBeenCalled();
+    expect(manager.publishScrapingTaskMessages).not.toHaveBeenCalled();
   });
 
   it.each([ScrapingJobStatus.Paused, ScrapingJobStatus.Stopped, ScrapingJobStatus.Completed])('publishes nothing of a %s job', async (status) => {
@@ -81,6 +81,6 @@ describe('ScrapingJobPublishConsumer', () => {
 
     await consumer.process(message());
 
-    expect(manager.publish).not.toHaveBeenCalled();
+    expect(manager.publishScrapingTaskMessages).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,7 @@ import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingJobScheduler } from './scraping-job.scheduler';
 
 function fixture() {
-  const jobs = { runDue: jest.fn().mockResolvedValue(undefined) };
+  const jobs = { runDueToScheduledJobs: jest.fn().mockResolvedValue(undefined), sweep: jest.fn().mockResolvedValue(undefined) };
   const scheduler = new ScrapingJobScheduler(jobs as unknown as ScrapingJobManager);
 
   return { scheduler, jobs };
@@ -19,21 +19,22 @@ describe('ScrapingJobScheduler', () => {
 
     await scheduler.tick();
 
-    expect(jobs.runDue).toHaveBeenCalled();
+    expect(jobs.runDueToScheduledJobs).toHaveBeenCalled();
+    expect(jobs.sweep).toHaveBeenCalled();
   });
 
   it('swallows what a tick throws, so the next one still runs', async () => {
     const { scheduler, jobs } = fixture();
 
-    jobs.runDue.mockRejectedValue(new Error('Firestore is unreachable'));
+    jobs.runDueToScheduledJobs.mockRejectedValue(new Error('Firestore is unreachable'));
 
     // Nothing awaits a tick: a rejection left alone is an unhandled one, and in Node
     // that is the whole process.
     await expect(scheduler.tick()).resolves.toBeUndefined();
 
-    jobs.runDue.mockResolvedValue(undefined);
+    jobs.runDueToScheduledJobs.mockResolvedValue(undefined);
     await scheduler.tick();
 
-    expect(jobs.runDue).toHaveBeenCalledTimes(2);
+    expect(jobs.runDueToScheduledJobs).toHaveBeenCalledTimes(2);
   });
 });

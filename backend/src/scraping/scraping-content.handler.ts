@@ -3,8 +3,7 @@ import { SCRAPING_CONTENT_QUEUE, ScrapingContentRequested, QueueMessage } from '
 import { QueueConsumer } from '../core/queues/queue.consumer';
 import { ScrapingJobManager } from './scraping-job.manager';
 import { ScrapingJobRepository } from './scraping-job.repository';
-import { ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
-import { LibraryContent } from '../library/entities/library-content.entity';
+import { ScrapingJobStatus } from './entities/scraping-job.entity';
 import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { nowIso } from '../_shared/helper';
 import { LibraryContentManager } from '../library/library-content.manager';
@@ -38,30 +37,45 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
   /**
    * Every attempt this chapter is allowed, in one run.
    *
-   * Between two of them the task goes back to `queued` — `scrape` gates on it, and a
-   * task left `running` by the attempt that just died is one the next attempt skips
-   * silently. The last failure marks the task failed and is rethrown, which is how a
-   * consumer says the work did not happen and what leaves the message in the failed
-   * set. The queue is sent one attempt per message, so nothing is redelivered.
+   * The last failure marks the task failed and is rethrown, which is how a consumer says
+   * the work did not happen and what leaves the message in the failed set. The queue is
+   * sent one attempt per message, so nothing is redelivered.
    */
   protected async handle({ payload }: QueueMessage<ScrapingContentRequested>): Promise<void> {
     const content = await this.libraryContentManager.find(payload.itemId, payload.contentId);
     const task = await this.scrapingJobRepository.task(payload.jobId, payload.contentId);
 
-    if (!this.validate(payload, content, task)) return;
+    if (!task) {
+      this.logger.warn(`Task ${payload.contentId} of job ${payload.jobId} is gone — ${payload.sourceUrl} will not be scraped`);
+      return;
+    }
+
+    if (task.status !== ScrapingJobStatus.Queued) {
+      this.logger.debug(`Task ${payload.contentId} of job ${payload.jobId} is ${task.status} — skipped`);
+      return;
+    }
+
+    // Failed rather than skipped: a task left queued is one the job stays owed forever.
+    if (!content) {
+      this.logger.warn(`Content ${payload.contentId} of item ${payload.itemId} is gone — ${payload.sourceUrl} will not be scraped`);
+      await this.markTaskFailed(payload, 'The library row is gone');
+      await this.scrapingJobManager.settleJob(payload.jobId);
+      return;
+    }
+
     await this.markTaskRunning(payload);
 
-    for (let attempt = 1; attempt <= payload.retry; attempt += 1) {
+    // `retry` counts the retries, so the attempt that earns them is not one of them.
+    for (let attempt = 0; attempt <= payload.retry; attempt += 1) {
       try {
-        await this.scrapingJobManager.scrape(payload, content!);
+        await this.scrapingJobManager.scrape(payload, content);
         await this.markTaskCompleted(payload);
         await this.scrapingJobManager.settleJob(payload.jobId);
         this.logger.debug(`Scraped ${payload.sourceUrl} of ${payload.itemId}`);
         return;
-      } 
-      catch (cause: unknown) {
+      } catch (cause: unknown) {
         const error = cause instanceof Error ? cause.message : String(cause);
-        this.logger.warn(`${payload.sourceUrl} failed on attempt ${attempt} of ${payload.retry} — ${error}`);
+        this.logger.warn(`${payload.sourceUrl} failed on attempt ${attempt + 1} of ${payload.retry + 1} — ${error}`);
 
         if (attempt === payload.retry) {
           await this.markTaskFailed(payload, error);
@@ -72,25 +86,6 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
         await wait(BACKOFF_MS * 2 ** attempt);
       }
     }
-
-  }
-
-  private validate(payload: ScrapingContentRequested, content: LibraryContent | null, task: ScrapingTask | null): boolean {
-    if (!content) {
-      this.logger.warn(`Content ${payload.contentId} of item ${payload.itemId} is gone — ${payload.sourceUrl} will not be scraped`);
-      return false;
-    }
-
-    if (!task) {
-      this.logger.warn(`Task ${payload.contentId} of job ${payload.jobId} is gone — ${payload.sourceUrl} will not be scraped`);
-      return false;
-    }
-
-    if (task.status !== ScrapingJobStatus.Queued) {
-      this.logger.debug(`Task ${payload.contentId} of job ${payload.jobId} is ${task.status} — skipped`);
-      return false;
-    }
-    return true;
   }
 
   private async markTaskRunning(payload: ScrapingContentRequested): Promise<void> {

@@ -333,22 +333,13 @@ describe('ScrapingJobManager.create', () => {
     expect(producer.send).toHaveBeenCalledWith(QueueTopic.ScrapingJobRequested, { jobId: JOB_ID }, { attempts: 1 });
   });
 
-  it('mirrors the job, with the item it names under `library`', async () => {
+  it('mirrors nothing yet — the node appears when the fan-out claims the tasks', async () => {
     const { manager, realtime } = fixture();
 
     await manager.create(job());
 
-    // Identity and counters share the block because they describe one thing; the
-    // counters join it as chapters land, which is why `publishJob` merges by field.
-    expect(realtime.publishJob).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      id: JOB_ID,
-      library: { id: 'novel-1', type: LibraryItemType.Novel, title: 'The Silent Cartographer' },
-    }));
-    expect(realtime.publishTasks).toHaveBeenCalledWith(JOB_ID, [
-      { contentId: 'chapter-1', status: ScrapingJobStatus.Scheduled, index: 1 },
-      { contentId: 'chapter-2', status: ScrapingJobStatus.Scheduled, index: 2 },
-      { contentId: 'chapter-3', status: ScrapingJobStatus.Scheduled, index: 3 },
-    ]);
+    expect(realtime.publishJob).not.toHaveBeenCalled();
+    expect(realtime.publishTasks).not.toHaveBeenCalled();
   });
 
   it('writes the record before it publishes, so a restart between the two leaves a job', async () => {
@@ -747,174 +738,99 @@ describe('ScrapingJobManager.sweep', () => {
 });
 
 describe('ScrapingJobManager.scrape', () => {
-  /** A job whose tasks are already written, which is what a message arrives against. */
-  async function started(options: Parameters<typeof fixture>[0] = {}) {
-    const context = fixture(options);
-
-    await context.manager.create(job());
-    context.jobs.patch.mockClear();
-
-    return { ...context, getContent: (contentId: string) => context.rows.find((row) => row.id === contentId)! };
-  }
-
   it('stores the joined lines and points the row at them', async () => {
-    const { manager, contents, files, getContent } = await started({ scraped: { title: '第五百二十七章', content: ['一二三', '四五六'] } });
+    const { manager, contents, files, rows } = fixture({ scraped: { title: '第五百二十七章', content: ['一二三', '四五六'] } });
 
-    await manager.scrape(message(), getContent('chapter-1'));
+    await manager.scrape(message(), rows[0]);
 
     // One newline between lines — what the reader splits on and what the editor writes.
     expect(files.saveText).toHaveBeenCalledWith('novel-1', '一二三\n四五六');
     expect(contents.completeScrape).toHaveBeenCalledWith('novel-1', 'chapter-1', { contentUrl: NEW_TEXT_URL, words: 6 });
   });
 
-  it('moves its task through running and into completed', async () => {
-    const { manager, jobs, getContent } = await started();
-
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(jobs.startTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', expect.any(String));
-    expect(jobs.patchTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Completed }));
-  });
-
-  it('starts the task before it reads the source, so the job reads as running while it fetches', async () => {
-    const { manager, jobs, scraping, getContent } = await started();
-
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    // `startTask` moves the job as well as the task — a job left at `queued` for the
-    // whole run reads as waiting for a worker that already has it.
-    expect(jobs.startTask.mock.invocationCallOrder[0]).toBeLessThan(scraping.content.mock.invocationCallOrder[0]);
-  });
-
   it('writes the file, then the row, then discards what the row no longer points at', async () => {
     const rows = [chapter({ index: 1, status: LibraryContentStatus.Scraping, contentUrl: OLD_TEXT_URL })];
-    const { manager, order, getContent } = await started({ rows });
+    const { manager, order } = fixture({ rows });
 
-    await manager.scrape(message({ refetch: true }), getContent('chapter-1'));
+    await manager.scrape(message({ refetch: true }), rows[0]);
 
     // A row pointing at nothing is worse than an object nobody reads.
     expect(order).toEqual(['saveText', `completeScrape:${NEW_TEXT_URL}`, `discard:${OLD_TEXT_URL}`]);
   });
 
-  it('keeps the job\'s counters in step with its tasks', async () => {
-    const { manager, jobs, getContent } = await started();
-
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, { completed: 1, failed: 0 });
-  });
-
-  it('settles the job on its own tasks once none is owed', async () => {
-    const { manager, jobs, getContent } = await started();
-
-    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0, halted: 0 });
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Completed, completed: 3 }));
-  });
-
-  it('settles the job failed where one of its tasks failed', async () => {
-    const { manager, jobs, getContent } = await started();
-
-    jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, halted: 0 });
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Failed }));
-  });
-
-  it('never writes the item\'s own status, however the job ends', async () => {
-    const { manager, contents, getContent } = await started();
+  it('never writes the item\'s own status, however the chapter lands', async () => {
+    const { manager, contents, rows } = fixture();
 
     // `Draft` and `Ready` are the person's, and a background job must not promote one
     // behind them. The `library` double has no `mark*` method to call, so a runner that
     // reached for the item's status would throw here rather than pass quietly.
     contents.completeScrape.mockResolvedValue(DRAINED);
-    await expect(manager.scrape(message(), getContent('chapter-1'))).resolves.toBeUndefined();
+    await expect(manager.scrape(message(), rows[0])).resolves.toBeUndefined();
+  });
 
-    contents.completeScrape.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, bytes: 0 });
-    await expect(manager.scrape(message(), getContent('chapter-1'))).resolves.toBeUndefined();
+  it('stores nothing and leaves the row where it is when the source cannot be read', async () => {
+    const { manager, scraping, files, contents, rows } = fixture();
+
+    scraping.content.mockRejectedValue(new Error('502 from the service'));
+
+    // Throwing is how the consumer says *not done*, so it takes its next attempt.
+    await expect(manager.scrape(message(), rows[0])).rejects.toThrow(/502/);
+    expect(files.saveText).not.toHaveBeenCalled();
+    expect(contents.completeScrape).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScrapingJobManager.settleJob', () => {
+  it('keeps the job\'s counters in step with its tasks', async () => {
+    const { manager, jobs } = fixture();
+
+    await manager.settleJob(JOB_ID);
+
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, { completed: 1, failed: 0 });
+  });
+
+  it('settles the job on its own tasks once none is owed', async () => {
+    const { manager, jobs } = fixture();
+
+    jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0, halted: 0 });
+    await manager.settleJob(JOB_ID);
+
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Completed, completed: 3 }));
+  });
+
+  it('settles the job failed where one of its tasks failed', async () => {
+    const { manager, jobs } = fixture();
+
+    jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, halted: 0 });
+    await manager.settleJob(JOB_ID);
+
+    expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Failed }));
   });
 
   it('does not settle a halted job when its last chapter in flight lands', async () => {
-    const { manager, jobs, getContent } = await started();
+    const { manager, jobs } = fixture();
 
     // What a pause leaves behind: its queued tasks moved to `paused`, and one chapter
     // still fetching. Those tasks are no longer *owed*, so a test on `pending` alone
     // reads the job as drained and stamps `completed` over the status just asked for.
     // A stopped job loses its own status the same way — `halted` covers both.
     jobs.counts.mockResolvedValue({ total: 3, completed: 2, failed: 0, pending: 0, halted: 1 });
-    await manager.scrape(message(), getContent('chapter-1'));
+    await manager.settleJob(JOB_ID);
 
     expect(jobs.patch).toHaveBeenCalledWith(JOB_ID, { completed: 2, failed: 0 });
     expect(jobs.patch).not.toHaveBeenCalledWith(JOB_ID, expect.objectContaining({ status: ScrapingJobStatus.Completed }));
   });
 
   it('leaves the settled job in the live tree, for the sweep to take a tick later', async () => {
-    const { manager, contents, jobs, realtime, getContent } = await started();
+    const { manager, jobs, realtime } = fixture();
 
-    contents.completeScrape.mockResolvedValue(DRAINED);
     jobs.counts.mockResolvedValue({ total: 3, completed: 3, failed: 0, pending: 0, halted: 0 });
-    await manager.scrape(message(), getContent('chapter-1'));
+    await manager.settleJob(JOB_ID);
 
     // Removing the node in the same act would race the refetch the screen makes when
     // it sees the transition — which is the whole reason the sweep is a tick behind.
     expect(realtime.clearJob).not.toHaveBeenCalled();
-    expect(realtime.publishJob).toHaveBeenCalledWith(expect.objectContaining({ status: ScrapingJobStatus.Completed }));
-  });
-
-  it('publishes each task moving, and the item\'s aggregate with the completion', async () => {
-    const { manager, realtime, getContent } = await started();
-
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(realtime.publishTask).toHaveBeenNthCalledWith(1, JOB_ID, 'chapter-1', ScrapingJobStatus.Running);
-    expect(realtime.publishTask).toHaveBeenNthCalledWith(2, JOB_ID, 'chapter-1', ScrapingJobStatus.Completed);
-    // The counters the Library listing draws for the item ride on the job's node — and
-    // carry no status, because the item's own is not the runner's to state.
-    expect(realtime.publishJob).toHaveBeenLastCalledWith(expect.objectContaining({ library: { total: 3, completed: 1, failed: 0, pending: 2 } }));
-  });
-
-  it('skips a task the record no longer wants, whatever the queue still holds', async () => {
-    const { manager, jobs, tasks, scraping, getContent } = await started();
-
-    // What a pause leaves behind: the messages are already in Redis and cannot be
-    // recalled, so the task is the authority and the consumer costs two small reads.
-    tasks.forEach((task) => { task.status = ScrapingJobStatus.Paused; });
-
-    await expect(manager.scrape(message(), getContent('chapter-1'))).resolves.toBeUndefined();
-    expect(jobs.startTask).not.toHaveBeenCalled();
-    expect(scraping.content).not.toHaveBeenCalled();
-  });
-
-  it('is quiet about a job deleted between the send and the delivery', async () => {
-    const { manager, scraping, rows } = await started();
-
-    await expect(manager.scrape(message({ contentId: 'gone' }), rows[0])).resolves.toBeUndefined();
-    expect(scraping.content).not.toHaveBeenCalled();
-  });
-
-  it('fails the task where the library row is gone, so the job can still drain', async () => {
-    const rows = [chapter({ index: 1 }), chapter({ index: 2 })];
-    const { manager, jobs, rows: stored, scraping, getContent } = await started({ rows });
-
-    // The row goes after the job claimed it — an item deleted mid-run.
-    stored.length = 0;
-    await manager.scrape(message(), getContent('chapter-1'));
-
-    expect(scraping.content).not.toHaveBeenCalled();
-    expect(jobs.patchTask).toHaveBeenLastCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Failed, error: 'The library row is gone' }));
-    expect(jobs.patch).toHaveBeenCalled();
-  });
-
-  it('stores nothing and leaves the row where it is when the source cannot be read', async () => {
-    const { manager, scraping, files, contents, getContent } = await started();
-
-    scraping.content.mockRejectedValue(new Error('502 from the service'));
-
-    // Throwing is how the consumer says *not done*, so BullMQ retries it.
-    await expect(manager.scrape(message(), getContent('chapter-1'))).rejects.toThrow(/502/);
-    expect(files.saveText).not.toHaveBeenCalled();
-    expect(contents.completeScrape).not.toHaveBeenCalled();
+    expect(realtime.publishJob).toHaveBeenCalledWith(expect.objectContaining({ id: JOB_ID, status: ScrapingJobStatus.Completed }));
   });
 });
 
@@ -928,35 +844,14 @@ describe('ScrapingJobManager.retry', () => {
     expect(realtime.publishTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', ScrapingJobStatus.Queued);
   });
 
-  it('leaves a task the next attempt will act on rather than skip', async () => {
-    const { manager, jobs, tasks, scraping, rows } = fixture();
-
-    await manager.create(job());
-    // Where the attempt that just died left it: `scrape` moved it to `running` before
-    // it read the source, and a task still `running` is one the retry skips silently.
-    tasks.forEach((task) => { task.status = ScrapingJobStatus.Running; });
-    jobs.patchTask.mockImplementation((jobId: string, contentId: string, fields: { status: ScrapingJobStatus }) => {
-      tasks.filter((task) => task.contentId === contentId).forEach((task) => { task.status = fields.status; });
-
-      return Promise.resolve();
-    });
-
-    await manager.retry(message(), '502 from the service');
-    await manager.scrape(message(), rows[0]);
-
-    expect(scraping.content).toHaveBeenCalledWith(CRAWLER, CHAPTER_URL);
-  });
-
   it('marks the row failed now, rather than leaving it scraping until the attempts are spent', async () => {
-    const { manager, contents, realtime } = fixture();
+    const { manager, contents } = fixture();
 
-    contents.markFailed.mockResolvedValue({ total: 3, completed: 1, failed: 1, pending: 1, bytes: 0 });
     await manager.retry(message(), '502 from the service');
 
     // A chapter whose fetch just failed is not being scraped, and the next attempt is a
     // backoff and a service timeout away.
-    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', 'chapter-1');
-    expect(realtime.publishJob).toHaveBeenCalledWith({ id: JOB_ID, library: { total: 3, completed: 1, failed: 1, pending: 1 } });
+    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', ['chapter-1']);
   });
 
   it('leaves the job itself where it stands, since the chapter is still owed', async () => {
@@ -968,7 +863,7 @@ describe('ScrapingJobManager.retry', () => {
     // are its tasks', which have not moved.
     expect(jobs.patch).not.toHaveBeenCalled();
     expect(jobs.counts).not.toHaveBeenCalled();
-    expect(realtime.publishJob).not.toHaveBeenCalledWith(expect.objectContaining({ status: ScrapingJobStatus.Failed }));
+    expect(realtime.publishJob).not.toHaveBeenCalled();
   });
 });
 
@@ -979,19 +874,17 @@ describe('ScrapingJobManager.fail', () => {
     await manager.fail(message(), '502 from the service');
 
     expect(jobs.patchTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', expect.objectContaining({ status: ScrapingJobStatus.Failed, error: '502 from the service' }));
-    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', 'chapter-1');
+    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', ['chapter-1']);
   });
 
-  it('marks the row failed and republishes the item\'s aggregate, but not its status', async () => {
-    const { manager, contents, realtime } = fixture();
+  it('publishes the task and settles the job, but never the item\'s own status', async () => {
+    const { manager, realtime } = fixture();
 
-    contents.markFailed.mockResolvedValue({ total: 3, completed: 2, failed: 1, pending: 0, bytes: 0 });
     await manager.fail(message(), 'gave up');
 
     // The item's own status is left exactly where the person put it — the `library`
     // double has no method that could move it.
-    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', 'chapter-1');
     expect(realtime.publishTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', ScrapingJobStatus.Failed);
-    expect(realtime.publishJob).toHaveBeenLastCalledWith(expect.objectContaining({ library: { total: 3, completed: 2, failed: 1, pending: 0 } }));
+    expect(realtime.publishJob).toHaveBeenLastCalledWith(expect.objectContaining({ id: JOB_ID, completed: 1, failed: 0 }));
   });
 });
