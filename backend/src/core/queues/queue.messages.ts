@@ -7,24 +7,30 @@
  * reads, which is one layer below this.
  */
 export enum QueueTopic {
-  ContentScrapeRequested = 'content.scrape.requested',
+  ScrapingJobRequested = 'scraping.job.requested',
+  ScrapingContentRequested = 'scraping.content.requested',
+}
+
+/**
+ * A job whose tasks are to be handed to the queue. The fan-out itself — a thousand
+ * Firestore writes and a thousand messages — moved off the request that asked for it.
+ */
+export interface ScrapingJobRequested {
+  jobId: string;
 }
 
 /**
  * One piece of content to fetch and store. Ids and primitives only — the message
  * outlives the process that wrote it, and the row it names is free to move under it.
  */
-export interface ContentScrapeRequested {
+export interface ScrapingContentRequested {
   /** Which job asked. The task it names is what decides whether this is still wanted. */
   jobId: string;
   itemId: string;
   contentId: string;
   crawler: string;
-  /** The chapter's own URL, as discovery stored it. */
   sourceUrl: string;
-  /** Whether stored bytes are to be overwritten, decided when the job was described. */
   refetch: boolean;
-  /** How many further tries the consumer takes within this delivery, from the job. */
   retry: number;
 }
 
@@ -37,7 +43,8 @@ export interface ContentScrapeRequested {
  * process that wrote it — to a shape free to change under it.
  */
 export interface QueuePayloads {
-  [QueueTopic.ContentScrapeRequested]: ContentScrapeRequested;
+  [QueueTopic.ScrapingJobRequested]: ScrapingJobRequested;
+  [QueueTopic.ScrapingContentRequested]: ScrapingContentRequested;
 }
 
 /** What a consumer is handed: the payload, and enough about the send to trace it. */
@@ -54,7 +61,8 @@ export interface QueueMessage<TPayload> {
  * BullMQ hands a job to exactly one worker, so two parts that must both see a
  * topic need two queues, and the producer sends the same message to each.
  */
-export const CONTENT_SCRAPE_QUEUE = 'content.scrape.requested.scraper';
+export const SCRAPING_JOB_QUEUE = 'scraping.job.requested';
+export const SCRAPING_CONTENT_QUEUE = 'scraping.content.scrape.requested';
 
 /**
  * Which consumers receive what. The one place fan-out is configured: a queue name
@@ -65,7 +73,8 @@ export const CONTENT_SCRAPE_QUEUE = 'content.scrape.requested.scraper';
  * serve several.
  */
 export const QUEUE_CONSUMERS: Record<QueueTopic, readonly string[]> = {
-  [QueueTopic.ContentScrapeRequested]: [CONTENT_SCRAPE_QUEUE],
+  [QueueTopic.ScrapingJobRequested]: [SCRAPING_JOB_QUEUE],
+  [QueueTopic.ScrapingContentRequested]: [SCRAPING_CONTENT_QUEUE],
 };
 
 /** Every queue that has to exist, for the module that registers them. Deduplicated. */

@@ -1,11 +1,11 @@
 import { getQueueToken } from '@nestjs/bullmq';
 import { ModuleRef } from '@nestjs/core';
-import { allConsumerQueues, CONTENT_SCRAPE_QUEUE, ContentScrapeRequested, QUEUE_CONSUMERS, QueueMessage, QueueTopic } from './queue.messages';
+import { allConsumerQueues, SCRAPING_CONTENT_QUEUE, ScrapingContentRequested, QUEUE_CONSUMERS, QueueMessage, QueueTopic } from './queue.messages';
 import { QueueProducer, QueueSendOptions } from './queue.producer';
 
-const TOPIC = QueueTopic.ContentScrapeRequested;
+const TOPIC = QueueTopic.ScrapingContentRequested;
 
-const PAYLOAD: ContentScrapeRequested = { jobId: 'job-1', itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false, retry: 0 };
+const PAYLOAD: ScrapingContentRequested = { jobId: 'job-1', itemId: 'item-1', contentId: 'chapter-1', crawler: 'truyenfull', sourceUrl: 'https://example.test/1', refetch: false, retry: 0 };
 
 /**
  * A container holding one stub queue per registered name, resolved the way the
@@ -34,7 +34,7 @@ function fixture() {
 }
 
 /** What the queue was handed, or undefined if it was not used. `add(jobName, message)`. */
-function sentTo(queue: { add: jest.Mock }): QueueMessage<ContentScrapeRequested> | undefined {
+function sentTo(queue: { add: jest.Mock }): QueueMessage<ScrapingContentRequested> | undefined {
   return addCalls(queue)[0]?.[1];
 }
 
@@ -43,13 +43,13 @@ function jobNameOf(queue: { add: jest.Mock }): string | undefined {
   return addCalls(queue)[0]?.[0];
 }
 
-function addCalls(queue: { add: jest.Mock }): [string, QueueMessage<ContentScrapeRequested>, QueueSendOptions | undefined][] {
-  return queue.add.mock.calls as [string, QueueMessage<ContentScrapeRequested>, QueueSendOptions | undefined][];
+function addCalls(queue: { add: jest.Mock }): [string, QueueMessage<ScrapingContentRequested>, QueueSendOptions | undefined][] {
+  return queue.add.mock.calls as [string, QueueMessage<ScrapingContentRequested>, QueueSendOptions | undefined][];
 }
 
 /** The jobs one `addBulk` was handed, or an empty list if it was never called. */
-function bulkSentTo(queue: { addBulk: jest.Mock }): { name: string; data: QueueMessage<ContentScrapeRequested>; opts?: QueueSendOptions }[] {
-  return (queue.addBulk.mock.calls as [{ name: string; data: QueueMessage<ContentScrapeRequested>; opts?: QueueSendOptions }[]][])[0]?.[0] ?? [];
+function bulkSentTo(queue: { addBulk: jest.Mock }): { name: string; data: QueueMessage<ScrapingContentRequested>; opts?: QueueSendOptions }[] {
+  return (queue.addBulk.mock.calls as [{ name: string; data: QueueMessage<ScrapingContentRequested>; opts?: QueueSendOptions }[]][])[0]?.[0] ?? [];
 }
 
 describe('QueueProducer', () => {
@@ -78,7 +78,7 @@ describe('QueueProducer', () => {
     const { queue, producer } = fixture();
 
     await producer.send(TOPIC, PAYLOAD);
-    const message = sentTo(queue(CONTENT_SCRAPE_QUEUE));
+    const message = sentTo(queue(SCRAPING_CONTENT_QUEUE));
 
     expect(message?.topic).toBe(TOPIC);
     // An instant rather than a fixed value: what matters is that it parses.
@@ -92,7 +92,7 @@ describe('QueueProducer', () => {
 
     // The name alone: what follows it is the message and the per-send options, and
     // neither is what this is about.
-    expect(jobNameOf(queue(CONTENT_SCRAPE_QUEUE))).toBe(TOPIC);
+    expect(jobNameOf(queue(SCRAPING_CONTENT_QUEUE))).toBe(TOPIC);
   });
 
   it('passes the caller\'s attempts through to the queue', async () => {
@@ -100,19 +100,19 @@ describe('QueueProducer', () => {
 
     await producer.send(TOPIC, PAYLOAD, { attempts: 2 });
 
-    expect(addCalls(queue(CONTENT_SCRAPE_QUEUE))[0]?.[2]).toEqual({ attempts: 2 });
+    expect(addCalls(queue(SCRAPING_CONTENT_QUEUE))[0]?.[2]).toEqual({ attempts: 2 });
   });
 
   it('fails the send when a queue will not take the message', async () => {
     const { queue, producer } = fixture();
 
-    queue(CONTENT_SCRAPE_QUEUE).add.mockRejectedValue(new Error('redis is down'));
+    queue(SCRAPING_CONTENT_QUEUE).add.mockRejectedValue(new Error('redis is down'));
 
     await expect(producer.send(TOPIC, PAYLOAD)).rejects.toThrow(/redis is down/);
   });
 
   describe('sendMany', () => {
-    const PAYLOADS: ContentScrapeRequested[] = [PAYLOAD, { ...PAYLOAD, contentId: 'chapter-2', sourceUrl: 'https://example.test/2' }];
+    const PAYLOADS: ScrapingContentRequested[] = [PAYLOAD, { ...PAYLOAD, contentId: 'chapter-2', sourceUrl: 'https://example.test/2' }];
 
     it('fans every payload over every queue subscribed to the topic', async () => {
       const { queue, producer } = fixture();
@@ -130,7 +130,7 @@ describe('QueueProducer', () => {
       const { queue, producer } = fixture();
 
       await producer.sendMany(TOPIC, PAYLOADS);
-      const [first] = bulkSentTo(queue(CONTENT_SCRAPE_QUEUE));
+      const [first] = bulkSentTo(queue(SCRAPING_CONTENT_QUEUE));
 
       expect(first?.name).toBe(TOPIC);
       expect(first?.data.topic).toBe(TOPIC);
@@ -142,7 +142,7 @@ describe('QueueProducer', () => {
 
       await producer.sendMany(TOPIC, PAYLOADS, { attempts: 4 });
 
-      bulkSentTo(queue(CONTENT_SCRAPE_QUEUE)).forEach((job) => expect(job.opts).toEqual({ attempts: 4 }));
+      bulkSentTo(queue(SCRAPING_CONTENT_QUEUE)).forEach((job) => expect(job.opts).toEqual({ attempts: 4 }));
     });
 
     it('touches no queue when there is nothing to send', async () => {
@@ -156,7 +156,7 @@ describe('QueueProducer', () => {
     it('fails the send when a queue will not take the batch', async () => {
       const { queue, producer } = fixture();
 
-      queue(CONTENT_SCRAPE_QUEUE).addBulk.mockRejectedValue(new Error('redis is down'));
+      queue(SCRAPING_CONTENT_QUEUE).addBulk.mockRejectedValue(new Error('redis is down'));
 
       await expect(producer.sendMany(TOPIC, PAYLOADS)).rejects.toThrow(/redis is down/);
     });

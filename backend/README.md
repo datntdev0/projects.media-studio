@@ -117,21 +117,21 @@ Producing, from any manager:
 ```ts
 constructor(private readonly producer: QueueProducer) {}
 
-await this.producer.send(QueueTopic.ContentScrapeRequested, { itemId, contentId, crawler, sourceUrl, refetch });
+await this.producer.send(QueueTopic.ScrapingContentRequested, { itemId, contentId, crawler, sourceUrl, refetch });
 ```
 
 Consuming — add the queue name to `QUEUE_CONSUMERS[topic]`, then declare the class in the module that owns the work:
 
 ```ts
-@Processor(CONTENT_SCRAPE_QUEUE, { concurrency: 2 })
-export class ContentScrapeConsumer extends QueueConsumer<ContentScrapeRequested> {
-  protected handle(message: QueueMessage<ContentScrapeRequested>): Promise<void> { … }
+@Processor(SCRAPING_CONTENT_QUEUE, { concurrency: 2 })
+export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentRequested> {
+  protected handle(message: QueueMessage<ScrapingContentRequested>): Promise<void> { … }
 }
 ```
 
 Throwing out of `handle` is how a consumer says the work did not happen: BullMQ retries on the `QUEUE_ATTEMPTS`/`QUEUE_BACKOFF_MS` schedule and, once the attempts are spent, leaves the job in the failed set. Swallowing would mark it done.
 
-`scraping/content-scrape.handler.ts` is the worked example — one chapter per message, sent in bulk by `ScrapingJobManager`.
+`scraping/scraping-content.handler.ts` is the worked example — one chapter per message, sent in bulk by `ScrapingJobManager`.
 
 ## Commands
 
