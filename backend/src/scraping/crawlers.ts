@@ -65,7 +65,7 @@ export function requireCrawler(name: string): Crawler {
  * browser, because it is the mistake the wizard exists to catch and it should cost
  * nothing to report.
  */
-export function checkHost(crawler: Crawler, sourceUrl: string): void {
+export function validateSourceUrl(crawler: Crawler, sourceUrl: string): void {
   const host = hostOf(sourceUrl);
 
   if (!host || !crawler.hosts.includes(host)) {

@@ -5,14 +5,14 @@ import { ScrapingProvider } from '../core/providers/scraping.provider';
 import { ContentScrapeRequested, QueueTopic } from '../core/queues/queue.messages';
 import { QueueProducer } from '../core/queues/queue.producer';
 import { LibraryItemDto } from '../library/dto/library-item.dto';
-import { LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
+import { LibraryContent, LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
 import { LibraryItemType, LibrarySourceMode } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
 import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryManager } from '../library/library.manager';
-import { checkHost, Crawler, requireCrawler } from './crawlers';
+import { validateSourceUrl, Crawler, requireCrawler } from './crawlers';
 import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
-import { attemptsFor, CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
+import { CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
 import { ACTIVE_JOB_STATUSES, ScrapingJob, ScrapingJobStatus, TERMINAL_JOB_STATUSES } from './entities/scraping-job.entity';
 import { ScrapingJobDraft, ScrapingJobPatch, ScrapingJobRepository, ScrapingTaskDraft } from './scraping-job.repository';
 
@@ -98,13 +98,11 @@ export class ScrapingJobManager {
     }
 
     const crawler = requireCrawler(item.sourceName);
-
-    checkHost(crawler, item.sourceUrl);
+    validateSourceUrl(crawler, item.sourceUrl);
 
     const at = startAtFrom(input.startAt);
     const chapters = await this.contents.chapters(item.id);
     const candidates = selectByRange(input.range, chapters);
-    // A chapter added by hand has no source to read, whatever the range said.
     const fetchable = candidates.filter((chapter) => !!chapter.sourceUrl);
     const wanted = input.refetch ? fetchable : fetchable.filter((chapter) => chapter.status !== LibraryContentStatus.Completed);
 
@@ -117,7 +115,6 @@ export class ScrapingJobManager {
     // Scheduled tab of a screen nobody has refreshed.
     await this.realtime.publishJob(nodeOf(job));
     await this.realtime.publishTasks(job.id, tasks.map((task) => ({ contentId: task.contentId, status: task.status, index: task.index })));
-
     // Nothing to publish now, for one of two reasons: a range that matched nothing is
     // already a settled record, and a booked job waits for the cron. Both leave the
     // library exactly as they found it.
@@ -186,63 +183,36 @@ export class ScrapingJobManager {
    * nothing is worse than an object nobody reads, which is the order the browser's
    * own upload takes.
    */
-  async scrape(message: ContentScrapeRequested): Promise<void> {
-    const task = await this.jobs.task(message.jobId, message.contentId);
-
-    // A job deleted between the send and the delivery is not a failure.
-    if (!task) {
-      this.logger.warn(`Task ${message.contentId} of job ${message.jobId} is gone — nothing to scrape`);
-
-      return;
-    }
-
-    // The gate the whole pause story rests on, and it is one comparison. A pause cannot
-    // reach into Redis and remove the messages already published, so the record is the
-    // authority instead: anything not `queued` is paused, stopped, or already taken, and
-    // the remaining messages drain in seconds at two small reads each.
-    if (task.status !== ScrapingJobStatus.Queued) {
-      this.logger.debug(`Task ${message.contentId} of job ${message.jobId} is ${task.status} — skipped`);
-
-      return;
-    }
-
-    await this.jobs.startTask(message.jobId, message.contentId, nowIso());
-    await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Running);
-    await this.realtime.publishJob({ id: message.jobId, status: ScrapingJobStatus.Running });
-
-    const content = await this.contents.find(message.itemId, message.contentId);
-
-    // Failed rather than returned quietly: a job whose item was deleted mid-run used
-    // to leave a task that never moved, and therefore a job that never drained.
-    if (!content || content.type !== LibraryItemType.Novel) {
-      await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error: 'The library row is gone' });
-      await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Failed);
-      await this.settleJob(message.jobId);
-
-      return;
-    }
-
-    // The row itself, in flight. The item's status is not touched — that one is the
-    // person's — but what we hold of a chapter is exactly this row's business.
-    await this.contents.markScraping(message.itemId, message.contentId);
-
+  async scrape(message: ContentScrapeRequested, content: LibraryContent): Promise<void> {
     const scraped = await this.scraping.content(message.crawler, message.sourceUrl);
-    // One newline between lines, which is what the reader splits on and what the
-    // browser's own editor writes.
     const text = scraped.content.join('\n');
     const contentUrl = await this.files.saveText(message.itemId, text);
     const counts = await this.contents.completeScrape(message.itemId, message.contentId, { contentUrl, words: wordCount(text) });
-
     await this.files.discard(content.contentUrl);
-    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Completed, completedAt: nowIso(), error: null });
-    await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Completed);
-
-    // Debug rather than log: one line per chapter is a thousand lines per novel, and
-    // the screen is where progress is meant to be read. It is here at all because
-    // otherwise a draining queue says nothing at all.
-    this.logger.debug(`Stored ${content.index} of ${message.itemId} — ${counts.completed}/${counts.total} done`);
-
     await this.settleJob(message.jobId, counts);
+  }
+
+  /**
+   * An attempt failed and another is booked: the row says so now, and the task goes
+   * back to `queued` for the attempt that is coming.
+   *
+   * The task status is not cosmetic — `scrape` gates on `queued`, and a task left
+   * `running` by the attempt that just died is one the next attempt skips, quietly,
+   * without throwing. The job then never fails and never drains. Back in the queue is
+   * also where a pause can still reach it, which `running` is not.
+   *
+   * The row is marked here rather than only once the attempts are spent, because a
+   * chapter whose fetch just failed is not being scraped, and saying **Scraping** until
+   * the last attempt means saying it for as long as the backoff and the service's own
+   * timeout take. The next attempt writes **Scraping** back at the top of `scrape`.
+   */
+  async retry(message: ContentScrapeRequested, error: string): Promise<void> {
+    await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Queued, error });
+    await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Queued);
+
+    // The counters move with the row, and nothing else does: the job is still owed this
+    // chapter, so its own status and counts are not this method's to touch.
+    await this.realtime.publishJob({ id: message.jobId, library: libraryOf(await this.contents.markFailed(message.itemId, [message.contentId])) });
   }
 
   /** The attempts are spent, and both records say so — and it may have been the last one owed. */
@@ -250,7 +220,7 @@ export class ScrapingJobManager {
     await this.jobs.patchTask(message.jobId, message.contentId, { status: ScrapingJobStatus.Failed, completedAt: nowIso(), error });
     await this.realtime.publishTask(message.jobId, message.contentId, ScrapingJobStatus.Failed);
 
-    const counts = await this.contents.markFailed(message.itemId, message.contentId);
+    const counts = await this.contents.markFailed(message.itemId, [message.contentId]);
 
     await this.settleJob(message.jobId, counts);
   }
@@ -362,9 +332,12 @@ export class ScrapingJobManager {
       crawler: job.crawler,
       sourceUrl: task.sourceUrl,
       refetch: job.refetch,
+      retry: job.retry,
     }));
 
-    await this.producer.sendMany(QueueTopic.ContentScrapeRequested, payloads, { attempts: attemptsFor(job.retry) });
+    // One attempt per message: the retries happen inside the consumer's own run, so a
+    // redelivery would be a second chapter's worth of work nobody asked for.
+    await this.producer.sendMany(QueueTopic.ContentScrapeRequested, payloads, { attempts: 1 });
     await this.jobs.patch(job.id, { status: ScrapingJobStatus.Queued, queuedAt });
 
     // The tasks rather than their ids: this is the one moment the whole claimed set is
@@ -410,7 +383,7 @@ export class ScrapingJobManager {
       status: fields.status,
       completed: counts.completed,
       failed: counts.failed,
-      library: library && { total: library.total, completed: library.completed, failed: library.failed, pending: library.pending },
+      library: library && libraryOf(library),
     });
   }
 
@@ -503,6 +476,11 @@ function nodeOf(job: ScrapingJob): ScrapingJobSnapshot {
     failed: job.failed,
     library: { id: job.libraryId, type: job.libraryType, title: job.libraryTitle },
   };
+}
+
+/** The four the Library listing draws for the item. `bytes` is not one of them. */
+function libraryOf(counts: LibraryContentCounts): ScrapingJobSnapshot['library'] {
+  return { total: counts.total, completed: counts.completed, failed: counts.failed, pending: counts.pending };
 }
 
 /** Newest first, which is the order a listing of work reads in. ISO strings compare as instants. */

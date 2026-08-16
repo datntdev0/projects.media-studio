@@ -157,17 +157,25 @@ export class LibraryContentManager {
     return stored.filter((content): content is NovelChapter => content.type === LibraryItemType.Novel);
   }
 
-  /** The rows a job has just claimed, queued — and the item recounted around them. */
-  async markQueued(itemId: string, contentIds: string[]): Promise<void> {
+  async markQueued(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
     const item = await this.requireItem(itemId);
 
     await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Pending);
-    await this.recount(item);
+    return this.recount(item);
   }
 
-  /** One row, in flight. The counts do not move — `pending` already counted it. */
-  async markScraping(itemId: string, contentId: string): Promise<void> {
-    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Scraping });
+  async markScraping(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
+    const item = await this.requireItem(itemId);
+    
+    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Scraping);
+    return this.recount(item);
+  }
+
+  async markFailed(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
+    const item = await this.requireItem(itemId);
+
+    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Failed);
+    return this.recount(item);
   }
 
   /**
@@ -184,23 +192,7 @@ export class LibraryContentManager {
     return this.recount(item);
   }
 
-  /**
-   * The attempts are spent.
-   *
-   * The stored text is left where it is: a forced re-scrape that failed keeps what it
-   * already held, which is the safe direction — **Failed** does not mean empty.
-   *
-   * Answers with the counts, as `completeScrape` does, and recounts to get them. It did
-   * neither before, which left the summary wrong and made a job whose *last* chapter
-   * failed undetectable as drained — so the item sat at **Scraping** for good.
-   */
-  async markFailed(itemId: string, contentId: string): Promise<LibraryContentCounts> {
-    const item = await this.requireItem(itemId);
-
-    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Failed });
-
-    return this.recount(item);
-  }
+ 
 
   /**
    * A brand new row. `index` is read from the store rather than sent, so "Add

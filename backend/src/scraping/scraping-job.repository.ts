@@ -196,15 +196,7 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
     await this.tasksOf(jobId).doc(contentId).update({ ...fields });
   }
 
-  /**
-   * A consumer has picked this task up — so the task is running, and so is the job
-   * that asked for it.
-   *
-   * Both in one batch: a job left at `queued` while its chapters are being fetched
-   * reads as waiting for a worker for the whole run, and writing the two separately
-   * would leave a window where a screen sees a running task under a queued job.
-   */
-  async startTask(jobId: string, contentId: string, at: string): Promise<void> {
+  public async startTask(jobId: string, contentId: string, at: string): Promise<void> {
     const batch = this.firestore.batch();
 
     batch.update(this.collection.doc(jobId), { status: ScrapingJobStatus.Running, updatedAt: Timestamp.now() });
@@ -213,8 +205,12 @@ export class ScrapingJobRepository extends FirestoreRepository<ScrapingJob> {
     await batch.commit();
   }
 
+  public async completeTask(jobId: string, contentId: string, at: string): Promise<void> {
+    await this.tasksOf(jobId).doc(contentId).update({ status: ScrapingJobStatus.Completed, completedAt: at, error: null });
+  }
+
   /** The status of many tasks at once, for a publish. Batched, as `createTasks` is. */
-  async setTaskStatus(jobId: string, contentIds: string[], status: ScrapingJobStatus): Promise<void> {
+  public async setTaskStatus(jobId: string, contentIds: string[], status: ScrapingJobStatus): Promise<void> {
     const tasks = this.tasksOf(jobId);
 
     for (let from = 0; from < contentIds.length; from += BATCH_LIMIT) {

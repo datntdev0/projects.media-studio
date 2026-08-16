@@ -24,6 +24,8 @@ export interface ContentScrapeRequested {
   sourceUrl: string;
   /** Whether stored bytes are to be overwritten, decided when the job was described. */
   refetch: boolean;
+  /** How many further tries the consumer takes within this delivery, from the job. */
+  retry: number;
 }
 
 /**

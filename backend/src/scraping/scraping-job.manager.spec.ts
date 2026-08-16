@@ -244,7 +244,7 @@ function published(producer: { sendMany: jest.Mock }): { payloads: ContentScrape
 }
 
 function message(over: Partial<ContentScrapeRequested> = {}): ContentScrapeRequested {
-  return { jobId: JOB_ID, itemId: 'novel-1', contentId: 'chapter-1', crawler: CRAWLER, sourceUrl: CHAPTER_URL, refetch: false, ...over };
+  return { jobId: JOB_ID, itemId: 'novel-1', contentId: 'chapter-1', crawler: CRAWLER, sourceUrl: CHAPTER_URL, refetch: false, retry: 3, ...over };
 }
 
 describe('selectByRange', () => {
@@ -340,12 +340,15 @@ describe('ScrapingJobManager.create', () => {
     expect(jobs.createTasks.mock.invocationCallOrder[0]).toBeLessThan(producer.sendMany.mock.invocationCallOrder[0]);
   });
 
-  it('hands the queue one attempt more than the retries asked for', async () => {
+  it('carries the retries onto every message, and asks the queue for one delivery', async () => {
     const { manager, producer } = fixture();
 
     await manager.create(job({ retry: 1 }));
 
-    expect(published(producer).options).toEqual({ attempts: 2 });
+    // The retries are the consumer's to take within its own run, so a redelivery would
+    // be a second chapter's worth of work nobody asked for.
+    published(producer).payloads.forEach((payload) => expect(payload.retry).toBe(1));
+    expect(published(producer).options).toEqual({ attempts: 1 });
   });
 
   it('drops a completed chapter unless refetch says otherwise', async () => {
@@ -851,6 +854,60 @@ describe('ScrapingJobManager.scrape', () => {
     await expect(manager.scrape(message())).rejects.toThrow(/502/);
     expect(files.saveText).not.toHaveBeenCalled();
     expect(contents.completeScrape).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScrapingJobManager.retry', () => {
+  it('puts the task back in the queue, carrying what ended the attempt', async () => {
+    const { manager, jobs, realtime } = fixture();
+
+    await manager.retry(message(), '502 from the service');
+
+    expect(jobs.patchTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', { status: ScrapingJobStatus.Queued, error: '502 from the service' });
+    expect(realtime.publishTask).toHaveBeenCalledWith(JOB_ID, 'chapter-1', ScrapingJobStatus.Queued);
+  });
+
+  it('leaves a task the next attempt will act on rather than skip', async () => {
+    const { manager, jobs, tasks, scraping } = fixture();
+
+    await manager.create(job());
+    // Where the attempt that just died left it: `scrape` moved it to `running` before
+    // it read the source, and a task still `running` is one the retry skips silently.
+    tasks.forEach((task) => { task.status = ScrapingJobStatus.Running; });
+    jobs.patchTask.mockImplementation((jobId: string, contentId: string, fields: { status: ScrapingJobStatus }) => {
+      tasks.filter((task) => task.contentId === contentId).forEach((task) => { task.status = fields.status; });
+
+      return Promise.resolve();
+    });
+
+    await manager.retry(message(), '502 from the service');
+    await manager.scrape(message());
+
+    expect(scraping.content).toHaveBeenCalledWith(CRAWLER, CHAPTER_URL);
+  });
+
+  it('marks the row failed now, rather than leaving it scraping until the attempts are spent', async () => {
+    const { manager, contents, realtime } = fixture();
+
+    contents.markFailed.mockResolvedValue({ total: 3, completed: 1, failed: 1, pending: 1, bytes: 0 });
+    await manager.retry(message(), '502 from the service');
+
+    // A chapter whose fetch just failed is not being scraped, and the next attempt is a
+    // backoff and a service timeout away.
+    expect(contents.markFailed).toHaveBeenCalledWith('novel-1', 'chapter-1');
+    expect(realtime.publishJob).toHaveBeenCalledWith({ id: JOB_ID, library: { total: 3, completed: 1, failed: 1, pending: 1 } });
+  });
+
+  it('leaves the job itself where it stands, since the chapter is still owed', async () => {
+    const { manager, jobs, realtime } = fixture();
+
+    await manager.retry(message(), '502 from the service');
+
+    // A job settled between two attempts would contradict the retry — and its counters
+    // are its tasks', which have not moved.
+    expect(jobs.patch).not.toHaveBeenCalled();
+    expect(jobs.counts).not.toHaveBeenCalled();
+    expect(realtime.publishJob).not.toHaveBeenCalledWith(expect.objectContaining({ status: ScrapingJobStatus.Failed }));
   });
 });
 

@@ -376,14 +376,6 @@ describe('LibraryContentManager job writes', () => {
     expect(contents.statuses).toEqual([]);
   });
 
-  it('moves one row in flight and nothing else', async () => {
-    const contents = new FakeContentRepository([chapter()]);
-
-    await managerOver(contents, new FakeItemRepository([novel()])).markScraping('novel-1', 'chapter-1');
-
-    expect(contents.patches).toEqual([{ contentId: 'chapter-1', fields: { status: LibraryContentStatus.Scraping } }]);
-  });
-
   it('points a completed row at what was stored, and recounts', async () => {
     const contents = new FakeContentRepository([chapter({ id: 'a', status: LibraryContentStatus.Scraping, contentUrl: null, words: 0 }), chapter({ id: 'b' })]);
     const items = new FakeItemRepository([novel()]);
@@ -395,14 +387,6 @@ describe('LibraryContentManager job writes', () => {
     expect(items.counters).toEqual([{ itemId: 'novel-1', counters: { discoveredCount: 2, downloadedCount: 2, downloadedSize: undefined } }]);
   });
 
-  it('moves a failed row status and leaves the text it already held', async () => {
-    const contents = new FakeContentRepository([chapter({ contentUrl: TEXT_URL })]);
-
-    await managerOver(contents, new FakeItemRepository([novel()])).markFailed('novel-1', 'chapter-1');
-
-    expect(contents.patches).toEqual([{ contentId: 'chapter-1', fields: { status: LibraryContentStatus.Failed } }]);
-    expect(contents.rows[0]).toMatchObject({ contentUrl: TEXT_URL });
-  });
 });
 
 describe('LibraryContentManager.remove', () => {

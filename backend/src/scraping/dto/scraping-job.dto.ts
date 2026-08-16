@@ -184,7 +184,7 @@ export class ScrapingJobPageDto {
   pageSize!: number;
 }
 
-/** BullMQ counts attempts, not retries. The one place the two are reconciled. */
+/** The consumer counts attempts, the caller asks in retries. The one place the two are reconciled. */
 export function attemptsFor(retry: number): number {
   return retry + 1;
 }

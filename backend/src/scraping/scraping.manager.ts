@@ -6,7 +6,7 @@ import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryItemType, LibrarySourceMode, NovelStatus } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
 import { LibraryManager } from '../library/library.manager';
-import { checkHost, Crawler, hostOf, requireCrawler } from './crawlers';
+import { validateSourceUrl, Crawler, hostOf, requireCrawler } from './crawlers';
 import { DiscoverDto } from './dto/discover.dto';
 import { NovelPreviewDto, PreviewDto } from './dto/preview.dto';
 import { ValidateDto } from './dto/validate.dto';
@@ -39,7 +39,7 @@ export class ScrapingManager {
   async validate(input: ValidateDto, refresh = false): Promise<PreviewDto> {
     const crawler = requireCrawler(input.crawler);
 
-    checkHost(crawler, input.sourceUrl);
+    validateSourceUrl(crawler, input.sourceUrl);
 
     // A novel is the only content a crawler reads today. A registry entry of
     // another kind would need a `content` shape of its own, and answering with
@@ -86,7 +86,7 @@ export class ScrapingManager {
 
     const crawler = requireCrawler(item.sourceName);
 
-    checkHost(crawler, item.sourceUrl);
+    validateSourceUrl(crawler, item.sourceUrl);
 
     const chapters = await this.scraping.chapters(crawler.name, item.sourceUrl);
     // Field by field rather than a spread, so a field the service adds cannot
