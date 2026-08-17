@@ -2,6 +2,8 @@
 
 FastAPI service wrapping [Scrapling](https://github.com/D4Vinci/Scrapling). It scrapes novel metadata, chapter lists and cover images from [novel543.com](https://www.novel543.com), which sits behind Cloudflare.
 
+Part of the [projects.media-studio](../README.md) repository, but outside the pnpm workspace — it is Python, and `pnpm lint`, `pnpm typecheck` and `pnpm test` do not reach it. The API calls this service through `SCRAPING_BASE_URL` and caches what comes back, so it is the only thing that talks to it.
+
 ## Running it
 
 With the rest of the local infrastructure, from the repository root:
@@ -113,7 +115,7 @@ Responses are camelCase. A missing book gives `404`; an upstream or browser fail
 | `PORT` | `8000` | Port uvicorn listens on |
 | `SCRAPER_MAX_PAGES` | `4` | Browser tabs, which also caps concurrent scrapes |
 | `SCRAPER_IDLE_RESTART_SECONDS` | `900` | Rebuild the browser after this much idle time |
-| `SCRAPER_USER_DATA_DIR` | `/data/profile` | Persisted browser profile. Empty means a throwaway one |
+| `SCRAPER_USER_DATA_DIR` | `/data/profile` | Persisted browser profile. Empty means a throwaway one — which is the default outside the image, where the Dockerfile is not there to set it |
 
 ## How it works
 

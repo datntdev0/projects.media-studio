@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage --passWithNoTests"
+    "test:cov": "jest --coverage --passWithNoTests --json --outputFile=coverage/test-results.json"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.5",
@@ -73,6 +73,11 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
+    "coverageReporters": [
+      "text-summary",
+      "html",
+      "json-summary"
+    ],
     "testEnvironment": "node"
   }
 }

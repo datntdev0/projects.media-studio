@@ -10,95 +10,126 @@ This is a pnpm workspace monorepo.
 | --- | --- | --- |
 | `@media-studio/backend` | [`backend/`](./backend) | NestJS 11 API (default port `3001`) |
 | `@media-studio/frontend` | [`frontend/`](./frontend) | Nuxt 4 + Nuxt UI dashboard (default port `3000`) |
+| `@media-studio/tests` | [`tests/`](./tests) | Playwright end-to-end suite |
+
+[`scraping/`](./scraping) is a Python + FastAPI service outside the workspace, published on port `8000` and started with the rest of the local infrastructure. [`_deploy/`](./_deploy) holds the Docker Compose file and the Firebase emulator config that infrastructure is built from.
 
 ## Prerequisites
 
 - Node.js `>=22`
 - pnpm `11.18.0` (pinned via the `packageManager` field — run `corepack enable` to have it picked up automatically)
-- A Java runtime (JDK 11+) on the `PATH` — the Firestore emulator runs on the JVM. Nothing else in the repository needs it, and the Auth emulator runs without it.
-- The .NET 9 runtime, only to regenerate the API client — see [The generated API client](#the-generated-api-client). The committed client builds and typechecks without it.
+- Docker, for the local infrastructure. The Firebase emulators, the scraping service and Redis all run as containers, and the JRE the Firestore and Storage emulators need is inside the image rather than on the host.
+- The .NET 9 runtime, only to regenerate the API client — see [the frontend README](./frontend/README.md#the-generated-api-client). The committed client builds and typechecks without it.
 
 ## Getting started
+
+Five steps, all run from the repository root. Steps 1 to 4 are once per checkout; step 5 is what you repeat.
+
+### 1. Install the dependencies
 
 ```bash
 pnpm install
 ```
 
-Installing from the repository root wires up both packages against a single lockfile.
+Installing from the root wires up every package against a single lockfile. Do not install from inside a package.
+
+### 2. Start the local infrastructure
+
+```bash
+pnpm dev:infrastructure
+```
+
+Leave this in its own terminal — it runs in the foreground and stops the stack on `Ctrl+C`. The first run builds the images, which takes a while: the scraping service bakes a stealth Chromium into its own.
+
+| Service | Address | What it is |
+| --- | --- | --- |
+| Emulator UI | <http://127.0.0.1:4000> | Browse the emulated Auth users, Firestore documents and files |
+| Authentication | `127.0.0.1:9099` | Where accounts and ID tokens come from |
+| Firestore | `127.0.0.1:8080` | Everything the API stores itself |
+| Realtime Database | `127.0.0.1:9000` | Live scraping status the browser subscribes to |
+| Storage | `127.0.0.1:9199` | Media files — cover images and chapter text |
+| Scraping API | <http://127.0.0.1:8000/docs> | The FastAPI service in [`scraping/`](./scraping) |
+| Redis | `127.0.0.1:6379` | What the BullMQ job queues run on |
+
+Everything is published on `127.0.0.1` only, on the ports the `.env.example` files already point at. The emulators export their data to a Docker volume when the stack stops and read it back when it starts, so accounts and documents outlive a restart.
+
+### 3. Configure the two apps
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+In PowerShell, `Copy-Item backend/.env.example backend/.env`.
+
+Both examples are already pointed at the emulators from step 2, so nothing needs editing to run locally. Both `.env` files are gitignored, and every variable in them is documented in place. The backend also reads `.env.local` first, if you keep one.
+
+### 4. Seed the development account
+
+```bash
+pnpm seed:firebase
+```
+
+Creates `admin@datntdev.com` / `StrongPassword123!` in the Auth emulator. It is idempotent, and the emulator keeps its data across restarts, so this is a one-off rather than something to repeat. The infrastructure from step 2 has to be up.
+
+### 5. Start the apps
+
+```bash
+pnpm dev
+```
+
+| | Address |
+| --- | --- |
+| Web app | <http://localhost:3000> |
+| API | <http://localhost:3001> |
+| Swagger UI | <http://localhost:3001/docs> |
+
+Sign in with the seeded account. `pnpm dev:backend` and `pnpm dev:frontend` start one side on its own, which is the quicker loop when you are only working on one.
+
+### If something does not come up
+
+| Symptom | Cause |
+| --- | --- |
+| The API exits asking for a service account | An emulator host is missing from `backend/.env`. All four together are what stand in for a credential |
+| Sign-in hangs or rejects a correct password | The Auth emulator is not running, or step 4 was skipped |
+| The dashboard loads but every call fails | `NUXT_PUBLIC_API_BASE` and the API's `CORS_ORIGINS` disagree, or the API is not running |
+| A scraping job never leaves `queued` | Redis or the scraping service is down. Check with `docker compose -f _deploy/dockercompose.local.infrastructure.yml ps` |
 
 ## Common commands
 
-Run from the repository root; each command fans out across every workspace package.
+Run from the repository root; each fans out across every workspace package.
 
 ```bash
 pnpm dev          # start backend and frontend together
 pnpm build        # build every package
-pnpm lint         # lint every package
+pnpm lint         # lint every package (lint:fix to autofix)
 pnpm typecheck    # typecheck every package
-pnpm test         # run every package's tests
+pnpm test         # unit tests
+pnpm test:cov     # unit tests with coverage
+pnpm test:e2e     # Playwright, against an app that is already running
 ```
 
-To work on a single package:
+To target a single package:
 
 ```bash
 pnpm dev:backend
 pnpm dev:frontend
 
-# or target it directly
-pnpm --filter @media-studio/backend run test
+pnpm --filter @media-studio/backend run test -- library.manager
 ```
 
-## The generated API client
+`pnpm generate:api` regenerates the frontend's API client from the running backend — see [the frontend README](./frontend/README.md#the-generated-api-client). Run it after any change to a controller, a route or a DTO.
 
-The frontend talks to the API through a TypeScript client generated by [NSwag](https://github.com/RicoSuter/NSwag) from the OpenAPI document the backend serves. Regenerating it is a two-step affair, because NSwag reads the document over HTTP:
+## Documentation
 
-```bash
-pnpm dev:backend      # in one terminal — the document is served at :3001/openapi.json
-pnpm generate:api     # in another — rewrites frontend/app/utils/api.clients.ts
-```
-
-Do that after any change to a controller, a route or a DTO. The output is committed, so nobody needs to run the generator to build or typecheck.
-
-- [`frontend/nswag.json`](./frontend/nswag.json) is the whole configuration: where the document is, and how to shape the output.
-- [`frontend/app/utils/api.clients.ts`](./frontend/app/utils/api.clients.ts) is the output. Never edit it — it is overwritten wholesale, and it is excluded from lint for that reason.
-- [`frontend/app/composables/useApiClient.ts`](./frontend/app/composables/useApiClient.ts) is where it is wired up: the base URL, and the Firebase ID token every protected route wants. It is the only way the app reaches the API.
-
-One client per tag in the document, which is why an item's content is on `libraryClient` — it is a library route:
-
-```ts
-const { libraryClient } = useApiClient()
-
-const page = await libraryClient.list('novel', undefined, undefined, 'cartographer', 1, 20)
-const chapters = await libraryClient.listContents(itemId, undefined, undefined, 1, 200)
-```
-
-A failed call throws an `ApiException` carrying `status`, `response` and `headers`. Its own `message` is the operation's documented description, so print `apiMessage(cause, fallback)` instead — that digs the server's sentence out of the body.
-
-Two things the generator cannot carry over, both handled in `app/utils/`:
-
-- `metadata` on an item, and a row in a content page, are `oneOf` three shapes. NSwag flattens a `oneOf` to its first branch, so every generated item describes itself as a novel. `asLibraryItem`, `asLibraryItemPage`, `asLibraryContent` and `asLibraryContentPage` read a response back as the discriminated unions in `app/types/`, which is what the screens narrow on.
-- A DTO subclass that pins an inherited enum property needs its own `enumName` — otherwise it republishes the shared schema as the one value it pinned. See `NovelChapterDto` in `backend/src/library/dto/library-content.dto.ts`.
-
-NSwag ships as a .NET tool, so `pnpm generate:api` needs the **.NET 9 runtime** on the machine. Nothing else in the repository does, and only whoever regenerates the client needs it.
-
-## Authentication
-
-Sign-in is Firebase Authentication: the browser exchanges credentials with Firebase directly, and the API only ever verifies the ID token it is handed. Locally that runs against the [Auth emulator](https://firebase.google.com/docs/emulator-suite), so no Firebase project or network access is needed.
-
-```bash
-pnpm dev:infrastructure   # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000, Scraping API :8000, Redis :6379
-pnpm seed:firebase        # creates admin@datntdev.com / StrongPassword123!
-```
-
-The emulators run in Docker — [`_deploy/dockercompose.local.infrastructure.yml`](./_deploy/dockercompose.local.infrastructure.yml) — published on `127.0.0.1` on the ports each package's `.env` already points at. Leave the stack running in its own terminal and start the app as usual. Beside the emulators it runs the [scraping API](./scraping/README.md), which the scraping work sends its requests through.
-
-Firestore is where everything the API stores itself lives, and Storage holds the media files — cover images today. Both are exported to a Docker volume when the stack is stopped and read back when it starts, so the seeded account outlives a restart and `pnpm seed:firebase` is a one-off rather than something to repeat.
-
-The emulator config — `firebase.json`, `.firebaserc` and the rules — lives in [`_deploy/firebase/`](./_deploy/firebase) and is baked into the image, so edits to it need a rebuild. `dev:infrastructure` passes `--build`, which is enough.
-
-Storage is the one thing the browser talks to directly: a cover image is uploaded from the picker to the bucket, and only the download URL it comes back with is sent to the API. [`storage.rules`](./_deploy/firebase/storage.rules) is therefore the whole guard on that path — a file lives under the uid that wrote it.
-
-Both packages read their Firebase settings from a gitignored `.env` — copy each package's `.env.example` to get the emulator defaults. See [`_docs/plan/[auth]-google_firebase_authentication_integration.md`](./_docs/plan/%5Bauth%5D-google_firebase_authentication_integration.md) for how the pieces fit together.
+| Where | What it covers |
+| --- | --- |
+| [`backend/README.md`](./backend/README.md) | Routes, the controller/manager/repository layering, configuration, queues |
+| [`frontend/README.md`](./frontend/README.md) | App structure, the generated API client, the design system |
+| [`scraping/README.md`](./scraping/README.md) | The scraping endpoints, and why the browser is set up the way it is |
+| [`tests/README.md`](./tests/README.md) | The end-to-end suite and what it covers |
+| [`DESIGN.md`](./DESIGN.md) | The Industry design system the dashboard is skinned with |
+| [`_docs/plan/`](./_docs/plan) | The plan behind each feature, in the order they were built |
 
 ## License
 

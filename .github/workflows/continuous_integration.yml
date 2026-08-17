@@ -38,13 +38,15 @@ jobs:
       # failures are worth reading without opening the log.
       - name: Report coverage
         if: ${{ !cancelled() && hashFiles('test.log') != '' }}
-        run: |
-          {
-            echo '## Unit tests and coverage'
-            echo '```'
-            cat test.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/report-coverage.mjs test.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the coverage report
+        if: ${{ !cancelled() && hashFiles('backend/coverage/index.html') != '' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: backend/coverage
+          retention-days: 7
 
       - name: Build
         run: pnpm run build
