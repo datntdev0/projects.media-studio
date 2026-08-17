@@ -20,6 +20,19 @@ const LOOKUP_LIMIT = 300;
 export type TranslationDraft = Omit<NovelChapter, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
+ * One translation in a batch, and what its document was first written at.
+ *
+ * `createdAt` is the caller's to carry because a batch cannot read: `upsert` reads the
+ * stored date one document at a time, and a caller writing six hundred already has
+ * them from the `findByIds` it planned with. Null is a translation that is not there yet.
+ */
+export interface TranslationRewrite {
+  contentId: string;
+  createdAt: string | null;
+  draft: TranslationDraft;
+}
+
+/**
  * The `translation_*` subcollections of a library item — one per language, each
  * holding a chapter's translation under that chapter's own id.
  *
@@ -83,6 +96,27 @@ export class LibraryTranslationRepository {
     // Built from what was written rather than read back: the write is the
     // authority on its own result.
     return { ...draft, id: contentId, createdAt: iso(createdAt), updatedAt: iso(now) };
+  }
+
+  /**
+   * Many translations at once, each keeping the date its document was first written
+   * at — the promise `upsert` makes one row at a time, kept for five hundred.
+   */
+  async upsertMany(itemId: string, language: TranslationLanguage, rows: TranslationRewrite[]): Promise<void> {
+    const translations = this.translationsOf(itemId, language);
+
+    for (let from = 0; from < rows.length; from += BATCH_LIMIT) {
+      const batch = this.firebase.firestore.batch();
+      const now = Timestamp.now();
+
+      rows.slice(from, from + BATCH_LIMIT).forEach((row) => {
+        const createdAt = row.createdAt ? Timestamp.fromDate(new Date(row.createdAt)) : now;
+
+        batch.set(translations.doc(row.contentId), { ...row.draft, createdAt, updatedAt: now });
+      });
+
+      await batch.commit();
+    }
   }
 
   /**

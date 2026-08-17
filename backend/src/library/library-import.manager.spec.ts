@@ -3,13 +3,20 @@
 // require. Nothing here talks to Firebase, so an empty module is enough.
 jest.mock('firebase-admin/auth', () => ({}));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ArchiveEntry, ArchiveProvider } from '../core/providers/archive.provider';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
+import { LibraryImportRequested, QueueTopic } from '../core/queues/queue.messages';
+import { QueueProducer } from '../core/queues/queue.producer';
+import { CreateLibraryItemDto } from './dto/library-item-create.dto';
+import { LibraryPackageReportDto } from './dto/library-package.dto';
 import { LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
-import { PackageCheckState } from './entities/library-package.entity';
+import { ImportConflict, PackageCheckState } from './entities/library-package.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryImportManager } from './library-import.manager';
+import { LibraryImportWriter } from './library-import.writer';
+import { LibraryManager } from './library.manager';
 import { LibraryRepository } from './library.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
@@ -27,7 +34,15 @@ class FakeArchive {
   /** Every name the pass asked about, and whether it took it. Pins what a body costs. */
   asked: { name: string, taken: boolean }[] = [];
 
+  removed: string[] = [];
+
   constructor(public entries: Record<string, unknown> = {}) {}
+
+  remove(path: string): Promise<void> {
+    this.removed.push(path);
+
+    return Promise.resolve();
+  }
 
   readFrom(_path: string, wanted: (name: string) => boolean, onEntry: ArchiveEntry): Promise<void> {
     return Object.entries(this.entries).reduce(async (before, [name, body]) => {
@@ -91,15 +106,62 @@ function novel(over: Partial<NovelItem> = {}): NovelItem {
 
 const imageSet = (): ImageSetItem => ({ ...novel(), id: 'set-1', type: LibraryItemType.Image, metadata: { discoveredCount: 0, discoveredAt: null, downloadedCount: 0, downloadedSize: 0 } });
 
-function managerOver(packaged: FakeArchive, item: LibraryItem | null = novel(), chapters: NovelChapter[] = []) {
+/** What the endpoint half of the manager reaches for, and what each call recorded. */
+class Around {
+  sent: LibraryImportRequested[] = [];
+
+  created: CreateLibraryItemDto[] = [];
+
+  ran: { itemId: string, onConflict: ImportConflict }[] = [];
+
+  running: string | null = null;
+
+  failed: { itemId: string, error?: string }[] = [];
+
+  /** Set to make the writer throw, for the case where a pass dies half-way. */
+  breaks: Error | null = null;
+
+  readonly library = { create: (input: CreateLibraryItemDto) => { this.created.push(input); return Promise.resolve({ id: 'novel-2' }); } };
+
+  readonly writer = {
+    run: (item: { id: string }, _path: string, _records: unknown, onConflict: ImportConflict) => {
+      this.ran.push({ itemId: item.id, onConflict });
+
+      return this.breaks ? Promise.reject(this.breaks) : Promise.resolve({ added: 1, overwritten: 0, skipped: 0, translated: 0 });
+    },
+  };
+
+  readonly realtime = {
+    runningImport: () => Promise.resolve(this.running ? { itemId: this.running, status: 'running' } : null),
+    publishImport: (snapshot: { itemId: string, status?: string, error?: string }) => {
+      if (snapshot.status === 'failed') {
+        this.failed.push({ itemId: snapshot.itemId, error: snapshot.error });
+      }
+
+      return Promise.resolve();
+    },
+  };
+
+  readonly queue = { send: (_topic: QueueTopic, payload: LibraryImportRequested) => { this.sent.push(payload); return Promise.resolve(); } };
+}
+
+function managerOver(packaged: FakeArchive, item: LibraryItem | null = novel(), chapters: NovelChapter[] = [], around = new Around()) {
   const items = { findById: () => Promise.resolve(item) } as unknown as LibraryRepository;
   const contents = { chapters: () => Promise.resolve(chapters) } as unknown as LibraryContentManager;
 
-  return new LibraryImportManager(items, contents, packaged as unknown as ArchiveProvider);
+  return new LibraryImportManager(
+    items,
+    around.library as unknown as LibraryManager,
+    contents,
+    around.writer as unknown as LibraryImportWriter,
+    packaged as unknown as ArchiveProvider,
+    around.realtime as unknown as RealtimeProvider,
+    around.queue as unknown as QueueProducer,
+  );
 }
 
 /** One check by the label it starts with, so an assertion names what it is looking for. */
-const check = (report: { checks: { label: string }[] }, starting: string) => report.checks.find(one => one.label.startsWith(starting));
+const check = (report: LibraryPackageReportDto, starting: string) => report.checks.find(one => one.label.startsWith(starting));
 
 describe('LibraryImportManager.validate', () => {
   it('reads a clean package and counts what it would add', async () => {
@@ -186,5 +248,82 @@ describe('LibraryImportManager.validate', () => {
   it('refuses a set, and an item that is not there', async () => {
     await expect(managerOver(archive(), imageSet()).validate('set-1', PACKAGE_URL)).rejects.toBeInstanceOf(BadRequestException);
     await expect(managerOver(archive(), null).validate('nope', PACKAGE_URL)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('LibraryImportManager.start', () => {
+  const skip = { packageUrl: PACKAGE_URL, onConflict: ImportConflict.Skip };
+
+  it('queues one message for the whole package and answers with what it will write', async () => {
+    const around = new Around();
+
+    const answer = await managerOver(archive(), novel(), [], around).start('novel-1', skip);
+
+    expect(answer).toEqual({ itemId: 'novel-1', total: 2 });
+    expect(around.sent).toEqual([{ itemId: 'novel-1', packageUrl: PACKAGE_URL, onConflict: ImportConflict.Skip }]);
+  });
+
+  // An endpoint that trusts a client to have asked a question is one that can be
+  // asked not to.
+  it('validates for itself, and queues nothing when the package fails', async () => {
+    const around = new Around();
+    const later = archive({ 'manifest.json': { ...MANIFEST, schema: 2 } });
+
+    await expect(managerOver(later, novel(), [], around).start('novel-1', skip)).rejects.toBeInstanceOf(BadRequestException);
+    expect(around.sent).toHaveLength(0);
+  });
+
+  it('refuses a second import while one is running', async () => {
+    const around = new Around();
+
+    around.running = 'novel-1';
+
+    await expect(managerOver(archive(), novel(), [], around).start('novel-1', skip)).rejects.toBeInstanceOf(ConflictException);
+    expect(around.sent).toHaveLength(0);
+  });
+
+  it('creates the item a new-item import goes into, and names it on the answer', async () => {
+    const around = new Around();
+
+    const answer = await managerOver(archive(), novel(), [], around).start('novel-1', { packageUrl: PACKAGE_URL, onConflict: ImportConflict.NewItem });
+
+    expect(around.created).toEqual([{ ...ITEM, type: LibraryItemType.Novel }]);
+    expect(answer.itemId).toBe('novel-2');
+    expect(around.sent[0]?.itemId).toBe('novel-2');
+  });
+
+  // A refused request must not leave a stray item behind, so the running check comes
+  // first — and a brand new item cannot have an import running over it anyway.
+  it('makes no item when the package fails validation', async () => {
+    const around = new Around();
+    const later = archive({ 'manifest.json': { ...MANIFEST, schema: 2 } });
+
+    await expect(managerOver(later, novel(), [], around).start('novel-1', { packageUrl: PACKAGE_URL, onConflict: ImportConflict.NewItem })).rejects.toBeInstanceOf(BadRequestException);
+    expect(around.created).toHaveLength(0);
+  });
+});
+
+describe('LibraryImportManager.run', () => {
+  it('unpacks the package and then drops it', async () => {
+    const around = new Around();
+    const packaged = archive();
+
+    await managerOver(packaged, novel(), [], around).run('novel-1', PACKAGE_URL, ImportConflict.Overwrite);
+
+    expect(around.ran).toEqual([{ itemId: 'novel-1', onConflict: ImportConflict.Overwrite }]);
+    expect(packaged.removed).toEqual(['packages/novel-1/a.zip']);
+  });
+
+  // Left behind on purpose: a failed import is re-run by pressing Import again, and
+  // the retry needs something to read.
+  it('says why it failed, keeps the package, and lets the queue see the throw', async () => {
+    const around = new Around();
+    const packaged = archive();
+
+    around.breaks = new Error('Storage is down');
+
+    await expect(managerOver(packaged, novel(), [], around).run('novel-1', PACKAGE_URL, ImportConflict.Skip)).rejects.toThrow('Storage is down');
+    expect(around.failed).toEqual([{ itemId: 'novel-1', error: 'Storage is down' }]);
+    expect(packaged.removed).toHaveLength(0);
   });
 });

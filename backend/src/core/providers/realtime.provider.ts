@@ -5,6 +5,9 @@ import { FirebaseAdminService } from '../firebase/firebase-admin.service';
 /** Where the live tree is rooted. Nothing outside this class spells a path under it. */
 const RUNNING_JOBS_ROOT = 'scrapings/runningJobs';
 
+/** The other live tree: one node per item something is being unpacked into. */
+const LIBRARY_IMPORTS_ROOT = 'libraryImports';
+
 /** How many rows go in one multi-path update — the batch size the Firestore writes beside it use. */
 const UPDATE_CHUNK = 500;
 
@@ -45,6 +48,32 @@ export interface ScrapingTaskRow {
 }
 
 /**
+ * One item's running — or last — import.
+ *
+ * Keyed by the item rather than by a job, because there is no import record: nothing
+ * lists past imports and nothing queries one, so the node is the whole of what an
+ * import is remembered by. It survives the run deliberately, which is what lets a
+ * reopened dialog say what the last one did; the item's deletion is what clears it.
+ *
+ * Only `itemId` is required, for `ScrapingJobSnapshot`'s reason: every write is an
+ * `update`, so a bar moving costs nothing but the fields that moved.
+ */
+export interface LibraryImportSnapshot {
+  itemId: string;
+  status?: string;
+  /** Bodies to write — chapters plus translations. What the bar divides by. */
+  total?: number;
+  done?: number;
+  /** "Chapter 412 · Nine Bells for the Harbour". */
+  label?: string;
+  added?: number;
+  overwritten?: number;
+  skipped?: number;
+  translated?: number;
+  error?: string;
+}
+
+/**
  * The live state of the running jobs, mirrored where the browser can subscribe to it.
  *
  * Firestore holds the truth; this is a derived tree the screens watch so a job that
@@ -58,9 +87,9 @@ export interface ScrapingTaskRow {
  * Every method funnels through `attempt`, which logs and swallows, and that is the whole
  * of this class's error handling — which is why no caller has a `try`.
  *
- * One tree with one writer. `ScrapingJobManager` is that writer: the two library
- * managers keep their Firestore writes and publish nothing, because a job's progress is
- * the job's to publish.
+ * Two trees, one writer each. `ScrapingJobManager` writes the jobs; `LibraryImportWriter`
+ * writes the imports. The library's own managers keep their Firestore writes and publish
+ * nothing, because a job's progress is the job's to publish.
  */
 @Injectable()
 export class RealtimeProvider {
@@ -129,6 +158,29 @@ export class RealtimeProvider {
     await this.attempt(`the node of job ${jobId}`, () => this.jobRef(jobId).remove());
   }
 
+  /** Whatever of an import's state the caller has, in one `update`. */
+  async publishImport(snapshot: LibraryImportSnapshot): Promise<void> {
+    const fields: Record<string, unknown> = { ...stated(snapshot), updatedAt: Date.now() };
+
+    await this.attempt(`the import of item ${snapshot.itemId}`, () => this.importRef(snapshot.itemId).update(fields));
+  }
+
+  /** What the last import into an item did, dropped — which only its deletion asks for. */
+  async clearImport(itemId: string): Promise<void> {
+    await this.attempt(`the import node of item ${itemId}`, () => this.importRef(itemId).remove());
+  }
+
+  /** The node as it stands, or null. What tells an endpoint an import is already running. */
+  async runningImport(itemId: string): Promise<LibraryImportSnapshot | null> {
+    try {
+      return (await this.importRef(itemId).get()).val() as LibraryImportSnapshot | null;
+    } catch (cause: unknown) {
+      this.logger.warn(`Could not read the import of item ${itemId}`, cause);
+
+      return null;
+    }
+  }
+
   private rootRef(): Reference {
     return this.firebase.database.ref(RUNNING_JOBS_ROOT);
   }
@@ -139,6 +191,10 @@ export class RealtimeProvider {
 
   private tasksRef(jobId: string): Reference {
     return this.firebase.database.ref(`${RUNNING_JOBS_ROOT}/${jobId}/tasks`);
+  }
+
+  private importRef(itemId: string): Reference {
+    return this.firebase.database.ref(`${LIBRARY_IMPORTS_ROOT}/${itemId}`);
   }
 
   /** The swallow, stated once. `what` completes the sentence "Could not publish …". */

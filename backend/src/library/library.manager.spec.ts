@@ -4,6 +4,7 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
@@ -97,8 +98,19 @@ class FakeTranslationManager {
   }
 }
 
-function managerOver(repository: FakeRepository, contents = new FakeContentRepository(), translations = new FakeTranslationManager()): LibraryManager {
-  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository, translations as unknown as LibraryTranslationManager);
+/** The live tree, as far as this manager touches it: one node dropped when an item goes. */
+class FakeRealtimeProvider {
+  cleared: string[] = [];
+
+  clearImport(itemId: string): Promise<void> {
+    this.cleared.push(itemId);
+
+    return Promise.resolve();
+  }
+}
+
+function managerOver(repository: FakeRepository, contents = new FakeContentRepository(), translations = new FakeTranslationManager(), realtime = new FakeRealtimeProvider()): LibraryManager {
+  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository, translations as unknown as LibraryTranslationManager, realtime as unknown as RealtimeProvider);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
@@ -407,6 +419,16 @@ describe('LibraryManager.remove', () => {
     await managerOver(new FakeRepository([novel()]), new FakeContentRepository(), translations).remove('novel-1');
 
     expect(translations.cleared).toEqual(['novel-1']);
+  });
+
+  // The node outlives the run that wrote it, so a reopened dialog can say what the
+  // last import did. Deleting the item is the only thing that ever drops it.
+  it('drops the import node, which nothing else does', async () => {
+    const realtime = new FakeRealtimeProvider();
+
+    await managerOver(new FakeRepository([novel()]), new FakeContentRepository(), new FakeTranslationManager(), realtime).remove('novel-1');
+
+    expect(realtime.cleared).toEqual(['novel-1']);
   });
 });
 

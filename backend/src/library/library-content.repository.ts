@@ -54,6 +54,12 @@ type WithoutStamps<T> = T extends LibraryContent ? Omit<T, 'id' | 'createdAt' | 
 /** A row as a caller hands it over — the id and the dates are this class's to stamp. */
 export type LibraryContentDraft = WithoutStamps<LibraryContent>;
 
+/** A stored row and what to rewrite it as. `createdAt` is the document's, and stays. */
+export interface LibraryContentRewrite {
+  id: string;
+  draft: LibraryContentDraft;
+}
+
 /**
  * The `contents` subcollection of a library item.
  *
@@ -114,15 +120,49 @@ export class LibraryContentRepository {
     return { ...draft, id: document.id, createdAt: iso(now), updatedAt: iso(now) };
   }
 
-  /** Rows a source turned out to hold. Batched, because a novel is a thousand of them. */
-  async createMany(itemId: string, drafts: LibraryContentDraft[]): Promise<void> {
+  /**
+   * Rows a source turned out to hold. Batched, because a novel is a thousand of them.
+   *
+   * Answers with the ids it allocated, in the order the drafts came — which is what
+   * lets an import file a translation under a chapter it has only just created.
+   */
+  async createMany(itemId: string, drafts: LibraryContentDraft[]): Promise<string[]> {
     const contents = this.contentsOf(itemId);
+    const created: string[] = [];
 
     for (let from = 0; from < drafts.length; from += BATCH_LIMIT) {
       const batch = this.firebase.firestore.batch();
       const now = Timestamp.now();
 
-      drafts.slice(from, from + BATCH_LIMIT).forEach((draft) => batch.set(contents.doc(), { ...draft, createdAt: now, updatedAt: now }));
+      drafts.slice(from, from + BATCH_LIMIT).forEach((draft) => {
+        const document = contents.doc();
+
+        batch.set(document, { ...draft, createdAt: now, updatedAt: now });
+        created.push(document.id);
+      });
+
+      await batch.commit();
+    }
+
+    return created;
+  }
+
+  /**
+   * Many rows rewritten whole, in `createMany`'s loop with a different verb.
+   *
+   * `update` rather than `set`, for the one field it leaves alone — `createdAt` — and
+   * for the same reason `replace` uses it one row at a time. What earns the batch is
+   * the import: six hundred `replace` calls would be six hundred round trips and six
+   * hundred recounts of the item they all belong to.
+   */
+  async replaceMany(itemId: string, rows: LibraryContentRewrite[]): Promise<void> {
+    const contents = this.contentsOf(itemId);
+
+    for (let from = 0; from < rows.length; from += BATCH_LIMIT) {
+      const batch = this.firebase.firestore.batch();
+      const updatedAt = Timestamp.now();
+
+      rows.slice(from, from + BATCH_LIMIT).forEach((row) => batch.update(contents.doc(row.id), { ...row.draft, updatedAt }));
 
       await batch.commit();
     }

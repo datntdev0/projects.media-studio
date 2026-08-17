@@ -9,6 +9,7 @@
 export enum QueueTopic {
   ScrapingJobRequested = 'scraping.job.requested',
   ScrapingContentRequested = 'scraping.content.requested',
+  LibraryImportRequested = 'library.import.requested',
 }
 
 /**
@@ -35,6 +36,19 @@ export interface ScrapingContentRequested {
 }
 
 /**
+ * A package to unpack into an item. One message for the whole of it, not one per
+ * chapter: an import is a single sequential pass over one archive we already hold,
+ * and splitting it would mean reading that archive once per chapter.
+ */
+export interface LibraryImportRequested {
+  /** Where the chapters are going. Already resolved — a new-item import created it first. */
+  itemId: string;
+  packageUrl: string;
+  /** What to do with a chapter number the target already holds. The library's own enum, as a string. */
+  onConflict: string;
+}
+
+/**
  * The payload each topic carries. Producer and consumer both read this, so a field
  * that changes is a compile error on both sides at once.
  *
@@ -45,6 +59,7 @@ export interface ScrapingContentRequested {
 export interface QueuePayloads {
   [QueueTopic.ScrapingJobRequested]: ScrapingJobRequested;
   [QueueTopic.ScrapingContentRequested]: ScrapingContentRequested;
+  [QueueTopic.LibraryImportRequested]: LibraryImportRequested;
 }
 
 /** What a consumer is handed: the payload, and enough about the send to trace it. */
@@ -63,6 +78,7 @@ export interface QueueMessage<TPayload> {
  */
 export const SCRAPING_JOB_QUEUE = 'scraping.job.requested';
 export const SCRAPING_CONTENT_QUEUE = 'scraping.content.scrape.requested';
+export const LIBRARY_IMPORT_QUEUE = 'library.import.unpack.requested';
 
 /**
  * Which consumers receive what. The one place fan-out is configured: a queue name
@@ -75,6 +91,7 @@ export const SCRAPING_CONTENT_QUEUE = 'scraping.content.scrape.requested';
 export const QUEUE_CONSUMERS: Record<QueueTopic, readonly string[]> = {
   [QueueTopic.ScrapingJobRequested]: [SCRAPING_JOB_QUEUE],
   [QueueTopic.ScrapingContentRequested]: [SCRAPING_CONTENT_QUEUE],
+  [QueueTopic.LibraryImportRequested]: [LIBRARY_IMPORT_QUEUE],
 };
 
 /** Every queue that has to exist, for the module that registers them. Deduplicated. */

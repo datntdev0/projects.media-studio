@@ -464,7 +464,8 @@ discovery produced.
 
 | File | What it is |
 | --- | --- |
-| `backend/src/library/library-import.manager.ts` | New, ~180 lines. `validate`, `start`, `run`. |
+| `backend/src/library/library-import.manager.ts` | New. `read`, `validate`, and — in step 4 — `start` and `run`. |
+| `backend/src/library/library-import.report.ts` | New. The five rows, as free functions over what `read` found. Its own file because it is prose rather than rules, and because the two together put the manager well past the file-length line. |
 | `backend/src/library/library.controller.ts` | The `POST :id/import/validate` route. |
 | `backend/src/library/library-import.manager.spec.ts` | New. |
 

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { LibraryItemDto, LibraryItemMetadataInputDto, NovelMetadataInputDto } from './dto/library-item.dto';
 import { LibraryItemPageDto, LibraryListItemDto } from './dto/library-item-list.dto';
@@ -35,6 +36,7 @@ export class LibraryManager {
     private readonly repository: LibraryRepository,
     private readonly contents: LibraryContentRepository,
     private readonly translations: LibraryTranslationManager,
+    private readonly realtime: RealtimeProvider,
   ) {}
 
   /**
@@ -105,6 +107,9 @@ export class LibraryManager {
     await this.require(id);
     await this.contents.removeAll(id);
     await this.translations.removeAll(id);
+    // The import node outlives the run that wrote it, so a reopened dialog can say
+    // what the last one did. This is the only thing that ever clears it.
+    await this.realtime.clearImport(id);
     await this.repository.delete(id);
   }
 

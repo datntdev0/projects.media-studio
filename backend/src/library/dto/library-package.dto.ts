@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUrl } from 'class-validator';
-import { PackageCheckState } from '../entities/library-package.entity';
+import { IsEnum, IsUrl } from 'class-validator';
+import { ImportConflict, PackageCheckState } from '../entities/library-package.entity';
 import { LibraryTranslationCoverageDto } from './library-translation.dto';
 
 /**
@@ -39,6 +39,22 @@ export class LibraryPackageRefDto {
   @ApiProperty({ description: 'The download URL of an uploaded package. It has to be an object in this bucket.' })
   @IsUrl()
   packageUrl!: string;
+}
+
+/** The same package, plus what to do about the chapters the target already holds. */
+export class StartLibraryImportDto extends LibraryPackageRefDto {
+  @ApiProperty({ description: 'What to do with a chapter number this item already has.', enum: ImportConflict, enumName: 'ImportConflict' })
+  @IsEnum(ImportConflict)
+  onConflict!: ImportConflict;
+}
+
+/** What a queued import answers with. Nothing is written yet. */
+export class LibraryImportDto {
+  @ApiProperty({ description: "Where the chapters are going. The route's id, unless the policy made a new item.", example: 'oWY5aMSyk2Xu6nqQKtF3' })
+  itemId!: string;
+
+  @ApiProperty({ description: 'Bodies to write — chapters plus translations. What the progress bar divides by.', example: 1052 })
+  total!: number;
 }
 
 /** One line of the report — the mockup's badge, its bold line and its muted one. */

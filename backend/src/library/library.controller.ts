@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { LIBRARY_CONTENT_PATH, LIBRARY_EXPORT_PATH, LIBRARY_IMPORT_PATH, LIBRARY_PATH } from '../core/api.constants';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
@@ -8,7 +8,7 @@ import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { CONTENT_ONE_OF, ImageAssetDto, LibraryContentPageDto, NovelChapterDto, VideoAssetDto } from './dto/library-content.dto';
 import { LibraryItemDto } from './dto/library-item.dto';
 import { LibraryItemPageDto } from './dto/library-item-list.dto';
-import { LibraryPackageDto, LibraryPackageRefDto, LibraryPackageReportDto } from './dto/library-package.dto';
+import { LibraryImportDto, LibraryPackageDto, LibraryPackageRefDto, LibraryPackageReportDto, StartLibraryImportDto } from './dto/library-package.dto';
 import { QueryContentLanguageDto } from './dto/query-content-language.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
@@ -136,6 +136,18 @@ export class LibraryController {
   @ApiNotFoundResponse({ description: NOT_FOUND })
   validateImport(@Param('id') id: string, @Body() packaged: LibraryPackageRefDto): Promise<LibraryPackageReportDto> {
     return this.imports.validate(id, packaged.packageUrl);
+  }
+
+  @Post(`:id/${LIBRARY_IMPORT_PATH}`)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Unpack a package into this item, or into a new one, in the background' })
+  @ApiAcceptedResponse({ type: LibraryImportDto, description: 'Queued. Watch `libraryImports/{itemId}` in the Realtime Database for how far it has got.' })
+  @ApiBadRequestResponse({ description: `${NOT_PACKAGEABLE} A package that will not open, or one whose report is not valid.` })
+  @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
+  @ApiNotFoundResponse({ description: NOT_FOUND })
+  @ApiConflictResponse({ description: 'An import is already running over this item.' })
+  startImport(@Param('id') id: string, @Body() input: StartLibraryImportDto): Promise<LibraryImportDto> {
+    return this.imports.start(id, input);
   }
 
   @Get(CONTENTS)

@@ -6,6 +6,10 @@
         ".write": false,
         ".indexOn": ["library/id", "status"]
       }
+    },
+    "libraryImports": {
+      ".read": "auth != null",
+      ".write": false
     }
   }
 }
