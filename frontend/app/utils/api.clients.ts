@@ -483,6 +483,177 @@ export class LibraryClient {
     }
 
     /**
+     * Pack an item's metadata, chapters and translations into a .zip
+     * @return Filed in the bucket. Open `url` to download it.
+     */
+    export(id: string, signal?: AbortSignal): Promise<LibraryPackageDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/export";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processExport(_response);
+        });
+    }
+
+    protected processExport(response: Response): Promise<LibraryPackageDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryPackageDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("An image or video set. Only a novel can be packaged.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LibraryPackageDto>(null as any);
+    }
+
+    /**
+     * Say what an uploaded package holds, and what importing it would do
+     * @return Read, compared against this item, and nothing written. A warning does not stop an import; a failure does.
+     */
+    validateImport(id: string, body: LibraryPackageRefDto, signal?: AbortSignal): Promise<LibraryPackageReportDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/import/validate";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processValidateImport(_response);
+        });
+    }
+
+    protected processValidateImport(response: Response): Promise<LibraryPackageReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryPackageReportDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("An image or video set. Only a novel can be packaged. A URL that is not an object in this bucket, or a package that will not open.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LibraryPackageReportDto>(null as any);
+    }
+
+    /**
+     * Unpack a package into this item, or into a new one, in the background
+     * @return Queued. Watch `libraryImports/{itemId}` in the Realtime Database for how far it has got.
+     */
+    startImport(id: string, body: StartLibraryImportDto, signal?: AbortSignal): Promise<LibraryImportDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/import";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processStartImport(_response);
+        });
+    }
+
+    protected processStartImport(response: Response): Promise<LibraryImportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryImportDto;
+            return result202;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("An image or video set. Only a novel can be packaged. A package that will not open, or one whose report is not valid.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id.", status, _responseText, _headers);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            return throwException("An import is already running over this item.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LibraryImportDto>(null as any);
+    }
+
+    /**
      * One item's content — chapters by their number, assets by their name
      * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
      * @param status (optional) All five, including the ones only discovery and the job runner set — a filter reads data it does not write.
@@ -1467,6 +1638,67 @@ export interface UpdateLibraryItemDto {
     status?: WritableLibraryItemStatus;
     /** The editable fields for this `type`. Every type may state the inventory; only a novel has anything else to say. */
     metadata?: NovelMetadataInputDto;
+}
+
+export interface LibraryPackageDto {
+    /** Where the archive is. Tokenised, and ready to open. */
+    url: string;
+    /** What the browser saves it as. */
+    filename: string;
+    /** What the archive weighs. */
+    bytes: number;
+    /** Chapter records written. */
+    chapters: number;
+    /** Of those, how many had text to pack. The rest are discovered chapters nobody has scraped. */
+    bodies: number;
+    /** What the package carries per language — all three, zeroes included. */
+    translations: LibraryTranslationCoverageDto[];
+}
+
+export interface LibraryPackageRefDto {
+    /** The download URL of an uploaded package. It has to be an object in this bucket. */
+    packageUrl: string;
+}
+
+export type PackageCheckState = "pass" | "warn" | "fail";
+
+export interface LibraryPackageCheckDto {
+    state: PackageCheckState;
+    label: string;
+    detail: string;
+}
+
+export interface LibraryPackageReportDto {
+    /** Whether an import may proceed: no check failed. A warning does not stop one. */
+    valid: boolean;
+    checks: LibraryPackageCheckDto[];
+    /** Chapter records in the package. */
+    chapters: number;
+    /** Chapter numbers the target does not hold yet. */
+    adding: number;
+    /** Chapter numbers it already holds. What the conflict policy decides about. */
+    existing: number;
+    /** Entries the format does not know, left alone. */
+    skipped: string[];
+    /** One row per language the package carries. A language it does not is absent, not zero. */
+    translations: LibraryTranslationCoverageDto[];
+}
+
+/** What to do with a chapter number this item already has. */
+export type ImportConflict = "skip" | "overwrite" | "newItem";
+
+export interface StartLibraryImportDto {
+    /** The download URL of an uploaded package. It has to be an object in this bucket. */
+    packageUrl: string;
+    /** What to do with a chapter number this item already has. */
+    onConflict: ImportConflict;
+}
+
+export interface LibraryImportDto {
+    /** Where the chapters are going. The route's id, unless the policy made a new item. */
+    itemId: string;
+    /** Bodies to write — chapters plus translations. What the progress bar divides by. */
+    total: number;
 }
 
 export interface LibraryContentPageDto {

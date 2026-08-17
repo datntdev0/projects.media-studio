@@ -24,6 +24,8 @@ const covers = useCovers()
 
 const files = useContentFiles()
 
+const packages = useLibraryPackages()
+
 const toast = useToast()
 
 const itemId = computed(() => String(route.params.id))
@@ -216,6 +218,10 @@ const uploading = ref(false)
 
 const discovering = ref(false)
 
+const exporting = ref(false)
+
+const importOpen = ref(false)
+
 const formOpen = ref(false)
 
 const deleteItemOpen = ref(false)
@@ -327,6 +333,47 @@ async function onDiscover() {
   } finally {
     discovering.value = false
   }
+}
+
+/**
+ * The whole item, packed and handed to the browser.
+ *
+ * One request, held open while the archive is built — a long novel is a long wait, and
+ * the button says **Preparing…** and means it. The download itself is a navigation:
+ * the object carries its own `Content-Disposition`, so the file lands under the name
+ * the server chose.
+ */
+async function onExport() {
+  if (exporting.value) {
+    return
+  }
+
+  exporting.value = true
+
+  try {
+    const packed = await libraryClient.export(itemId.value)
+
+    packages.download(packed.url)
+
+    toast.add({ title: `Packed ${countLabel(packed.chapters)} ${contentUnit('novel', packed.chapters)}`, icon: 'i-lucide-check', color: 'primary' })
+  } catch (cause) {
+    toast.add({ title: apiMessage(cause, 'Could not pack the item.'), icon: 'i-lucide-triangle-alert', color: 'error' })
+  } finally {
+    exporting.value = false
+  }
+}
+
+/** A run finished. Into this item it is a refresh; into a new one it is a new screen. */
+async function onImported(target: string) {
+  if (target !== itemId.value) {
+    await navigateTo(`/library/${target}`)
+
+    return
+  }
+
+  await refreshAll()
+
+  toast.add({ title: 'Import complete', icon: 'i-lucide-check', color: 'primary' })
 }
 
 /** The panel's button describes a job over the whole novel; the table's over what is ticked. */
@@ -499,10 +546,13 @@ async function onUpload(picked: FileList | null) {
           :item="novel"
           :chapters="total"
           :discovering="discovering"
+          :exporting="exporting"
           @edit="formOpen = true"
           @remove="deleteItemOpen = true"
           @discover="onDiscover"
           @scrape="onScrape()"
+          @export="onExport"
+          @import="importOpen = true"
         />
       </AppResizable>
 
@@ -675,6 +725,8 @@ async function onUpload(picked: FileList | null) {
       :chapter="renaming"
       @saved="onContentSaved"
     />
+
+    <AppLibraryImportDialog v-model:open="importOpen" :item-id="itemId" @imported="onImported" />
 
     <AppLibraryScrapeDialog
       v-model:open="scrapeOpen"

@@ -13,6 +13,8 @@ const props = defineProps<{
   chapters: number
   /** True while the source is being read. The one control that waits on it. */
   discovering?: boolean
+  /** True while the archive is being built. Export is a request, and a long novel makes it a long one. */
+  exporting?: boolean
 }>()
 
 defineEmits<{
@@ -20,6 +22,8 @@ defineEmits<{
   remove: []
   discover: []
   scrape: []
+  export: []
+  import: []
 }>()
 
 /** Only a crawler item has a source to read; a manual one is told so rather than left to guess. */
@@ -134,6 +138,35 @@ const facts = computed(() => [
 
       <p class="text-label text-muted text-pretty">
         Discovery only checks the source for new chapter links — it does not download content.
+      </p>
+
+      <!-- Both are enabled for a manual item, unlike the two above: a novel written
+           by hand is exactly the kind you would want to move somewhere else. -->
+      <div class="grid grid-cols-2 gap-2">
+        <UButton
+          icon="i-lucide-download"
+          :label="exporting ? 'Preparing…' : 'Export .zip'"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          block
+          :loading="exporting"
+          @click="$emit('export')"
+        />
+
+        <UButton
+          icon="i-lucide-upload"
+          label="Import…"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          block
+          @click="$emit('import')"
+        />
+      </div>
+
+      <p class="text-label text-muted text-pretty">
+        Export packs metadata, chapters and translations into a .zip. Import accepts a zip exported from any workspace.
       </p>
 
       <UButton

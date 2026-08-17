@@ -241,6 +241,8 @@ describe('LibraryImportWriter', () => {
     await around.writer().run(novel(), PATH, records(), ImportConflict.Skip);
 
     expect(around.published[0]).toMatchObject({ itemId: 'novel-1', status: 'running', total: 2, done: 0 });
-    expect(around.published.at(-1)).toMatchObject({ status: 'completed', added: 2, overwritten: 0, skipped: 0, translated: 0 });
+    // `done` again at the end, so the bar lands full: two bodies never reach a tick,
+    // and a bar stopped at 0% reads as an import that did nothing.
+    expect(around.published.at(-1)).toMatchObject({ status: 'completed', done: 2, added: 2, overwritten: 0, skipped: 0, translated: 0 });
   });
 });

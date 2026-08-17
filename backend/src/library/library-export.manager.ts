@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppConfigService } from '../core/config/app-config.service';
 import { objectPathFrom } from '../core/firebase/storage-url';
@@ -179,7 +179,15 @@ function chapterBodies(chapters: NovelChapter[], records: PackagedChapter[]): Pa
 /** One at a time, deliberately: each waits for the upload, which is what bounds the memory. */
 async function copy(into: ArchiveWriter, bodies: PackagedBody[]): Promise<void> {
   for (const body of bodies) {
-    await into.object(body.entry, body.path);
+    try {
+      await into.object(body.entry, body.path);
+    } catch (cause: unknown) {
+      // A row pointing at an object that is not there is a row that is lying, and the
+      // storage client's own "No such object" says nothing about which chapter. The
+      // whole export fails rather than quietly writing an empty entry: an archive that
+      // says it holds a chapter and does not is worse than one nobody got.
+      throw new UnprocessableEntityException(`${body.entry} points at text that is not in storage. Re-scrape that chapter, or clear its content, and export again.`, { cause });
+    }
   }
 }
 

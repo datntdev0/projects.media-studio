@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { LIBRARY_CONTENT_PATH, LIBRARY_EXPORT_PATH, LIBRARY_IMPORT_PATH, LIBRARY_PATH } from '../core/api.constants';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
@@ -121,6 +121,7 @@ export class LibraryController {
   @ApiBadRequestResponse({ description: NOT_PACKAGEABLE })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: NOT_FOUND })
+  @ApiUnprocessableEntityResponse({ description: 'A chapter points at text that is not in storage. The item is packable once that row is fixed.' })
   export(@Param('id') id: string): Promise<LibraryPackageDto> {
     return this.packages.export(id);
   }

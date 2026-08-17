@@ -90,13 +90,16 @@ export class LibraryImportWriter {
   async run(item: NovelItem, path: string, records: PackageRecords, onConflict: ImportConflict): Promise<ImportOutcome> {
     const stored = await this.contents.chapters(item.id);
     const plan = planFor(records, stored, await this.storedTranslations(item.id, records, stored), onConflict);
+    const total = bodyCount(records);
 
-    await this.realtime.publishImport({ itemId: item.id, status: RUNNING, total: bodyCount(records), done: 0, error: '' });
-    await this.fill(item.id, path, plan);
+    await this.realtime.publishImport({ itemId: item.id, status: RUNNING, total, done: 0, error: '' });
+    await this.fill(item.id, path, plan, total);
 
     const outcome = await this.flush(item, plan);
 
-    await this.realtime.publishImport({ itemId: item.id, status: COMPLETED, label: '', ...outcome });
+    // `done` again, so the bar ends full: a package of three bodies never reaches a
+    // tick, and one that stopped at 0% would read as an import that did nothing.
+    await this.realtime.publishImport({ itemId: item.id, status: COMPLETED, done: total, label: '', ...outcome });
 
     return outcome;
   }
@@ -120,7 +123,7 @@ export class LibraryImportWriter {
    * package holds, not over what turned out to be worth writing — and its text is
    * never uploaded.
    */
-  private async fill(itemId: string, path: string, plan: ImportPlan): Promise<void> {
+  private async fill(itemId: string, path: string, plan: ImportPlan, total: number): Promise<void> {
     const chapters = entriesBy(plan.chapters, (planned) => planned.action !== 'skip');
     const translations = entriesBy(plan.translations, (planned) => planned.write);
     let done = 0;
@@ -134,7 +137,7 @@ export class LibraryImportWriter {
         planned.contentUrl = await this.files.saveText(itemId, body.toString('utf8'));
       }
 
-      if (done % PUBLISH_EVERY === 0) {
+      if (done % PUBLISH_EVERY === 0 || done === total) {
         await this.realtime.publishImport({ itemId, done, label: planned ? `Chapter ${planned.record.index} · ${planned.record.title}` : '' });
       }
     });

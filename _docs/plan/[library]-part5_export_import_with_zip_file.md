@@ -642,6 +642,13 @@ one the import already has: a queue message, a node and a progress bar. It is no
 mockup draws export as a button and not as a dialog, and because an export writes nothing that a
 timeout could leave half-done — a failed one leaves an incomplete object nobody was given the URL of.
 
+**One chapter pointing at text that is not in storage fails the whole export.** A row whose
+`contentUrl` names an object that has gone — a discarded upload, or a URL set by hand — cannot be
+packed, and the archive is abandoned rather than written with an empty entry where a chapter should
+be: a backup that silently loses a chapter is worse than one nobody got. The `422` names the entry,
+so the row can be re-scraped or cleared. Skipping it instead would need the item's whole prefix
+listed before the archive is opened, which is a real fix and a larger one.
+
 **An export object is never removed.** Every export leaves a zip under `packages/{itemId}/` under a
 random name, and exporting the same novel five times leaves five. The random name is deliberate —
 `ContentFileProvider` and `useContentFiles` both give the reason, that a fixed one would break a
@@ -672,6 +679,16 @@ counters. There is no rollback and there should not be one.
 **The uploaded package is left behind when an import fails**, on purpose, so it can be retried. That
 is also how it becomes litter: nothing retries it either, and the bucket keeps it.
 
+**A package is consumed by the import that reads it.** A successful run drops the object, so the URL
+that started it answers `403` afterwards and a second import off the same URL is the *"could not open
+the package"* refusal. That is right for the dialog, which uploads afresh every time, and surprising
+for anyone driving the API by hand.
+
+**The progress bar moves in tens.** `PUBLISH_EVERY` is 10, so an import of eight chapters shows one
+jump from nothing to done. The last body always publishes, so a bar never stops short of full — but
+the number between the two ends is coarse by design, because the alternative is a Realtime Database
+write per chapter.
+
 **Nothing checks that a translation is in the language its folder names.** `translations/vi/` will
 import whatever is in it, which is part 4's limit reaching one layer further out.
 
@@ -696,6 +713,17 @@ pnpm install              # picks up fflate
 pnpm dev:infrastructure   # emulators + the scraping API on :8000
 pnpm seed:firebase        # admin@datntdev.com / StrongPassword123!
 pnpm dev                  # backend :3001 + frontend :3000
+```
+
+**An emulator already running has to be rebuilt, not just restarted.** This part changes
+`storage.rules` — the new `packages/` prefix — and `database.rules.json` — the `libraryImports`
+read — and `_deploy/firebase/Dockerfile` bakes both into the image rather than bind-mounting them.
+A container started before this branch enforces the old rules, so the browser's upload answers
+`403 Permission denied. No WRITE permission.` and the dialog's progress subscription reads nothing.
+`pnpm dev:infrastructure` carries `--build` and is the whole fix; for a container already up:
+
+```bash
+docker compose -f _deploy/dockercompose.local.infrastructure.yml up -d --build firebase
 ```
 
 **Backend**, before any UI:
