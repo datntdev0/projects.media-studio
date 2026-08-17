@@ -12,6 +12,14 @@ export const LIBRARY_COLLECTION = 'libraryItems';
 /** Under a library item: one document per chapter, image or clip it holds. */
 export const CONTENT_SUBCOLLECTION = 'contents';
 
+/**
+ * Beside `contents`, one per language: `translation_vi`, `translation_en` and
+ * `translation_zh`, each holding one document per translated chapter, keyed by
+ * that chapter's own id. The map from a language to its name is
+ * `TRANSLATION_SUBCOLLECTIONS`, which stays beside the enum it is keyed by — a
+ * `Record<TranslationLanguage, …>` here would have `core` import from a feature.
+ */
+
 /** One document per scraping job — what was asked for, and where it has got to. */
 export const SCRAPING_JOB_COLLECTION = 'scrapingJobs';
 
