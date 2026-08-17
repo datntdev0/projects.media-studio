@@ -20,8 +20,11 @@ import { TRANSLATION_LANGUAGES, TranslationLanguage } from './library-translatio
  * inside an archive.
  */
 
-/** The format's version. A package from a later one is refused rather than half-read. */
+/** The format's version. A package from a later one fails validation rather than being half-read. */
 export const PACKAGE_SCHEMA = 1;
+
+/** Both packaging routes refuse the same thing, so both refuse it in the same words. */
+export const NOT_PACKAGEABLE = 'Only a novel can be packaged';
 
 export const MANIFEST_ENTRY = 'manifest.json';
 
@@ -75,6 +78,18 @@ export enum ImportConflict {
   Skip = 'skip',
   Overwrite = 'overwrite',
   NewItem = 'newItem',
+}
+
+/**
+ * How one line of the validation report reads.
+ *
+ * A `Fail` is what stops an import; a `Warn` is drawn in bold and continued past —
+ * the mockup's own footer says *"1 warning — you can continue."*
+ */
+export enum PackageCheckState {
+  Pass = 'pass',
+  Warn = 'warn',
+  Fail = 'fail',
 }
 
 /** `cover.jpg`, or `cover` where the stored object has no extension to keep. */

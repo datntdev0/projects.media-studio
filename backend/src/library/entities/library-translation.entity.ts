@@ -28,6 +28,17 @@ export const TRANSLATION_SUBCOLLECTIONS: Record<TranslationLanguage, string> = {
 export const TRANSLATION_LANGUAGES = Object.values(TranslationLanguage);
 
 /**
+ * What each one is called in a sentence this process writes — the validation report's
+ * *"Translations · Vietnamese"*. Mirrored by `TRANSLATION_LANGUAGES` in
+ * `frontend/app/utils/library-content.ts`, which names the same three for the dropdown.
+ */
+export const TRANSLATION_NAMES: Record<TranslationLanguage, string> = {
+  [TranslationLanguage.Vietnamese]: 'Vietnamese',
+  [TranslationLanguage.English]: 'English',
+  [TranslationLanguage.Chinese]: 'Chinese',
+};
+
+/**
  * A row as a language-aware route answers with — the content, and the two things
  * a client cannot work out for itself.
  *

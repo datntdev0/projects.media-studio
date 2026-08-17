@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryContentRepository } from './library-content.repository';
 import { LibraryExportManager } from './library-export.manager';
+import { LibraryImportManager } from './library-import.manager';
 import { LibraryTranslationManager } from './library-translation.manager';
 import { LibraryTranslationRepository } from './library-translation.repository';
 import { LibraryController } from './library.controller';
@@ -21,11 +22,11 @@ import { LibraryRepository } from './library.repository';
  * and their content without going through HTTP — a scraping job fills in the
  * chapters it fetched, and a translation workflow will fill in the rest. The
  * repositories stay in: what collection anything lives in is this module's alone,
- * and so is `LibraryExportManager`, which nothing but HTTP asks for a package.
+ * and so are the two package managers, which nothing but HTTP asks for a package.
  */
 @Module({
   controllers: [LibraryController],
-  providers: [LibraryManager, LibraryRepository, LibraryContentManager, LibraryContentRepository, LibraryTranslationManager, LibraryTranslationRepository, LibraryExportManager],
+  providers: [LibraryManager, LibraryRepository, LibraryContentManager, LibraryContentRepository, LibraryTranslationManager, LibraryTranslationRepository, LibraryExportManager, LibraryImportManager],
   exports: [LibraryManager, LibraryContentManager, LibraryTranslationManager],
 })
 export class LibraryModule {}

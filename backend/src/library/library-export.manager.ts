@@ -8,7 +8,7 @@ import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { LibraryPackageDto } from './dto/library-package.dto';
 import { NovelChapter } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item.entity';
-import { CHAPTERS_ENTRY, ITEM_ENTRY, MANIFEST_ENTRY, PACKAGE_SCHEMA, PackageManifest, PackagedChapter, bodyEntry, coverEntry, translationBodyEntry, translationsEntry } from './entities/library-package.entity';
+import { CHAPTERS_ENTRY, ITEM_ENTRY, MANIFEST_ENTRY, NOT_PACKAGEABLE, PACKAGE_SCHEMA, PackageManifest, PackagedChapter, bodyEntry, coverEntry, translationBodyEntry, translationsEntry } from './entities/library-package.entity';
 import { TRANSLATION_LANGUAGES, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryTranslationRepository } from './library-translation.repository';
@@ -16,9 +16,6 @@ import { LibraryRepository } from './library.repository';
 
 /** Where a packed item is filed, beside `content/{itemId}/` and `covers/{itemId}/`. */
 const PACKAGE_PREFIX = 'packages';
-
-/** Both refusals are the same fact: a set's package is its bytes, which is a different part. */
-const NOT_A_NOVEL = 'Only a novel can be packaged';
 
 /** One entry that has to be copied out of the bucket: where it goes, and where it comes from. */
 interface PackagedBody {
@@ -144,7 +141,7 @@ export class LibraryExportManager {
     }
 
     if (item.type !== LibraryItemType.Novel) {
-      throw new BadRequestException(NOT_A_NOVEL);
+      throw new BadRequestException(NOT_PACKAGEABLE);
     }
 
     return item;

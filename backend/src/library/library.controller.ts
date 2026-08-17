@@ -1,14 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
-import { LIBRARY_CONTENT_PATH, LIBRARY_EXPORT_PATH, LIBRARY_PATH } from '../core/api.constants';
+import { LIBRARY_CONTENT_PATH, LIBRARY_EXPORT_PATH, LIBRARY_IMPORT_PATH, LIBRARY_PATH } from '../core/api.constants';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
 import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { CONTENT_ONE_OF, ImageAssetDto, LibraryContentPageDto, NovelChapterDto, VideoAssetDto } from './dto/library-content.dto';
 import { LibraryItemDto } from './dto/library-item.dto';
 import { LibraryItemPageDto } from './dto/library-item-list.dto';
-import { LibraryPackageDto } from './dto/library-package.dto';
+import { LibraryPackageDto, LibraryPackageRefDto, LibraryPackageReportDto } from './dto/library-package.dto';
 import { QueryContentLanguageDto } from './dto/query-content-language.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
@@ -16,6 +16,7 @@ import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { TranslatedContent } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryExportManager } from './library-export.manager';
+import { LibraryImportManager } from './library-import.manager';
 import { LibraryManager } from './library.manager';
 
 /** Every route naming an item that is not there says so the same way. */
@@ -62,6 +63,7 @@ export class LibraryController {
     private readonly library: LibraryManager,
     private readonly contents: LibraryContentManager,
     private readonly packages: LibraryExportManager,
+    private readonly imports: LibraryImportManager,
   ) {}
 
   @Get()
@@ -121,6 +123,19 @@ export class LibraryController {
   @ApiNotFoundResponse({ description: NOT_FOUND })
   export(@Param('id') id: string): Promise<LibraryPackageDto> {
     return this.packages.export(id);
+  }
+
+  @Post(`:id/${LIBRARY_IMPORT_PATH}/validate`)
+  // Nothing is written, and nothing is addressable afterwards — a POST because the
+  // question is asked with a body, and a 200 because there is no new resource.
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Say what an uploaded package holds, and what importing it would do' })
+  @ApiOkResponse({ type: LibraryPackageReportDto, description: 'Read, compared against this item, and nothing written. A warning does not stop an import; a failure does.' })
+  @ApiBadRequestResponse({ description: `${NOT_PACKAGEABLE} A URL that is not an object in this bucket, or a package that will not open.` })
+  @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
+  @ApiNotFoundResponse({ description: NOT_FOUND })
+  validateImport(@Param('id') id: string, @Body() packaged: LibraryPackageRefDto): Promise<LibraryPackageReportDto> {
+    return this.imports.validate(id, packaged.packageUrl);
   }
 
   @Get(CONTENTS)

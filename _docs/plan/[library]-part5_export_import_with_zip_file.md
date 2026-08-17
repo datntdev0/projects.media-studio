@@ -177,7 +177,7 @@ Refusals, each a sentence:
 | --- | --- |
 | `400` | Export or import on an image or video set — *"Only a novel can be packaged."* |
 | `400` | A `packageUrl` that is not an object in our bucket. |
-| `400` | A package that will not open, has no `manifest.json`, or states a `schema` above ours. |
+| `400` | A package that will not open, or has no readable `manifest.json`. A package that opens is *reported on*, never refused — a schema above ours is a failed check, not a status code. |
 | `400` | `POST /import` on a package whose report is not `valid`. The server re-reads it; a client cannot skip validation by not calling it. |
 | `404` | No item under that id. |
 | `409` | An import is already running over this item. |
@@ -483,13 +483,19 @@ the format does not recognise — the mockup's `chapter_507.docx, notes.pdf`.
 numbers as a `Set`, so `adding` and `existing` are one loop, and the five checks built off what it
 found. It writes nothing, and it is safe to call twice.
 
-The refusals live here, and each one is checked before anything expensive:
+Only two things are refused outright, and both because there would be nothing to draw:
 
 - The URL is not an object in our bucket → `400`, before the object is opened.
 - No `manifest.json`, or it will not parse → `400`.
-- `manifest.schema > PACKAGE_SCHEMA` → `400` naming both numbers. A **lower** schema is accepted:
-  there is one version today and the reader will be told to widen when there are two.
-- `manifest.kind` is not a novel, or the target is not → `400`.
+
+Everything else about a package that *opens* is a row in the report rather than a status code,
+because the dialog is standing on the validate step waiting to be told what is wrong:
+
+- `manifest.schema > PACKAGE_SCHEMA` → **fail**. A lower schema is accepted; there is one version
+  today and the reader will be told to widen when there are two.
+- `manifest.kind` is not a novel, or either records file is missing → **fail**.
+- The target is not a novel → `400`. That is the *item*, not the package, and it is the same refusal
+  export gives.
 
 ## Step 4 — The import, queued and run
 
