@@ -31,6 +31,12 @@ export const LIBRARY_PATH = 'library';
 /** Under an item. `/api/v1/library/:itemId/contents/…` */
 export const LIBRARY_CONTENT_PATH = 'contents';
 
+/** Under an item. `/api/v1/library/:id/export` — the item packed into a .zip. */
+export const LIBRARY_EXPORT_PATH = 'export';
+
+/** Under an item. `/api/v1/library/:id/import` and `/import/validate`. */
+export const LIBRARY_IMPORT_PATH = 'import';
+
 /** Versioned. `/api/v1/scrapings/…` */
 export const SCRAPING_PATH = 'scrapings';
 

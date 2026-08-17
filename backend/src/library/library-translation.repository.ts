@@ -9,6 +9,13 @@ import { TRANSLATION_LANGUAGES, TRANSLATION_SUBCOLLECTIONS, TranslationLanguage 
 /** How many writes fit in one Firestore batch. */
 const BATCH_LIMIT = 500;
 
+/**
+ * How many documents one `getAll` asks for. A page of chapters is two hundred, but an
+ * export asks for the whole novel — and a single `BatchGetDocuments` of two thousand
+ * refs is a request neither end enjoys.
+ */
+const LOOKUP_LIMIT = 300;
+
 /** A translation as a caller hands it over. The id is the chapter's; the dates are this class's to stamp. */
 export type TranslationDraft = Omit<NovelChapter, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -32,26 +39,25 @@ export class LibraryTranslationRepository {
   /**
    * The translations of the chapters named, keyed by the chapter each one is of.
    *
-   * One round trip whatever the page holds, and a `Map` because the caller is
-   * about to zip it against a list — a `find()` per row over two hundred rows is
-   * the shape that quietly goes quadratic.
+   * One round trip per `LOOKUP_LIMIT` ids, and a `Map` because the caller is about
+   * to zip it against a list — a `find()` per row over two hundred rows is the
+   * shape that quietly goes quadratic.
    */
   async findByIds(itemId: string, language: TranslationLanguage, contentIds: string[]): Promise<Map<string, NovelChapter>> {
+    const translations = this.translationsOf(itemId, language);
     const found = new Map<string, NovelChapter>();
 
-    // `getAll` refuses an empty argument list, and an empty page is a real case.
-    if (contentIds.length === 0) {
-      return found;
-    }
+    for (let from = 0; from < contentIds.length; from += LOOKUP_LIMIT) {
+      const refs = contentIds.slice(from, from + LOOKUP_LIMIT).map((contentId) => translations.doc(contentId));
+      // `getAll` refuses an empty argument list, and an empty page is a real case.
+      const snapshots = refs.length > 0 ? await this.firebase.firestore.getAll(...refs) : [];
 
-    const translations = this.translationsOf(itemId, language);
-    const snapshots = await this.firebase.firestore.getAll(...contentIds.map((contentId) => translations.doc(contentId)));
+      for (const snapshot of snapshots) {
+        const row = entityFrom<NovelChapter>(snapshot);
 
-    for (const snapshot of snapshots) {
-      const row = entityFrom<NovelChapter>(snapshot);
-
-      if (row) {
-        found.set(snapshot.id, row);
+        if (row) {
+          found.set(snapshot.id, row);
+        }
       }
     }
 

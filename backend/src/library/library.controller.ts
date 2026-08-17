@@ -1,19 +1,21 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiExtraModels, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
-import { LIBRARY_CONTENT_PATH, LIBRARY_PATH } from '../core/api.constants';
+import { LIBRARY_CONTENT_PATH, LIBRARY_EXPORT_PATH, LIBRARY_PATH } from '../core/api.constants';
 import { CreateLibraryContentDto } from './dto/library-content-create.dto';
 import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { CONTENT_ONE_OF, ImageAssetDto, LibraryContentPageDto, NovelChapterDto, VideoAssetDto } from './dto/library-content.dto';
 import { LibraryItemDto } from './dto/library-item.dto';
 import { LibraryItemPageDto } from './dto/library-item-list.dto';
+import { LibraryPackageDto } from './dto/library-package.dto';
 import { QueryContentLanguageDto } from './dto/query-content-language.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { TranslatedContent } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
+import { LibraryExportManager } from './library-export.manager';
 import { LibraryManager } from './library.manager';
 
 /** Every route naming an item that is not there says so the same way. */
@@ -31,6 +33,9 @@ const WRONG_FIELDS = 'Fields belonging to a type the item is not — a filename 
 
 /** Only a novel is translated, so only a novel's routes take a `language`. */
 const WRONG_LANGUAGE = 'A `language` on an image or video set, or one that is not a language we translate into.';
+
+/** A set's package is its bytes, which is a different part — see the part 5 plan. */
+const NOT_PACKAGEABLE = 'An image or video set. Only a novel can be packaged.';
 
 /** `:itemId/contents`, under the item it belongs to. */
 const CONTENTS = `:itemId/${LIBRARY_CONTENT_PATH}`;
@@ -56,6 +61,7 @@ export class LibraryController {
   constructor(
     private readonly library: LibraryManager,
     private readonly contents: LibraryContentManager,
+    private readonly packages: LibraryExportManager,
   ) {}
 
   @Get()
@@ -102,6 +108,19 @@ export class LibraryController {
   @ApiNotFoundResponse({ description: NOT_FOUND })
   remove(@Param('id') id: string): Promise<void> {
     return this.library.remove(id);
+  }
+
+  @Post(`:id/${LIBRARY_EXPORT_PATH}`)
+  // It writes an archive, but not a resource the caller addresses afterwards — the
+  // same reading `POST /scrapings/validate` takes, and the same 200.
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Pack an item's metadata, chapters and translations into a .zip" })
+  @ApiOkResponse({ type: LibraryPackageDto, description: 'Filed in the bucket. Open `url` to download it.' })
+  @ApiBadRequestResponse({ description: NOT_PACKAGEABLE })
+  @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
+  @ApiNotFoundResponse({ description: NOT_FOUND })
+  export(@Param('id') id: string): Promise<LibraryPackageDto> {
+    return this.packages.export(id);
   }
 
   @Get(CONTENTS)
