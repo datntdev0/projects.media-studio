@@ -43,6 +43,22 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // An item packed into a .zip, or one waiting to be imported into it. Written
+    // from both ends: an export is put here by the API, and an import is uploaded
+    // by the browser the way a chapter body is.
+    match /packages/{itemId}/{file} {
+      allow read: if request.auth != null;
+
+      // Kept in step with PACKAGE_MAX_MB in frontend/app/utils/library-package.ts.
+      // Only a novel is packaged, and 640 chapters of text is single-digit
+      // megabytes — the cap is here for what is not that.
+      allow create, update: if request.auth != null
+        && request.resource.size < 200 * 1024 * 1024
+        && request.resource.contentType.matches('application/zip|application/x-zip-compressed');
+
+      allow delete: if request.auth != null;
+    }
+
     match /{path=**} {
       allow read, write: if false;
     }
