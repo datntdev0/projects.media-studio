@@ -484,16 +484,21 @@ export class LibraryClient {
 
     /**
      * One item's content — chapters by their number, assets by their name
+     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
      * @param status (optional) All five, including the ones only discovery and the job runner set — a filter reads data it does not write.
      * @param search (optional) Case-insensitive, matched against a chapter's title or an asset's filename.
      * @param page (optional) 
      * @param pageSize (optional) 
      */
-    listContents(itemId: string, status?: LibraryContentStatus | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
+    listContents(itemId: string, language?: TranslationLanguage | undefined, status?: LibraryContentStatus | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
         let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents?";
         if (itemId === undefined || itemId === null)
             throw new globalThis.Error("The parameter 'itemId' must be defined.");
         url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
+        if (language === null)
+            throw new globalThis.Error("The parameter 'language' cannot be null.");
+        else if (language !== undefined)
+            url_ += "language=" + encodeURIComponent("" + language) + "&";
         if (status === null)
             throw new globalThis.Error("The parameter 'status' cannot be null.");
         else if (status !== undefined)
@@ -533,6 +538,10 @@ export class LibraryClient {
             let result200: any = null;
             result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryContentPageDto;
             return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -608,15 +617,20 @@ export class LibraryClient {
 
     /**
      * One chapter, image or clip
+     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
      */
-    getContent(itemId: string, contentId: string, signal?: AbortSignal): Promise<NovelChapterDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}";
+    getContent(itemId: string, contentId: string, language?: TranslationLanguage | undefined, signal?: AbortSignal): Promise<NovelChapterDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}?";
         if (itemId === undefined || itemId === null)
             throw new globalThis.Error("The parameter 'itemId' must be defined.");
         url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
         if (contentId === undefined || contentId === null)
             throw new globalThis.Error("The parameter 'contentId' must be defined.");
         url_ = url_.replace("{contentId}", encodeURIComponent("" + contentId));
+        if (language === null)
+            throw new globalThis.Error("The parameter 'language' cannot be null.");
+        else if (language !== undefined)
+            url_ += "language=" + encodeURIComponent("" + language) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -641,6 +655,10 @@ export class LibraryClient {
             result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as NovelChapterDto;
             return result200;
             });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
             return throwException("Missing or invalid ID token.", status, _responseText, _headers);
@@ -658,16 +676,21 @@ export class LibraryClient {
     }
 
     /**
-     * Replace a row's whole writable representation
+     * Replace a row's whole writable representation, or write a translation of it
+     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
      */
-    replaceContent(itemId: string, contentId: string, body: UpdateLibraryContentDto, signal?: AbortSignal): Promise<NovelChapterDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}";
+    replaceContent(itemId: string, contentId: string, body: UpdateLibraryContentDto, language?: TranslationLanguage | undefined, signal?: AbortSignal): Promise<NovelChapterDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}?";
         if (itemId === undefined || itemId === null)
             throw new globalThis.Error("The parameter 'itemId' must be defined.");
         url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
         if (contentId === undefined || contentId === null)
             throw new globalThis.Error("The parameter 'contentId' must be defined.");
         url_ = url_.replace("{contentId}", encodeURIComponent("" + contentId));
+        if (language === null)
+            throw new globalThis.Error("The parameter 'language' cannot be null.");
+        else if (language !== undefined)
+            url_ += "language=" + encodeURIComponent("" + language) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(body);
@@ -698,7 +721,7 @@ export class LibraryClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Fields belonging to a type the item is not \u2014 a filename on a chapter, an index on an asset \u2014 or a chapter without a title.", status, _responseText, _headers);
+            return throwException("Fields belonging to a type the item is not \u2014 a filename on a chapter, an index on an asset \u2014 or a chapter without a title. A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -1211,6 +1234,10 @@ export interface NovelChapterDto {
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
+    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
+    translated: boolean;
+    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
+    sourceTitle: string | null;
     /** The chapter number, and what the list is ordered by. */
     index: number;
     title: string;
@@ -1234,6 +1261,10 @@ export interface ImageAssetDto {
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
+    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
+    translated: boolean;
+    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
+    sourceTitle: string | null;
     filename: string;
     /** Bytes. */
     filesize: number;
@@ -1254,6 +1285,10 @@ export interface VideoAssetDto {
     status: LibraryContentStatus;
     createdAt: string;
     updatedAt: string;
+    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
+    translated: boolean;
+    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
+    sourceTitle: string | null;
     filename: string;
     /** Bytes. */
     filesize: number;
@@ -1338,6 +1373,14 @@ export interface LibraryItemPageDto {
     pageSize: number;
 }
 
+export type TranslationLanguage = "vi" | "en" | "zh";
+
+export interface LibraryTranslationCoverageDto {
+    language: TranslationLanguage;
+    /** Chapters translated into it. Zero until one is written. */
+    translated: number;
+}
+
 export interface LibraryItemDto {
     id: string;
     /** Set on creation and immutable after it. */
@@ -1358,6 +1401,8 @@ export interface LibraryItemDto {
     createdAt: string;
     /** Rewritten on every write. The listing is ordered by it. */
     updatedAt: string;
+    /** How many chapters each language covers — all three, zeroes included. Null on an image or video set, which has no translations. */
+    translations: LibraryTranslationCoverageDto[] | null;
 }
 
 export interface NovelMetadataInputDto {

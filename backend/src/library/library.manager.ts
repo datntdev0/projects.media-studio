@@ -7,6 +7,7 @@ import { UpdateLibraryItemDto, WRITABLE_STATUSES } from './dto/library-item-upda
 import { LibraryItemMetadataBase, NovelMetadata } from './entities/library-item-metadata.entity';
 import { LibraryItem, LibraryItemBase, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from './entities/library-item.entity';
 import { LibraryContentRepository } from './library-content.repository';
+import { LibraryTranslationManager } from './library-translation.manager';
 import { LibraryItemDraft, LibraryRepository } from './library.repository';
 
 /** What a manual item's source is called — it is its own. */
@@ -30,7 +31,11 @@ type WritableNovelMetadata = Omit<NovelMetadata, keyof LibraryItemMetadataBase>;
  */
 @Injectable()
 export class LibraryManager {
-  constructor(private readonly repository: LibraryRepository, private readonly contents: LibraryContentRepository) {}
+  constructor(
+    private readonly repository: LibraryRepository,
+    private readonly contents: LibraryContentRepository,
+    private readonly translations: LibraryTranslationManager,
+  ) {}
 
   /**
    * One page of the listing.
@@ -54,8 +59,8 @@ export class LibraryManager {
   }
 
   /** The read half of CRUD — what refreshes a row after an edit. */
-  get(id: string): Promise<LibraryItemDto> {
-    return this.require(id);
+  async get(id: string): Promise<LibraryItemDto> {
+    return this.withCoverage(await this.require(id));
   }
 
   async create(input: CreateLibraryItemDto): Promise<LibraryItemDto> {
@@ -68,7 +73,7 @@ export class LibraryManager {
       ...source(input),
     };
 
-    return this.repository.create(newDraft(input.type, root, input.metadata));
+    return this.withCoverage(await this.repository.create(newDraft(input.type, root, input.metadata)));
   }
 
   /** The whole writable representation, so an omitted field is a cleared field. */
@@ -86,7 +91,7 @@ export class LibraryManager {
       ...source(input),
     };
 
-    return this.repository.replace(stored, nextDraft(stored, root, input.metadata));
+    return this.withCoverage(await this.repository.replace(stored, nextDraft(stored, root, input.metadata)));
   }
 
   /**
@@ -99,7 +104,18 @@ export class LibraryManager {
   async remove(id: string): Promise<void> {
     await this.require(id);
     await this.contents.removeAll(id);
+    await this.translations.removeAll(id);
     await this.repository.delete(id);
+  }
+
+  /**
+   * The item as a whole-item response carries it: with how much of it each
+   * language covers, or null where it is a set and the question does not apply.
+   *
+   * Not on `list`, deliberately — see `LibraryListItemDto`.
+   */
+  private async withCoverage(item: LibraryItem): Promise<LibraryItemDto> {
+    return { ...item, translations: await this.translations.coverage(item) };
   }
 
   /** The item, or the 404 every route that names one owes. */

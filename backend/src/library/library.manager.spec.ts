@@ -8,7 +8,9 @@ import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
+import { TRANSLATION_LANGUAGES, TranslationCoverage, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentCounts, LibraryContentRepository } from './library-content.repository';
+import { LibraryTranslationManager } from './library-translation.manager';
 import { LibraryManager } from './library.manager';
 import { LibraryItemDraft, LibraryItemFilter, LibraryRepository } from './library.repository';
 
@@ -70,8 +72,33 @@ class FakeContentRepository {
   }
 }
 
-function managerOver(repository: FakeRepository, contents = new FakeContentRepository()): LibraryManager {
-  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository);
+/** The three methods `LibraryManager` reaches for, each recording that it was reached for. */
+class FakeTranslationManager {
+  counted: string[] = [];
+
+  cleared: string[] = [];
+
+  constructor(private readonly translated = 0) {}
+
+  coverage(item: LibraryItem): Promise<TranslationCoverage[] | null> {
+    if (item.type !== LibraryItemType.Novel) {
+      return Promise.resolve(null);
+    }
+
+    this.counted.push(item.id);
+
+    return Promise.resolve(TRANSLATION_LANGUAGES.map((language) => ({ language, translated: this.translated })));
+  }
+
+  removeAll(itemId: string): Promise<void> {
+    this.cleared.push(itemId);
+
+    return Promise.resolve();
+  }
+}
+
+function managerOver(repository: FakeRepository, contents = new FakeContentRepository(), translations = new FakeTranslationManager()): LibraryManager {
+  return new LibraryManager(repository as unknown as LibraryRepository, contents as unknown as LibraryContentRepository, translations as unknown as LibraryTranslationManager);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
@@ -372,5 +399,43 @@ describe('LibraryManager.remove', () => {
     await expect(managerOver(repository, contents).remove('missing')).rejects.toThrow(NotFoundException);
     expect(repository.deleted).toEqual([]);
     expect(contents.cleared).toEqual([]);
+  });
+
+  it('clears the translations too, which are three more subcollections', async () => {
+    const translations = new FakeTranslationManager();
+
+    await managerOver(new FakeRepository([novel()]), new FakeContentRepository(), translations).remove('novel-1');
+
+    expect(translations.cleared).toEqual(['novel-1']);
+  });
+});
+
+describe('LibraryManager translation coverage', () => {
+  it('carries all three languages on a novel it answers with whole', async () => {
+    const item = await managerOver(new FakeRepository([novel()]), new FakeContentRepository(), new FakeTranslationManager(412)).get('novel-1');
+
+    expect(item.translations).toEqual([
+      { language: TranslationLanguage.Vietnamese, translated: 412 },
+      { language: TranslationLanguage.English, translated: 412 },
+      { language: TranslationLanguage.Chinese, translated: 412 },
+    ]);
+  });
+
+  it('carries null on a set, and counts nothing to say so', async () => {
+    const translations = new FakeTranslationManager();
+    const item = await managerOver(new FakeRepository([imageSet()]), new FakeContentRepository(), translations).get('images-1');
+
+    expect(item.translations).toBeNull();
+    expect(translations.counted).toEqual([]);
+  });
+
+  // The listing draws no dropdown, and a page of twenty novels would otherwise be
+  // sixty aggregations for a question nothing on that screen asks.
+  it('is never computed for the listing', async () => {
+    const translations = new FakeTranslationManager();
+
+    await managerOver(new FakeRepository([novel(), novel({ id: 'novel-2' })]), new FakeContentRepository(), translations).list(query());
+
+    expect(translations.counted).toEqual([]);
   });
 });

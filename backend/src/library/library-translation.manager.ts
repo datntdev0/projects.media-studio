@@ -93,8 +93,12 @@ export class LibraryTranslationManager {
   }
 }
 
-/** The row as it stands with no language asked for, or none stored. */
-function untranslated(content: LibraryContent): TranslatedContent {
+/**
+ * The row as it stands with no language asked for, or none stored. Exported for
+ * the routes that never take a language at all — a `POST` answers with the same
+ * shape as a `GET`, and both fields are false and null there by definition.
+ */
+export function untranslated(content: LibraryContent): TranslatedContent {
   return { ...content, translated: false, sourceTitle: null };
 }
 

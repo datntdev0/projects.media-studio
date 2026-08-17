@@ -4,8 +4,14 @@
       "collectionGroup": "scrapingJobs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "startAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
@@ -77,6 +83,156 @@
     },
     {
       "collectionGroup": "contents",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "index",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "words",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "status",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "sourceUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "type",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_vi",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "index",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "words",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "status",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "sourceUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "type",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_en",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "index",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "words",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "status",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "sourceUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "type",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "translation_zh",
       "fieldPath": "updatedAt",
       "indexes": []
     }

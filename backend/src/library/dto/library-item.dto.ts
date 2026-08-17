@@ -2,6 +2,7 @@ import { ApiExtraModels, ApiProperty, OmitType, PartialType, getSchemaPath } fro
 import { ImageSetMetadata, LibraryItemMetadataBase, NovelMetadata, VideoSetMetadata } from '../entities/library-item-metadata.entity';
 import type { LibraryItemMetadata } from '../entities/library-item-metadata.entity';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from '../entities/library-item.entity';
+import { LibraryTranslationCoverageDto } from './library-translation.dto';
 
 /**
  * One item, and the three shapes its `metadata` can take — one file, because a
@@ -125,4 +126,16 @@ export class LibraryItemDto {
 
   @ApiProperty({ description: 'Rewritten on every write. The listing is ordered by it.', example: '2026-08-10T09:12:04.113Z' })
   updatedAt!: string;
+
+  // On the item rather than behind a route of its own: the dropdown that draws it
+  // is on a screen that has already fetched the item, so a second call would be a
+  // round trip to learn something this one could say. `LibraryListItemDto` omits
+  // it — twenty rows a page would be sixty aggregations for a question the listing
+  // does not ask.
+  @ApiProperty({
+    type: [LibraryTranslationCoverageDto],
+    nullable: true,
+    description: 'How many chapters each language covers — all three, zeroes included. Null on an image or video set, which has no translations.',
+  })
+  translations!: LibraryTranslationCoverageDto[] | null;
 }

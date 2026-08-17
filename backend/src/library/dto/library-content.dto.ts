@@ -34,6 +34,16 @@ export class LibraryContentBaseDto implements LibraryContentBase {
 
   @ApiProperty({ example: '2026-08-11T09:12:04.113Z' })
   updatedAt!: string;
+
+  // Neither of the two below is stored, which is why this class carries more than
+  // the interface it implements — `implements` asks for at least the members, not
+  // exactly them. Both are worked out per read, from a source row the route has in
+  // hand anyway.
+  @ApiProperty({ description: 'Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for.', example: false })
+  translated!: boolean;
+
+  @ApiProperty({ type: String, nullable: true, description: 'What the chapter is called in its own language, for the line under a translated title. Null when this row is the source.', example: null })
+  sourceTitle!: string | null;
 }
 
 /**

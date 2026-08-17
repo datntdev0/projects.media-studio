@@ -5,10 +5,13 @@ jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
+import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { ImageAsset, LibraryContent, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { ImageSetItem, LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from './entities/library-item.entity';
+import { TranslatedContent, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryContentCounts, LibraryContentDraft, LibraryContentFilter, LibraryContentPatch, LibraryContentRepository } from './library-content.repository';
+import { LibraryTranslationManager } from './library-translation.manager';
 import { LibraryItemCounters, LibraryRepository } from './library.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
@@ -103,8 +106,35 @@ class FakeContentRepository {
   }
 }
 
-function managerOver(contents: FakeContentRepository, items: FakeItemRepository): LibraryContentManager {
-  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryRepository);
+/**
+ * The three methods the content manager delegates to. Its own translation spec
+ * covers the merge — what these record is that the delegation happens at all, and
+ * that the source collection is left alone when it does.
+ */
+class FakeTranslationManager {
+  saved: { language: TranslationLanguage, contentId: string }[] = [];
+
+  removed: string[] = [];
+
+  decorate(item: LibraryItem, language: TranslationLanguage | undefined, rows: LibraryContent[]): Promise<TranslatedContent[]> {
+    return Promise.resolve(rows.map((row) => ({ ...row, translated: !!language, sourceTitle: language ? 'the source title' : null })));
+  }
+
+  save(item: LibraryItem, language: TranslationLanguage, source: LibraryContent, input: UpdateLibraryContentDto): Promise<TranslatedContent> {
+    this.saved.push({ language, contentId: source.id });
+
+    return Promise.resolve({ ...source, title: input.title ?? '', translated: true, sourceTitle: 'the source title' } as TranslatedContent);
+  }
+
+  removeFor(itemId: string, contentId: string): Promise<void> {
+    this.removed.push(contentId);
+
+    return Promise.resolve();
+  }
+}
+
+function managerOver(contents: FakeContentRepository, items: FakeItemRepository, translations = new FakeTranslationManager()): LibraryContentManager {
+  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryRepository, translations as unknown as LibraryTranslationManager);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {
@@ -403,5 +433,45 @@ describe('LibraryContentManager.remove', () => {
 
     await expect(managerOver(contents, new FakeItemRepository([novel()])).remove('novel-1', 'missing')).rejects.toThrow(NotFoundException);
     expect(contents.removed).toEqual([]);
+  });
+
+  it("takes the chapter's translations with it", async () => {
+    const translations = new FakeTranslationManager();
+
+    await managerOver(new FakeContentRepository([chapter()]), new FakeItemRepository([novel()]), translations).remove('novel-1', 'chapter-1');
+
+    expect(translations.removed).toEqual(['chapter-1']);
+  });
+});
+
+describe('LibraryContentManager translations', () => {
+  it('writes the translation and leaves the source chapter alone', async () => {
+    const contents = new FakeContentRepository([chapter()]);
+    const translations = new FakeTranslationManager();
+
+    const saved = await managerOver(contents, new FakeItemRepository([novel()]), translations)
+      .replace('novel-1', 'chapter-1', { title: 'Chín hồi chuông cho bến cảng' }, TranslationLanguage.Vietnamese);
+
+    expect(translations.saved).toEqual([{ language: TranslationLanguage.Vietnamese, contentId: 'chapter-1' }]);
+    expect(contents.rows[0]).toMatchObject({ title: 'Nine Bells for the Harbour' });
+    expect(saved.translated).toBe(true);
+  });
+
+  // The counters say how much of the *source* we hold, and translating a chapter
+  // downloads nothing — so a translation write must not move them.
+  it('leaves the item counters where they were', async () => {
+    const items = new FakeItemRepository([novel()]);
+
+    await managerOver(new FakeContentRepository([chapter()]), items).replace('novel-1', 'chapter-1', { title: 'Chương một' }, TranslationLanguage.Vietnamese);
+
+    expect(items.counters).toEqual([]);
+  });
+
+  it('recounts as usual when the source itself is written', async () => {
+    const items = new FakeItemRepository([novel()]);
+
+    await managerOver(new FakeContentRepository([chapter()]), items).replace('novel-1', 'chapter-1', { title: 'Nine Bells' });
+
+    expect(items.counters).toHaveLength(1);
   });
 });

@@ -8,10 +8,11 @@ import { CreateLibraryItemDto } from './dto/library-item-create.dto';
 import { CONTENT_ONE_OF, ImageAssetDto, LibraryContentPageDto, NovelChapterDto, VideoAssetDto } from './dto/library-content.dto';
 import { LibraryItemDto } from './dto/library-item.dto';
 import { LibraryItemPageDto } from './dto/library-item-list.dto';
+import { QueryContentLanguageDto } from './dto/query-content-language.dto';
 import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
 import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
 import { UpdateLibraryItemDto } from './dto/library-item-update.dto';
-import { LibraryContent } from './entities/library-content.entity';
+import { TranslatedContent } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryManager } from './library.manager';
 
@@ -27,6 +28,9 @@ const UNAUTHORIZED = 'Missing or invalid ID token.';
 const ONE_ROW = { schema: { oneOf: CONTENT_ONE_OF } };
 
 const WRONG_FIELDS = 'Fields belonging to a type the item is not — a filename on a chapter, an index on an asset — or a chapter without a title.';
+
+/** Only a novel is translated, so only a novel's routes take a `language`. */
+const WRONG_LANGUAGE = 'A `language` on an image or video set, or one that is not a language we translate into.';
 
 /** `:itemId/contents`, under the item it belongs to. */
 const CONTENTS = `:itemId/${LIBRARY_CONTENT_PATH}`;
@@ -103,6 +107,7 @@ export class LibraryController {
   @Get(CONTENTS)
   @ApiOperation({ summary: "One item's content — chapters by their number, assets by their name" })
   @ApiOkResponse({ type: LibraryContentPageDto })
+  @ApiBadRequestResponse({ description: WRONG_LANGUAGE })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: CONTENT_NOT_FOUND })
   listContents(@Param('itemId') itemId: string, @Query() query: QueryListLibraryContentsDto): Promise<LibraryContentPageDto> {
@@ -112,10 +117,11 @@ export class LibraryController {
   @Get(`${CONTENTS}/:contentId`)
   @ApiOperation({ summary: 'One chapter, image or clip' })
   @ApiOkResponse(ONE_ROW)
+  @ApiBadRequestResponse({ description: WRONG_LANGUAGE })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: CONTENT_NOT_FOUND })
-  getContent(@Param('itemId') itemId: string, @Param('contentId') contentId: string): Promise<LibraryContent> {
-    return this.contents.get(itemId, contentId);
+  getContent(@Param('itemId') itemId: string, @Param('contentId') contentId: string, @Query() query: QueryContentLanguageDto): Promise<TranslatedContent> {
+    return this.contents.get(itemId, contentId, query.language);
   }
 
   @Post(CONTENTS)
@@ -124,18 +130,18 @@ export class LibraryController {
   @ApiBadRequestResponse({ description: WRONG_FIELDS })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: CONTENT_NOT_FOUND })
-  createContent(@Param('itemId') itemId: string, @Body() content: CreateLibraryContentDto): Promise<LibraryContent> {
+  createContent(@Param('itemId') itemId: string, @Body() content: CreateLibraryContentDto): Promise<TranslatedContent> {
     return this.contents.create(itemId, content);
   }
 
   @Put(`${CONTENTS}/:contentId`)
-  @ApiOperation({ summary: "Replace a row's whole writable representation" })
+  @ApiOperation({ summary: "Replace a row's whole writable representation, or write a translation of it" })
   @ApiOkResponse(ONE_ROW)
-  @ApiBadRequestResponse({ description: WRONG_FIELDS })
+  @ApiBadRequestResponse({ description: `${WRONG_FIELDS} ${WRONG_LANGUAGE}` })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: CONTENT_NOT_FOUND })
-  replaceContent(@Param('itemId') itemId: string, @Param('contentId') contentId: string, @Body() content: UpdateLibraryContentDto): Promise<LibraryContent> {
-    return this.contents.replace(itemId, contentId, content);
+  replaceContent(@Param('itemId') itemId: string, @Param('contentId') contentId: string, @Body() content: UpdateLibraryContentDto, @Query() query: QueryContentLanguageDto): Promise<TranslatedContent> {
+    return this.contents.replace(itemId, contentId, content, query.language);
   }
 
   @Delete(`${CONTENTS}/:contentId`)

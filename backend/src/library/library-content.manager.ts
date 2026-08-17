@@ -5,7 +5,9 @@ import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.d
 import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
 import { ImageAsset, LibraryContent, LibraryContentBase, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item.entity';
+import { TranslatedContent, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentCounts, LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
+import { LibraryTranslationManager, untranslated } from './library-translation.manager';
 import { LibraryRepository } from './library.repository';
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
@@ -40,7 +42,11 @@ export interface ScrapedRow {
  */
 @Injectable()
 export class LibraryContentManager {
-  constructor(private readonly contents: LibraryContentRepository, private readonly items: LibraryRepository) {}
+  constructor(
+    private readonly contents: LibraryContentRepository,
+    private readonly items: LibraryRepository,
+    private readonly translations: LibraryTranslationManager,
+  ) {}
 
   /**
    * One page of an item's content.
@@ -56,17 +62,23 @@ export class LibraryContentManager {
     const from = (query.page - 1) * query.pageSize;
 
     return {
-      items: found.slice(from, from + query.pageSize),
+      // Translations are folded onto the page rather than the scan: the slice is at
+      // most `pageSize` rows, and the search that narrowed it ran over the source
+      // titles — see the known limits in the part 4 plan.
+      items: await this.translations.decorate(item, query.language, found.slice(from, from + query.pageSize)),
       total: found.length,
       page: query.page,
       pageSize: query.pageSize,
     };
   }
 
-  async get(itemId: string, contentId: string): Promise<LibraryContent> {
-    await this.requireItem(itemId);
+  async get(itemId: string, contentId: string, language?: TranslationLanguage): Promise<TranslatedContent> {
+    const item = await this.requireItem(itemId);
+    const stored = await this.requireContent(itemId, contentId);
+    // One row in, one row out — `decorate` maps rather than filters.
+    const [decorated] = await this.translations.decorate(item, language, [stored]);
 
-    return this.requireContent(itemId, contentId);
+    return decorated;
   }
 
   /**
@@ -78,24 +90,36 @@ export class LibraryContentManager {
     return this.contents.findOne(itemId, contentId);
   }
 
-  async create(itemId: string, input: CreateLibraryContentDto): Promise<LibraryContent> {
+  /** The source row. A translation is written by `replace`, never created on its own. */
+  async create(itemId: string, input: CreateLibraryContentDto): Promise<TranslatedContent> {
     const item = await this.requireItem(itemId);
     const created = await this.contents.create(itemId, await this.newDraft(item, input));
 
     await this.recount(item);
 
-    return created;
+    return untranslated(created);
   }
 
-  /** The whole writable representation, so an omitted field is a cleared field. */
-  async replace(itemId: string, contentId: string, input: UpdateLibraryContentDto): Promise<LibraryContent> {
+  /**
+   * The whole writable representation, so an omitted field is a cleared field.
+   *
+   * With a language it writes the translation instead, and the source chapter is
+   * left exactly as it was — which is also why the counters do not move: they say
+   * how much of the *source* we hold, and translating a chapter downloads nothing.
+   */
+  async replace(itemId: string, contentId: string, input: UpdateLibraryContentDto, language?: TranslationLanguage): Promise<TranslatedContent> {
     const item = await this.requireItem(itemId);
     const stored = await this.requireContent(itemId, contentId);
+
+    if (language) {
+      return this.translations.save(item, language, stored, input);
+    }
+
     const replaced = await this.contents.replace(itemId, stored, nextDraft(stored, input));
 
     await this.recount(item);
 
-    return replaced;
+    return untranslated(replaced);
   }
 
   async remove(itemId: string, contentId: string): Promise<void> {
@@ -103,6 +127,9 @@ export class LibraryContentManager {
 
     await this.requireContent(itemId, contentId);
     await this.contents.remove(itemId, contentId);
+    // Firestore does not cascade, and a translation of a chapter that is gone is a
+    // document nothing can reach.
+    await this.translations.removeFor(itemId, contentId);
     await this.recount(item);
   }
 

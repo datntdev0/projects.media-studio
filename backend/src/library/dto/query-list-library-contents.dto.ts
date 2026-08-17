@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { LibraryContentStatus } from '../entities/library-content.entity';
+import { QueryContentLanguageDto } from './query-content-language.dto';
 
 const MAX_SEARCH = 200;
 
@@ -15,8 +16,13 @@ const MAX_PAGE_SIZE = 200;
  *
  * Larger pages than the listing's twenty: a chapter row is one line, and the
  * mockup scrolls them rather than paging through them.
+ *
+ * `language` comes from the base class, so the three routes that take one declare
+ * it once. It is applied last of all: the scan, the search and the slice happen
+ * over the source rows, and the translations are folded onto the page that
+ * survives them.
  */
-export class QueryListLibraryContentsDto {
+export class QueryListLibraryContentsDto extends QueryContentLanguageDto {
   @ApiPropertyOptional({ description: 'All five, including the ones only discovery and the job runner set — a filter reads data it does not write.', enum: LibraryContentStatus, enumName: 'LibraryContentStatus' })
   @IsOptional()
   @IsEnum(LibraryContentStatus)

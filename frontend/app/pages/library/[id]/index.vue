@@ -73,7 +73,7 @@ async function fetchPage(next: number) {
   contentError.value = null
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
 
     if (mine !== ticket) {
       return
@@ -121,7 +121,7 @@ async function reloadLoaded(): Promise<void> {
 
   try {
     const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
-      libraryClient.listContents(itemId.value, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
+      libraryClient.listContents(itemId.value, undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
 
     if (mine !== ticket) {
       return
