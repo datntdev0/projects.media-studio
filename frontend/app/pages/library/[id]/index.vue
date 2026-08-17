@@ -28,6 +28,18 @@ const toast = useToast()
 
 const itemId = computed(() => String(route.params.id))
 
+/**
+ * Which language the chapters are read in, kept in the URL rather than in a ref.
+ *
+ * It survives a reload, it travels into the reader on a row's own link, and Back
+ * returns to the language you left. A `?lang=` we do not translate into reads as
+ * the source rather than as an error.
+ */
+const language = computed({
+  get: () => asTranslationLanguage(route.query.lang) ?? null,
+  set: chosen => navigateTo({ query: { ...route.query, lang: chosen ?? undefined } })
+})
+
 const search = ref('')
 
 const debouncedSearch = refDebounced(search, SEARCH_DEBOUNCE)
@@ -73,7 +85,7 @@ async function fetchPage(next: number) {
   contentError.value = null
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
 
     if (mine !== ticket) {
       return
@@ -121,7 +133,7 @@ async function reloadLoaded(): Promise<void> {
 
   try {
     const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
-      libraryClient.listContents(itemId.value, undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
+      libraryClient.listContents(itemId.value, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
 
     if (mine !== ticket) {
       return
@@ -143,7 +155,9 @@ function loadMore() {
   return fetchPage(loaded.value + 1)
 }
 
-watch([itemId, debouncedSearch], () => refreshContents(), { immediate: true })
+// Changing language is a new list rather than a filter over the loaded one, so it
+// resets to page one alongside the other two.
+watch([itemId, debouncedSearch, language], () => refreshContents(), { immediate: true })
 
 const { forLibrary, settled, reconcile } = useScrapingJobs()
 
@@ -505,6 +519,13 @@ async function onUpload(picked: FileList | null) {
             size="sm"
           />
 
+          <AppLibraryLanguageSelect
+            v-model="language"
+            :source-language="novel.metadata.language"
+            :coverage="item?.translations ?? null"
+            :total="novel.metadata.discoveredCount"
+          />
+
           <UInput
             v-model="search"
             icon="i-lucide-search"
@@ -571,6 +592,7 @@ async function onUpload(picked: FileList | null) {
             v-model:selected="selected"
             :item-id="itemId"
             :chapters="chapters"
+            :language="language"
             :loading="loading"
             :loading-more="loadingMore"
             :more="more"

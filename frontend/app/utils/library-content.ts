@@ -1,5 +1,5 @@
 import type { BadgeProps } from '@nuxt/ui'
-import type { LibraryContent, LibraryContentPage, LibraryContentStatus, ScrapeScope, ScrapeStart } from '~/types/library-content'
+import type { LibraryContent, LibraryContentPage, LibraryContentStatus, ScrapeScope, ScrapeStart, TranslationLanguage } from '~/types/library-content'
 import type { LibraryItemType } from '~/types/library'
 import type { LibraryContentPageDto, NovelChapterDto } from './api.clients'
 
@@ -94,6 +94,29 @@ export function checkAsset(file: File, type: LibraryItemType): void {
 
 /** Why the scraping controls that are still deferred are disabled. */
 export const SCRAPING_DEFERRED = 'Scraping arrives with the job runner.'
+
+/** What a novel can be read in besides its own language, in the order the mockup lists them. */
+export const TRANSLATION_LANGUAGES: { code: TranslationLanguage, name: string }[] = [
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'en', name: 'English' },
+  { code: 'zh', name: 'Chinese' }
+]
+
+/** The three cases the mockup draws after a language's name: `none yet`, `complete`, `412 / 640`. */
+export function coverageLabel(translated: number, total: number): string {
+  if (translated === 0) {
+    return 'none yet'
+  }
+
+  return translated >= total ? 'complete' : `${countLabel(translated)} / ${countLabel(total)}`
+}
+
+/** Whether a value off the URL is a language we translate into. A hand-typed `?lang=de` reads as the source. */
+export const asTranslationLanguage = (value: unknown): TranslationLanguage | undefined =>
+  TRANSLATION_LANGUAGES.find(language => language.code === value)?.code
+
+/** What a language is called on screen. The source option is named after the item's own language instead. */
+export const languageName = (code: TranslationLanguage): string => TRANSLATION_LANGUAGES.find(language => language.code === code)?.name ?? code
 
 /** What each card in the scrape dialog is called. The `Record` makes a missing one a compile error. */
 export const SCRAPE_SCOPE_LABELS: Record<ScrapeScope, string> = {

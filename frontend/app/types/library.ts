@@ -4,6 +4,8 @@
  * `createdAt` is absent on purpose: the listing does not return it.
  */
 
+import type { TranslationCoverage } from '~/types/library-content'
+
 /** What the item holds, and therefore what shape its `metadata` has. */
 export type LibraryItemType = 'novel' | 'image' | 'video'
 
@@ -81,10 +83,13 @@ export interface VideoSetItem extends LibraryItemBase {
 export type LibraryItem = NovelItem | ImageSetItem | VideoSetItem
 
 /**
- * One item as `GET /library/:id` answers with it. The listing deliberately omits
- * `createdAt`; a detail screen has room to say when the item was started.
+ * One item as `GET /library/:id` answers with it.
+ *
+ * The listing deliberately omits both of these: it has room for neither the date
+ * the item was started nor a language dropdown, and coverage is three aggregations
+ * a novel that no listing row would draw.
  */
-export type LibraryItemDetail = LibraryItem & { createdAt: string }
+export type LibraryItemDetail = LibraryItem & { createdAt: string, translations: TranslationCoverage[] | null }
 
 /** One page of the listing, and enough to draw the counts and the pager around it. */
 export interface LibraryItemPage {

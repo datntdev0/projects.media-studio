@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NovelChapter } from '~/types/library-content'
+import type { NovelChapter, TranslationLanguage } from '~/types/library-content'
 
 /**
  * A novel's chapters. The title is a link into the reader, so a row is reachable
@@ -10,7 +10,7 @@ import type { NovelChapter } from '~/types/library-content'
  * is what asks for the next page. The caller owns the fetching — this only says
  * when the reader has run out of rows.
  */
-defineProps<{
+const props = defineProps<{
   itemId: string
   chapters: NovelChapter[]
   loading?: boolean
@@ -18,7 +18,12 @@ defineProps<{
   loadingMore?: boolean
   /** Whether there are rows past the ones handed over. */
   more?: boolean
+  /** The language the rows are in. Null is the source, and the table is the one it has always been. */
+  language?: TranslationLanguage | null
 }>()
+
+/** Carried onto every row link, so the reader opens in the language the table is in. */
+const chapterLink = (chapterId: string) => ({ path: `/library/${props.itemId}/${chapterId}`, query: props.language ? { lang: props.language } : {} })
 
 const emit = defineEmits<{
   remove: [chapter: NovelChapter]
@@ -30,6 +35,9 @@ const selected = defineModel<string[]>('selected', { required: true })
 
 /** Enough rows for the skeleton to read as a table rather than as a gap. */
 const SKELETON_ROWS = 8
+
+/** The columns between the checkbox and the action cell, so a skeleton row is as wide as a real one. */
+const SKELETON_CELLS = computed(() => props.language ? 6 : 5)
 
 const sentinel = useTemplateRef<HTMLElement>('sentinel')
 
@@ -60,6 +68,10 @@ function toggle(id: string, on: boolean) {
           Title
         </th>
 
+        <th v-if="language" class="w-32 px-2 py-2 text-meta tracking-widest uppercase font-normal text-muted">
+          {{ languageName(language) }}
+        </th>
+
         <th class="w-24 px-2 py-2 text-meta tracking-widest uppercase font-normal text-muted">
           Words
         </th>
@@ -80,7 +92,7 @@ function toggle(id: string, on: boolean) {
       <tr v-for="row in SKELETON_ROWS" :key="row" class="border-b border-default">
         <td />
 
-        <td v-for="cell in 5" :key="cell" class="px-2 py-3">
+        <td v-for="cell in SKELETON_CELLS" :key="cell" class="px-2 py-3">
           <USkeleton class="h-4 w-2/3" />
         </td>
 
@@ -93,7 +105,7 @@ function toggle(id: string, on: boolean) {
         v-for="chapter in chapters"
         :key="chapter.id"
         class="border-b border-default cursor-pointer hover:bg-(--color-row-hover)"
-        @click="navigateTo(`/library/${itemId}/${chapter.id}`)"
+        @click="navigateTo(chapterLink(chapter.id))"
       >
         <td class="px-2 py-3" @click.stop>
           <UCheckbox
@@ -108,9 +120,24 @@ function toggle(id: string, on: boolean) {
         </td>
 
         <td class="px-2 py-3">
-          <NuxtLink :to="`/library/${itemId}/${chapter.id}`" class="block text-ui text-default truncate hover:text-default">
+          <NuxtLink :to="chapterLink(chapter.id)" class="block text-ui text-default truncate hover:text-default">
             {{ chapter.title }}
           </NuxtLink>
+
+          <!-- What the chapter is called in its own language, so a translated list
+               can still be matched against the source. -->
+          <p v-if="chapter.sourceTitle" class="text-label text-muted truncate">
+            {{ chapter.sourceTitle }}
+          </p>
+        </td>
+
+        <td v-if="language" class="px-2 py-3">
+          <UBadge
+            :label="chapter.translated ? 'Translated' : 'Not translated'"
+            :color="chapter.translated ? 'primary' : 'neutral'"
+            :variant="chapter.translated ? 'subtle' : 'outline'"
+            size="sm"
+          />
         </td>
 
         <td class="px-2 py-3 text-support text-muted tabular-nums">
@@ -147,7 +174,7 @@ function toggle(id: string, on: boolean) {
       <tr v-if="more" ref="sentinel" class="border-b border-default">
         <td />
 
-        <td v-for="cell in 5" :key="cell" class="px-2 py-3">
+        <td v-for="cell in SKELETON_CELLS" :key="cell" class="px-2 py-3">
           <USkeleton v-if="loadingMore" class="h-4 w-2/3" />
         </td>
 

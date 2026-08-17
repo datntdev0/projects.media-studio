@@ -8,6 +8,15 @@ import type { LibraryItemType } from '~/types/library'
 /** How far one piece of content has got. `pending` and `completed` follow from `contentUrl`; the rest are discovery's and the job runner's. */
 export type LibraryContentStatus = 'discovered' | 'pending' | 'scraping' | 'completed' | 'failed'
 
+/** The languages a novel can be read in besides its own. */
+export type TranslationLanguage = 'vi' | 'en' | 'zh'
+
+/** How much of a novel one language covers, as the item reports it. */
+export interface TranslationCoverage {
+  language: TranslationLanguage
+  translated: number
+}
+
 /** What a row carries whatever its type. */
 interface LibraryContentBase {
   id: string
@@ -18,6 +27,10 @@ interface LibraryContentBase {
   status: LibraryContentStatus
   createdAt: string
   updatedAt: string
+  /** Whether this row is a translation. False for the source, and false for a chapter nothing has translated yet. */
+  translated: boolean
+  /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
+  sourceTitle: string | null
 }
 
 export interface NovelChapter extends LibraryContentBase {
@@ -79,6 +92,8 @@ export interface ListLibraryContentsQuery {
   search?: string
   page?: number
   pageSize?: number
+  /** Left out means the source, which is what every content route did before translations. */
+  language?: TranslationLanguage
 }
 
 /** Which asset a screen is acting on, and what it is called there. */
