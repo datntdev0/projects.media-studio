@@ -7,6 +7,9 @@
 dist
 coverage
 
+# The marker @nuxt/test-utils leaves to say its install hook has run
+.nuxtrc
+
 # Node dependencies
 node_modules
 

@@ -109,12 +109,27 @@ Everything else is written as Tailwind utilities at the call site: the roles abo
 
 Source mockups live in `_docs/design/` at the repository root — local only, not committed.
 
+## Tests
+
+[Vitest](https://vitest.dev) in the **Nuxt environment**, so a test mounts a page with its auto-imports, its components and its plugins resolved the way the app resolves them. Specs live in `tests/nuxt/`, mirroring `app/` — that path is the one Nuxt already puts in the app's `tsconfig`, so a spec is type-checked against the same auto-import types the pages see.
+
+```bash
+pnpm test         # from this directory, or pnpm test from the repository root
+pnpm test:watch
+pnpm test:cov     # writes frontend/coverage
+```
+
+Each spec mounts the real page and drives it through the DOM. What the page depends on is replaced with `mockNuxtImport` — `useApiClient` for the API, `useAuth` for the session, `useScrapingJobs` for the live tree — so the assertions are about the screen's own decisions and nothing goes over the network.
+
+[`vitest.config.ts`](./vitest.config.ts) points the run at [`.env.example`](./.env.example) rather than at `.env`, which on a developer's machine names the real Firebase project.
+
 ## Commands
 
 ```bash
 pnpm build        # production build
 pnpm preview      # preview the production build locally
 pnpm generate:api # regenerate the API client, backend running
+pnpm test         # unit tests (test:watch, test:cov)
 pnpm lint         # lint (lint:fix to autofix)
 pnpm typecheck    # type-check with vue-tsc
 ```
