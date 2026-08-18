@@ -18,7 +18,7 @@ export default defineVitestConfig({
     },
     coverage: {
       include: ['app/**/*.{ts,vue}'],
-      exclude: ['app/utils/api.clients.ts'],
+      exclude: ['app/utils/api.clients.ts', 'app/**/*.d.ts'],
       reportsDirectory: 'coverage',
       reporter: ['text-summary', 'html', 'json-summary']
     }
