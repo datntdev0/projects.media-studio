@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-media-studio"
+    "default": "demo-media-studio",
+    "prod": "projects-media-studio"
   }
 }
