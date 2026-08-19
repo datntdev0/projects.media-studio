@@ -82,7 +82,7 @@ function chaptersCheck(records: PackagedChapter[] | null, adding: number, existi
   return {
     state: PackageCheckState.Pass,
     label: `${records.length} chapter ${records.length === 1 ? 'file' : 'files'}`,
-    detail: `${adding} not present in this item · ${existing} already stored`,
+    detail: `${adding} new · ${existing} matched, for the conflict policy to decide`,
   };
 }
 

@@ -65,7 +65,7 @@ export class LibraryPackageCheckDto {
   @ApiProperty({ example: '640 chapter files' })
   label!: string;
 
-  @ApiProperty({ example: '228 not present in this item · 412 already stored' })
+  @ApiProperty({ example: '228 new · 412 matched, for the conflict policy to decide' })
   detail!: string;
 }
 

@@ -72,11 +72,14 @@ const done = computed(() => node.value?.done ?? 0)
 
 const bar = computed(() => stage.value === 'upload' ? percent.value : Math.round((done.value / Math.max(total.value, 1)) * 100))
 
+/** What pressing Import writes: the new chapter numbers, and the matched ones too unless the policy keeps them. */
+const importing = computed(() => (onConflict.value === 'skip' ? report.value?.adding : report.value?.chapters) ?? 0)
+
 /** What the primary button says, and nothing where there is nothing to advance to. */
 const advance = computed(() => ({
   pick: picked.value ? 'Upload package' : '',
   upload: '',
-  validate: report.value?.valid ? `Import ${countLabel(report.value.adding)} ${contentUnit('novel', report.value.adding)}` : '',
+  validate: report.value?.valid ? `Import ${countLabel(importing.value)} ${contentUnit('novel', importing.value)}` : '',
   importing: '',
   done: 'View chapters'
 }[stage.value]))

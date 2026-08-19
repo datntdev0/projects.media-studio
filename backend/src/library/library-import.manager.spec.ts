@@ -169,7 +169,7 @@ describe('LibraryImportManager.validate', () => {
 
     expect(report).toMatchObject({ valid: true, chapters: 2, adding: 1, existing: 1, skipped: [] });
     expect(check(report, 'manifest.json')).toEqual({ state: PackageCheckState.Pass, label: 'manifest.json · schema v1', detail: 'Exported 12 Aug 2026 from project media-studio-dev' });
-    expect(check(report, '2 chapter files')).toMatchObject({ state: PackageCheckState.Pass, detail: '1 not present in this item · 1 already stored' });
+    expect(check(report, '2 chapter files')).toMatchObject({ state: PackageCheckState.Pass, detail: '1 new · 1 matched, for the conflict policy to decide' });
     expect(check(report, 'Metadata record')).toMatchObject({ state: PackageCheckState.Pass, detail: 'Title, author, genres · matches this item' });
   });
 

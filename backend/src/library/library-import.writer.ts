@@ -33,7 +33,7 @@ interface PlannedChapter {
   stored: NovelChapter | null;
   /** Where the imported text landed. Filled in by the body pass. */
   contentUrl: string | null;
-  /** Set once the row exists — read back after the chapters are flushed. */
+  /** The document a translation is filed under. Settled once the chapters are flushed. */
   id: string | null;
 }
 
@@ -154,7 +154,9 @@ export class LibraryImportWriter {
     const created = await this.rows.createMany(item.id, adds.map(chapterDraft));
 
     adds.forEach((planned, at) => { planned.id = created[at] ?? null; });
-    overwrites.forEach((planned) => { planned.id = planned.stored?.id ?? null; });
+    // Every chapter the package matched, not only the rewritten ones: a translation is
+    // filed under its chapter's id whether or not the chapter itself was written.
+    plan.chapters.forEach((planned) => { planned.id ??= planned.stored?.id ?? null; });
 
     await this.rows.replaceMany(item.id, overwrites.flatMap((planned) => planned.id ? [{ id: planned.id, draft: chapterDraft(planned) }] : []));
 
@@ -263,11 +265,15 @@ function actionFor(record: PackagedChapter, existing: NovelChapter | null, onCon
  *
  * `sourceUrl` is the stored row's where there is one, for the reason `nextDraft` gives:
  * it is the address a re-scrape reads, and a package from another site has no business
- * moving it. `status` is `discovered` rather than `pending` for a record with no text —
- * a chapter we know about and do not hold is not a chapter that is queued.
+ * moving it. So is `contentUrl` where the policy kept the chapter: that draft is only
+ * ever read as a translation's source, and it should describe the row that is filed
+ * rather than the text this run declined to write. `status` is `discovered` rather than
+ * `pending` for a record with no text — a chapter we know about and do not hold is not
+ * a chapter that is queued.
  */
 function chapterDraft(planned: PlannedChapter): ChapterDraft {
-  const { record, contentUrl } = planned;
+  const { record, stored } = planned;
+  const contentUrl = planned.contentUrl ?? (planned.action === 'skip' ? stored?.contentUrl ?? null : null);
 
   return {
     type: LibraryItemType.Novel,
@@ -275,7 +281,7 @@ function chapterDraft(planned: PlannedChapter): ChapterDraft {
     title: record.title,
     language: record.language,
     words: record.words,
-    sourceUrl: planned.stored?.sourceUrl ?? record.sourceUrl,
+    sourceUrl: stored?.sourceUrl ?? record.sourceUrl,
     contentUrl,
     status: contentUrl ? LibraryContentStatus.Completed : LibraryContentStatus.Discovered,
   };

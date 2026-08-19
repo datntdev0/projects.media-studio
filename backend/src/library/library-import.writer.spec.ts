@@ -225,6 +225,23 @@ describe('LibraryImportWriter', () => {
     expect(forced.discarded).toContain('https://storage/old-vi.txt');
   });
 
+  // The policy is about the chapter's text, not about a language the item has none in.
+  it('files a translation under a chapter the policy skipped', async () => {
+    const around = new Around([chapter(1)]);
+
+    around.bodies = { 'chapters/0001.txt': 'One.', 'translations/vi/0001.txt': 'Chương một' };
+
+    const packaged = records({ chapters: [record(1)], translations: { vi: [record(1, { file: 'translations/vi/0001.txt' })] } });
+    const outcome = await around.writer().run(novel(), PATH, packaged, ImportConflict.Skip);
+
+    expect(outcome).toMatchObject({ added: 0, overwritten: 0, skipped: 1, translated: 1 });
+    expect(around.upserted[0]?.rows[0]).toMatchObject({ contentId: 'ch-1', createdAt: null });
+    // The chapter's own fields come off the row that is filed, not off the text this run declined to write.
+    expect(around.upserted[0]?.rows[0]?.draft).toMatchObject({ language: 'vi', index: 1, sourceUrl: 'https://stored/1', status: LibraryContentStatus.Completed });
+    // Only the translation's text was uploaded: the skipped chapter's body is dropped.
+    expect(around.saved).toEqual(['Chương một']);
+  });
+
   // Six hundred recounts would be six hundred writes to one item document, and
   // Firestore sustains about one a second to a single one.
   it('recounts the item exactly once', async () => {
