@@ -34,10 +34,9 @@ export const CRAWLERS: Crawler[] = [
   {
     name: 'novel543',
     domain: 'www.novel543.com',
-    // The parser's own `HOSTS`, kept in step with it.
     hosts: ['novel543.com', 'www.novel543.com'],
     kind: LibraryItemType.Novel,
-    language: 'zh-Hant',
+    language: 'zh',
     statuses: { 連載: NovelStatus.Ongoing, 完結: NovelStatus.Complete },
   },
 ];

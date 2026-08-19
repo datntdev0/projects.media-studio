@@ -20,16 +20,31 @@ const props = defineProps<{
 /** Null is the source — the state every screen starts in. */
 const language = defineModel<TranslationLanguage | null>({ required: true })
 
-const options = computed(() => [
-  { value: null, label: `${props.sourceLanguage || 'Source'} · source` },
-  ...TRANSLATION_LANGUAGES.map(({ code, name }) => ({
-    value: code,
-    label: `${name} · ${coverageLabel(props.coverage?.find(row => row.language === code)?.translated ?? 0, props.total)}`
-  }))
-])
+/** The item's own language as one of the three, when it is one. `zh` and `Chinese` both name it. */
+const sourceCode = computed(() => {
+  const own = props.sourceLanguage.trim().toLowerCase()
+
+  return TRANSLATION_LANGUAGES.find(({ code, name }) => own === code || own === name.toLowerCase())?.code ?? null
+})
+
+/**
+ * A novel written in one of the three has no row of its own: that language *is* the
+ * source, so the name stands where it always does and there is nothing to translate
+ * into. Anything else — or nothing — keeps the source at the top as its own row.
+ */
+const options = computed(() => {
+  const rows = TRANSLATION_LANGUAGES.map(({ code, name }) => code === sourceCode.value
+    ? { value: null, label: `${name} · source` }
+    : { value: code, label: `${name} · ${coverageLabel(props.coverage?.find(row => row.language === code)?.translated ?? 0, props.total)}` })
+
+  return sourceCode.value ? rows : [{ value: null, label: `${props.sourceLanguage || 'Source'} · source` }, ...rows]
+})
+
+/** The source row, which a `?lang=` naming the novel's own language falls back to. */
+const sourceOption = computed(() => options.value.find(option => option.value === null)!)
 
 const selected = computed({
-  get: () => options.value.find(option => option.value === language.value) ?? options.value[0],
+  get: () => options.value.find(option => option.value === language.value) ?? sourceOption.value,
   set: (option) => { language.value = option?.value ?? null }
 })
 </script>

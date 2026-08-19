@@ -71,7 +71,7 @@ function chapter(over: Partial<NovelChapter> = {}): NovelChapter {
     type: LibraryItemType.Novel,
     index: 1,
     title: 'Nine Bells for the Harbour',
-    language: 'zh-Hant',
+    language: 'zh',
     words: 0,
     sourceUrl: CHAPTER_URL,
     contentUrl: null,

@@ -36,7 +36,7 @@ export class NovelPreviewMetadataDto {
   @ApiProperty({ description: "The work's own status, mapped from the source's word for it.", enum: NovelStatus, enumName: 'NovelStatus' })
   status!: NovelStatus;
 
-  @ApiProperty({ description: "From the crawler's entry — the source does not publish one.", example: 'zh-Hant' })
+  @ApiProperty({ description: "From the crawler's entry — the source does not publish one.", example: 'zh' })
   language!: string;
 
   @ApiProperty({ type: [String], description: 'The source category, where it has one.', example: ['武俠'] })

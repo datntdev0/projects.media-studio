@@ -499,7 +499,7 @@ function isIndex(value: number | undefined): value is number {
 
 /**
  * How long a body runs. Whitespace-separated, and counted by character where the
- * script is written without spaces — the only crawler reads `zh-Hant`.
+ * script is written without spaces — the only crawler reads `zh`.
  *
  * The frontend's helper in `app/utils/library-content.ts` agrees with this, and
  * neither agrees with anything linguistic.

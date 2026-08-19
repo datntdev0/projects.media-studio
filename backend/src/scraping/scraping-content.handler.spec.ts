@@ -37,7 +37,7 @@ function content(): LibraryContent {
     type: LibraryItemType.Novel,
     index: 1,
     title: 'Nine Bells for the Harbour',
-    language: 'zh-Hant',
+    language: 'zh',
     words: 0,
     sourceUrl: PAYLOAD.sourceUrl,
     contentUrl: null,

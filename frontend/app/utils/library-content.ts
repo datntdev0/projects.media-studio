@@ -67,7 +67,7 @@ const UNSPACED_SCRIPT = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g
  *
  * The same count as `ScrapingJobManager.wordCount`, deliberately: this is the number a
  * save sends, so a helper that disagreed would rewrite the scraper's figure every time
- * a chapter was edited. Splitting a `zh-Hant` body on whitespace counts its lines.
+ * a chapter was edited. Splitting a `zh` body on whitespace counts its lines.
  */
 export function wordCount(text: string): number {
   const unspaced = text.match(UNSPACED_SCRIPT)?.length ?? 0
