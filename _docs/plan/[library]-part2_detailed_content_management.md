@@ -1,426 +1,270 @@
 # Library — Part 2: library content management
 
-Source design: `_docs/design/1. Library.dc.html` — the `isNovel` (lines 228–297), `isChapter`
-(299–349) and `isGallery` (351–405) screens, read against `DESIGN.md` for the visual system.
+## Overview
 
-## Goal of design
+Part 2 gives every library item what it holds: a novel's chapters, an image set's images, a
+video set's clips. One `contents` subcollection under each item, one controller shared with the
+item itself, and three screens — the novel detail page, the set detail page, and the chapter
+reader.
 
-Part 1 built the library listing and the CRUD behind it, and stopped at the door: `library.vue`'s
-own comment says *"Rows and cards are inert on purpose — the detail screens are part 3."* Nothing
-opens an item, and nothing stores what an item actually holds — `metadata.discoveredCount` and
-`downloadedCount` are on the entity but no code moves them, so every row reads `0 ch.`
+Content is not addressable apart from its item, so it gets no controller of its own: every
+route below `:itemId/contents` names the item first, and a client that can reach one can reach
+the other. The rows live in a subcollection rather than a root collection because the path *is*
+the parent reference — there is no `libraryItemId` field to keep in step with anything, and a
+cross-item read is impossible rather than merely refused.
 
-Part 2 makes an item openable and gives it content: a novel's chapters, an image set's images, a
-video set's clips. One new subcollection, one CRUD surface over it, and the three detail screens
-the mockup draws. The counters stop lying because content writes maintain them.
+The bytes never travel through the API. A chapter's text and an asset's file go from the
+browser straight into `content/{itemId}/{uuid}` in Cloud Storage, and the row keeps only the
+download URL. That is what keeps a 200 MB clip — and a 640-chapter novel's worth of prose — out
+of both the API process and Firestore.
 
-**In scope**
+## Requirements
 
-- A `contents` subcollection under each library item, with its own entity, repository, manager and
-  controller — list, read, create, replace and delete.
-- The parent item's counters maintained by every content write, so `412 / 640 ch.` on the listing is
-  true rather than decorative.
-- The three detail screens: the novel's metadata sidebar over its chapters table, the chapter
-  reader/editor, and the gallery's hero band over its asset grid.
-- Content bytes in Cloud Storage, uploaded straight from the browser — chapter text included.
+- **One shape per type, discriminated on the item's `type`.** `NovelChapter` carries `index`,
+  `title`, `language` and `words`; `ImageAsset` and `VideoAsset` carry `filename` and
+  `filesize`. The two asset shapes are identical and stay two, because each narrows off its own
+  `type` — merged, neither would.
+- **A row cannot claim a type its parent is not.** `type` is read from the item, never from the
+  request, on create and on replace alike.
+- **Which fields belong to which type is enforced.** `chapterBlock` refuses `filename` and
+  `filesize` on a chapter and requires a title; `assetBlock` refuses `index`, `title`,
+  `language` and `words` on an asset and requires a filename.
+- **`status` is derived, not sent.** A row with a `contentUrl` holds something (`completed`) and
+  a row without one does not (`pending`). `discovered`, `scraping` and `failed` belong to
+  discovery and the job runner, and no client can set them.
+- **A chapter's number is read from the store.** `newDraft` defaults `index` to
+  `highestIndex(itemId) + 1`, so "Add chapter" is a title and nothing else. On a replace,
+  `index` is the one field an omission does not clear — a chapter has no "no number" state.
+- **`sourceUrl` is not a `PUT`'s to rewrite.** It is where the row came from — the key discovery
+  matches on and the only address a re-scrape has — so `nextDraft` carries the stored value
+  over. Left to the generic path, a save that omitted it would clear it and the chapter could
+  never be fetched again.
+- **The item's counters are recomputed, never incremented.** `recount()` reads five Firestore
+  aggregations and writes `discoveredCount`, `downloadedCount` and — for a set only —
+  `downloadedSize`. A count that is recomputed cannot drift, and a novel of twelve hundred
+  chapters costs the same as one of twelve.
+- **Deleting cascades by hand.** A row's translations go with it; an item's contents and
+  translations go with it. Firestore does not cascade.
+- **The list is ordered in Firestore and searched in the manager.** `index` for a chapter,
+  `filename` for an asset — `orderField(type)` picks which — with an optional `status` equality
+  filter. The search and the page slice run over what comes back.
+- **Bytes go around the API.** `useContentFiles` uploads and reads;
+  `ContentFileProvider` is the server-side twin used by scraping and import, and both build
+  their URLs through `core/firebase/storage-url.ts` so a URL written by either end is the same
+  URL.
 
-**Out of scope — deliberately**
+## Solution
 
-| Deferred | Why |
-| --- | --- |
-| The job runner, and the scrape dialog | The mockup's **Scrape content… / Download content… / Discover new chapters / Discover new links / Retry failed / Scrape selected** controls are rendered **disabled with a tooltip** saying scraping arrives later. The screens stay visually faithful without claiming work nothing performs. |
-| A real crawler registry | Still `app/utils/crawlers.ts`, as in part 1. |
-| Media probing | `downloadedDuration` needs a clip's length. Nothing in this system can read one, so the counter stays where part 1 left it: `0`. |
-| Server-side truth about `words` and `filesize` | The browser uploads the bytes, so only the browser counts them — see [Known limits](#known-limits). |
-| Full-text search over content | Firestore has no substring index, same as part 1. |
+### Contract Skeleton
 
-### Decisions taken
-
-| Question | Decision |
-| --- | --- |
-| Where content bytes live | **Cloud Storage, browser-direct.** Every content row carries a `contentUrl`, chapter text included, uploaded as a `text/plain` object exactly the way `useCovers.ts` already uploads a cover. The API never touches a byte. |
-| Firestore layout | **Subcollection** `libraryItems/{itemId}/contents/{contentId}`. No `libraryItemId` field — the path *is* the parent reference. |
-| Screens | **All three** — novel detail, gallery detail, chapter reader/editor. |
-| Job-runner controls | **Rendered disabled**, each with a `UTooltip` explaining why. |
-
----
-
-## Contracts
-
-### `LibraryContent` — `backend/src/library/entities/library-content.entity.ts`
-
-One document per chapter, image or clip, in the `contents` subcollection of its item. Discriminated
-on `type` by **reusing `LibraryItemType`**, so a content row cannot claim a type its parent is not.
-
-| Field | Type | Writable | Notes |
+| Method | Path | Answers | Refuses |
 | --- | --- | --- | --- |
-| `id` | `string` | — | Firestore document id. |
-| `type` | `LibraryItemType` | — | **Server-set from the parent item.** Absent from the write DTOs entirely, which removes a whole class of mismatch. |
-| `status` | `LibraryContentStatus` | derived | See below. |
-| `contentUrl` | `string \| null` | yes | The Storage download URL. Null while the row is a placeholder — a chapter added by title before anything is written into it. |
-| `createdAt` | `string` (ISO) | — | Set on create. |
-| `updatedAt` | `string` (ISO) | — | Rewritten on every write. |
+| `GET` | `/api/v1/library/:itemId/contents` | `200 LibraryContentPageDto` | `401` · `404` no item |
+| `GET` | `/api/v1/library/:itemId/contents/:contentId` | `200` `oneOf` the three row shapes | `401` · `404` no item, or no row under it |
+| `POST` | `/api/v1/library/:itemId/contents` | `201` one row | `400` fields belonging to a type the item is not, or a chapter without a title · `401` · `404` |
+| `PUT` | `/api/v1/library/:itemId/contents/:contentId` | `200` one row | `400` as above · `401` · `404` |
+| `DELETE` | `/api/v1/library/:itemId/contents/:contentId` | `204` — the stored bytes are not deleted; whoever uploaded them drops them | `401` · `404` |
 
-Per type, over that base:
+**`QueryListLibraryContentsDto`**
 
-| Shape | Adds |
-| --- | --- |
-| `NovelChapter` | `index: number` (the chapter number, what the list is ordered by), `title: string`, `language: string`, `words: number` |
-| `ImageAsset` | `filename: string`, `filesize: number` (bytes) |
-| `VideoAsset` | `filename: string`, `filesize: number` (bytes) |
-
-```ts
-enum LibraryContentStatus { Pending = 'pending', Ready = 'ready', Failed = 'failed' }
-
-type LibraryContent = NovelChapter | ImageAsset | VideoAsset   // discriminated on `type`
-```
-
-`ImageAsset` and `VideoAsset` are the same shape and stay two interfaces, for the reason part 1 kept
-two set-metadata cases: each narrows off its own `type`, and merged, neither would.
-
-**Status is derived, not sent.** `contentUrl` present → `Ready`; absent → `Pending`. `Failed` is the
-job runner's, exactly as `LibraryItemStatus.Scraping` and `.Failed` are — so `status` is absent from
-the write DTOs and the manager sets it. The field is still stored, because the chapters table filters
-and draws on it and the runner will write `Failed` into it. It maps onto the mockup's
-Done / Queued / Failed tags.
-
-### Endpoints
-
-`LIBRARY_CONTENT_PATH = 'contents'` joins `api.constants.ts`. Versioned and guarded by
-`FirebaseAuthGuard`, like every other library route.
-
-| Method | Path | Input | Answers |
+| Field | Type | Default | Applied by |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/library/:itemId/contents` | `QueryListLibraryContentsDto` | `200 LibraryContentPageDto` · `404` |
-| `GET` | `/api/v1/library/:itemId/contents/:contentId` | — | `200 LibraryContentDto` · `404` |
-| `POST` | `/api/v1/library/:itemId/contents` | `CreateLibraryContentDto` | `201 LibraryContentDto` · `400` · `404` |
-| `PUT` | `/api/v1/library/:itemId/contents/:contentId` | `UpdateLibraryContentDto` | `200 LibraryContentDto` · `400` · `404` |
-| `DELETE` | `/api/v1/library/:itemId/contents/:contentId` | — | `204` · `404` |
+| `status` | `LibraryContentStatus` | — | Firestore equality |
+| `search` | `string` (≤200) | — | manager, over title or filename |
+| `page` | `int ≥ 1` | `1` | manager slice |
+| `pageSize` | `int 1–200` | `50` | manager slice |
+| `language` | `TranslationLanguage` | — | added in part 4 |
 
-A `404` on an unknown `:itemId` as readily as an unknown `:contentId` — the subcollection path means
-content of another item is simply not there, so no cross-item leak is possible by construction.
+**`LibraryContentBaseDto`** and the three shapes over it.
 
-`PUT`, not `PATCH`, for part 1's reason: the body is the row's whole writable representation, so **an
-omitted field is a cleared field**. Clearing a chapter's `contentUrl` — a reset back to a placeholder
-— has to be expressible.
+| Field | Type | On | Notes |
+| --- | --- | --- | --- |
+| `id` | `string` | all | |
+| `type` | `LibraryItemType` | all | The item's own. |
+| `sourceUrl` | `string \| null` | all | Null for a row added by hand. What discovery matches on. |
+| `contentUrl` | `string \| null` | all | Where the bytes are. Null while the row is a placeholder. |
+| `status` | `LibraryContentStatus` | all | `discovered` \| `pending` \| `scraping` \| `completed` \| `failed`. |
+| `createdAt` / `updatedAt` | `string` (ISO) | all | |
+| `translated` / `sourceTitle` | `boolean` / `string \| null` | all | Added in part 4. |
+| `index` | `number` | `NovelChapterDto` | The chapter number, and what the list is ordered by. |
+| `title` | `string` | `NovelChapterDto` | |
+| `language` | `string` | `NovelChapterDto` | |
+| `words` | `number` | `NovelChapterDto` | Zero until there is text. |
+| `filename` | `string` | `ImageAssetDto`, `VideoAssetDto` | And what the list is ordered by. |
+| `filesize` | `number` | `ImageAssetDto`, `VideoAssetDto` | Bytes. |
 
-### DTO classes — `backend/src/library/dto/`
+**`CreateLibraryContentDto`** — one shape for all three types, **every field optional**, because
+which fields a request must carry and which it must leave out follows from the parent item's
+type, and that rule belongs in the manager with the other rules about meaning.
+`UpdateLibraryContentDto extends CreateLibraryContentDto` — same body, different promise.
+Absent on purpose: `type`, which is the parent's, and `status`, which follows from `contentUrl`.
 
-| Class | Direction | Holds |
-| --- | --- | --- |
-| `NovelChapterDto` · `ImageAssetDto` · `VideoAssetDto` | out | One per shape, each `implements` its entity so a forgotten field is a compile error. |
-| `LibraryContentDto` | out | The row, `contentUrl` and stamps included; the per-type fields documented as `oneOf` the three above, the way `LibraryItemDto` documents `metadata`. |
-| `LibraryContentPageDto` | out | `items`, `total`, `page`, `pageSize`. |
-| `CreateLibraryContentDto` | in | **One shape for all three types**, every field optional: `index?`, `title?`, `language?`, `words?`, `filename?`, `filesize?`, `contentUrl?`. Part 1's precedent — one request shape, and the rule that narrows it lives in the manager with the other rules about meaning. |
-| `UpdateLibraryContentDto` | in | `extends CreateLibraryContentDto` — nothing to add, since `type` and `status` are the server's. |
-| `QueryListLibraryContentsDto` | in | `status?`, `search?`, `page = 1`, `pageSize = 50` (max 200). |
+| Field | Rules |
+| --- | --- |
+| `index` | `int 0–1_000_000`. A chapter only. |
+| `title` | `string 1–300`. A chapter only, and required of one. |
+| `language` | `string ≤32`. A chapter only. |
+| `words` | `int ≥ 0`. A chapter only. |
+| `filename` | `string 1–300`. An asset only, and required of one. |
+| `filesize` | `int ≥ 0`. An asset only. |
+| `sourceUrl` | URL ≤2048, nullable. |
+| `contentUrl` | URL ≤2048, nullable. What decides `status`. |
 
-Validation splits the way part 1 split it. **The pipe** checks shapes: `@IsInt() @Min(0)` on `index`,
-`words` and `filesize`, `@MaxLength` on `title`, `language` and `filename`, `@IsUrl` +
-`@MaxLength(MAX_URL)` on `contentUrl`, `@Type(() => Number)` on the query's numbers. **The manager**
-checks meaning:
+**`LibraryContentPageDto`** — `items`, `total`, `page`, `pageSize`. `CONTENT_ONE_OF` is what
+declares the three row shapes on every single-row response, and `@ApiExtraModels` on the
+controller is what puts them in the document.
 
-- a novel chapter needs a `title`, and must not carry `filename` or `filesize`
-- an image or video asset needs a `filename`, and must not carry `index`, `title`, `language` or `words`
-- `index` defaults to *the highest stored index + 1* when a chapter is created without one, so "Add
-  chapter" is a title and nothing else
-- `words` and `filesize` default to `0`
-
-### Frontend types — `frontend/app/types/library-content.ts`
-
-Hand-written mirrors, as `types/library.ts` already is: `LibraryContent` (the same union),
-`NovelChapter`, `ImageAsset`, `VideoAsset`, `LibraryContentStatus`, `LibraryContentPage`,
-`CreateLibraryContent`, `ListLibraryContentsQuery`, and a `LibraryContentFilters` for the screen's
-own `'all'` sentinel.
-
-`types/library.ts` also grows **`LibraryItemDetail extends LibraryItem { createdAt: string }`** —
-`GET /library/:id` returns `createdAt` and the listing's mirror deliberately omits it.
-
----
-
-## Shape of the system
+### Component Diagrams
 
 ```mermaid
-flowchart LR
-    subgraph fe["Nuxt · :3000"]
-        LIST["pages/library/index.vue"]
-        DETAIL["pages/library/[id]/index.vue"]
-        READER["pages/library/[id]/[contentId].vue"]
-        HOOK["useLibraryContents.ts"]
-        FILES["useContentFiles.ts"]
-        LIST --> DETAIL --> READER
-        DETAIL --> HOOK
-        READER --> HOOK
-        READER --> FILES
-        DETAIL --> FILES
+flowchart TB
+    subgraph fe["Nuxt 4 :3000"]
+        DETAIL["pages/library/{id}/index.vue"]
+        READER["pages/library/{id}/{contentId}.vue"]
+        NOVEL["AppLibraryNovelPanel<br/>AppLibraryChapterTable<br/>AppLibraryChapterDialog"]
+        SET["AppLibraryGalleryPanel<br/>AppLibraryAssetGrid"]
+        FILES["composables/useContentFiles.ts"]
     end
 
-    subgraph be["NestJS · :3001"]
-        CTRL["LibraryContentController"]
-        MGR["LibraryContentManager<br/>rules, narrowing, counters"]
-        CREPO["LibraryContentRepository<br/>the subcollection"]
-        IREPO["LibraryRepository<br/>+ updateCounters"]
-        CTRL --> MGR --> CREPO
-        MGR --> IREPO
+    subgraph be["NestJS :3001"]
+        CTRL["LibraryController<br/>:itemId/contents"]
+        CMGR["LibraryContentManager<br/>the rules"]
+        CREPO["LibraryContentRepository"]
+        IREPO["LibraryRepository<br/>updateCounters"]
+        CFP["ContentFileProvider"]
     end
 
-    FS["Firestore<br/>libraryItems/{id}/contents/{cid}"]
-    ST["Cloud Storage<br/>content/{uid}/…"]
+    subgraph gcp["Firebase"]
+        FS[("Firestore<br/>libraryItems/{id}/contents/{id}")]
+        ST[("Cloud Storage<br/>content/{itemId}/")]
+    end
 
-    HOOK -- "Bearer · /api/v1/library/:id/contents" --> CTRL
-    FILES -- "uploadBytes · getDownloadURL · fetch" --> ST
-    CREPO --> FS
-    IREPO --> FS
-
-    style ST stroke-dasharray: 4 3
+    DETAIL --> NOVEL
+    DETAIL --> SET
+    DETAIL --> READER
+    NOVEL --> FILES
+    SET --> FILES
+    READER --> FILES
+    FILES -- "uploadBytes · fetch · deleteObject" --> ST
+    DETAIL -- "generated LibraryClient" --> CTRL
+    READER --> CTRL
+    CTRL --> CMGR
+    CMGR --> CREPO --> FS
+    CMGR --> IREPO --> FS
+    CFP -- "save · delete" --> ST
 ```
 
-The bytes and the record travel separately and meet at `contentUrl`, which is the whole point of the
-browser-direct decision: a 200 MB clip never enters the API process.
+- **One controller, two managers.** `LibraryController` serves both the item and its content;
+  `LibraryContentManager` holds the row rules and calls `LibraryRepository.updateCounters`
+  after every change. `LibraryContentRepository` does not extend `FirestoreRepository` — a row
+  here is found by two ids, so it cannot inherit the one-key `findById`; what is worth sharing
+  is `entityFrom`, and that is what it uses.
+- **Two writers, one URL shape.** The browser writes through `useContentFiles`; the server
+  writes through `ContentFileProvider`. Both produce
+  `…/o/{path}?alt=media&token=…` — the token is written as object metadata, which is what
+  `getDownloadURL()` itself reads — so a scraped chapter and a hand-typed one are read back the
+  same way. A signed URL is not the alternative: the emulators issue no credential to sign with.
 
----
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant RD as the chapter reader
+    participant ST as Cloud Storage
+    participant BE as LibraryController
+    participant MG as LibraryContentManager
+    participant FS as Firestore
 
-## Step 1 — The subcollection and its repository
+    rect rgb(240, 244, 248)
+    note over U, FS: Read one chapter
+    U->>RD: open a row
+    RD->>BE: GET /library/:id/contents/:contentId
+    BE-->>RD: the row, with contentUrl
+    RD->>ST: fetch(contentUrl)
+    ST-->>RD: the text
+    RD->>RD: paragraphsOf · wordCount
+    end
 
-The base repository is the one thing that needs care. `FirestoreRepository`'s `collection`,
-`findById` and `delete` all assume a **root** collection keyed by one id; content is keyed by two.
-Inheriting them would leave `delete(itemId)` on the content repository pointing at the parent item —
-a live footgun.
-
-| File | What changes |
-| --- | --- |
-| `backend/src/core/firebase/firestore.repository.ts` | Extract the mapping into an exported free function `entityFrom<T>(snapshot): T \| null`, and have `protected toEntity` delegate to it. Four lines; the class's behaviour and its spec are untouched. This is what lets a two-key repository reuse the `Timestamp` → ISO flattening without inheriting one-key methods. |
-| `backend/src/core/firebase/collections.ts` | `export const CONTENT_SUBCOLLECTION = 'contents'`, in the same one-line comment style. |
-| `backend/src/library/entities/library-content.entity.ts` | The entity, the union and `LibraryContentStatus`, as above. |
-| `backend/src/library/library-content.repository.ts` | Does **not** extend `FirestoreRepository`. Injects `FirebaseAdminService`, keeps a private `contentsOf(itemId)` accessor, and uses `entityFrom`. Methods: `findMatching(itemId, filter)`, `findOne(itemId, contentId)`, `create(itemId, draft)`, `replace(itemId, stored, draft)`, `remove(itemId, contentId)`, `removeAll(itemId)` (batched, for the item cascade), and `counts(itemId)`. |
-| `backend/src/library/library.repository.ts` | Add `updateCounters(itemId, counts)` — the only file that writes the `libraryItems` collection stays the only file that writes it. |
-| `firestore.indexes.json` | `fieldOverrides` for the `contents` collection group, switching automatic indexing **off** for everything nothing queries — `title`, `language`, `words`, `filename`, `filesize`, `contentUrl`, `createdAt`, `updatedAt`. `type`, `status` and `index` keep theirs: `index` is what chapters are ordered by, `status` is what the counters aggregate on. |
-
-Mirror `LibraryRepository`'s conventions exactly: a
-`LibraryContentDraft = Omit<…, 'id' | 'createdAt' | 'updatedAt'>` distributed over the union,
-`Timestamp.now()` written and ISO returned, the result **built from what was written rather than read
-back**, `update` (not `set`) on replace so `createdAt` survives, and a module-local `iso()` helper.
-
-`counts(itemId)` uses Firestore **aggregation queries** rather than reading the documents: `.count()`
-for the total, `.where('status','==',Ready).count()` for what is held, and
-`.aggregate({ total: AggregateField.sum('filesize') })` for the bytes. Exact, server-side, and
-independent of how many rows there are — which matters for a 1,204-chapter novel.
-
-```ts
-const CONTENT_SCAN_LIMIT = 2000
+    rect rgb(244, 240, 240)
+    note over U, FS: Save one chapter
+    U->>RD: edit the title and the body
+    RD->>ST: uploadText → a new object
+    ST-->>RD: a fresh contentUrl
+    RD->>BE: PUT …/contents/:contentId
+    BE->>MG: replace(itemId, contentId, input)
+    MG->>FS: rewrite the row, sourceUrl carried over
+    MG->>FS: recount → five aggregations
+    MG->>FS: updateCounters on the item
+    MG-->>RD: 200 the row
+    RD->>ST: discard the object it replaced
+    end
 ```
 
-The same bargain part 1 struck at 500, with the headroom the mockup's largest sample needs: Firestore
-orders by `index` (novels) or `filename` (assets) and caps the read; the `search` match and the page
-slice happen in the manager. The repository logs a warning when a query fills the limit.
+- **Upload, then write the row, then drop what it replaced.** That order is the whole of the
+  consistency story: a failed upload leaves no row pointing at nothing, and a failed `PUT`
+  discards the fresh object instead. Objects are named at random rather than after the row,
+  because a body replaced mid-edit must not overwrite the one still being read.
+- **A placeholder opens straight into Edit.** A row with no `contentUrl` has nothing to read, so
+  the reader skips the reading view rather than drawing an empty one.
+- **The navigator is its own fetch.** The reader's left-hand list is the whole novel, not the
+  detail screen's filtered list — that one is whatever the search box there narrowed it to. It
+  pages in on scroll through an `IntersectionObserver`, and a failure leaves it short rather
+  than taking over a screen that is showing the chapter perfectly well.
+- **Both screens page at 200 and append.** `ticket` is bumped per request, so the answer to a
+  search two letters ago cannot land after the answer to this one.
+- **Assets upload one at a time.** Each file is checked against `ASSET_ACCEPTS` and the 200 MB
+  cap, uploaded, then turned into a row; a row that fails discards the object it would have
+  pointed at, so a retry leaves nothing orphaned.
 
-## Step 2 — The content manager and controller
+## Implementation Steps
 
-| File | What it is |
-| --- | --- |
-| `backend/src/core/api.constants.ts` | `export const LIBRARY_CONTENT_PATH = 'contents'`. |
-| `backend/src/library/dto/library-content.dto.ts` | The three out-shapes plus `LibraryContentDto` and `LibraryContentPageDto`. |
-| `backend/src/library/dto/create-library-content.dto.ts` | The one write shape. |
-| `backend/src/library/dto/update-library-content.dto.ts` | `extends CreateLibraryContentDto`. |
-| `backend/src/library/dto/query-list-library-contents.dto.ts` | The list filter. |
-| `backend/src/library/library-content.manager.ts` | The rules. Framework-free, module-level free functions after the class, matching `library.manager.ts` in style. |
-| `backend/src/library/library-content.controller.ts` | ``@Controller(`${LIBRARY_PATH}/:itemId/${LIBRARY_CONTENT_PATH}`)``, `@ApiTags('Library content')`, `@ApiBearerAuth()`, `@UseGuards(FirebaseAuthGuard)`. One-line delegations, `@HttpCode(NO_CONTENT)` on `DELETE`. |
-| `backend/src/library/library.manager.ts` | `remove(id)` now also calls `contents.removeAll(id)` — Firestore does not cascade, and an item deleted without its subcollection leaves documents nothing can reach. |
-| `backend/src/library/library.controller.ts` | The `DELETE` description stops saying *"Its content is not — part 1 stores none."* |
-| `backend/src/library/library.module.ts` | Register the content controller, manager and repository. |
-| `backend/src/library/library-content.manager.spec.ts` | Against a hand-written fake repository, no Nest fixture — the same shape as `library.manager.spec.ts`, `jest.mock('firebase-admin/auth', () => ({}))` first line included. |
+- **Step 1 — the subcollection and its repository.**
+  `entities/library-content.entity.ts` declares `LibraryContentStatus`, the base shape and the
+  three row shapes. `library-content.repository.ts` adds `findMatching` (ordered by
+  `orderField(type)`, `CONTENT_SCAN_LIMIT = 2000`), `findOne`, `highestIndex`, `create`,
+  `createMany` (batched at 500, answering with the ids it allocated, in order), `replaceMany`,
+  `updateStatus`, `patch`, `replace`, `remove`, `removeAll` and `counts` — five aggregations in
+  one `Promise.all`, including an `AggregateField.sum('filesize')`.
+- **Step 2 — the content manager and controller.** `library-content.manager.ts` holds
+  `list`, `get`, `find`, `create`, `replace`, `remove` and `recount`, plus the type-block
+  helpers that do the refusing. `library.controller.ts` grows the five content routes under
+  `:itemId/contents`. `dto/library-content.dto.ts`, `library-content-create.dto.ts`,
+  `library-content-update.dto.ts` and `query-list-library-contents.dto.ts` are the contract.
+- **Step 3 — storage for content.** `composables/useContentFiles.ts` gains `uploadAsset`,
+  `uploadText`, `readText` and `discard`, filing everything under `content/{itemId}/` — an
+  item's objects belong to the item, not to whoever uploaded them, and two people adding
+  chapters to one novel are filling the same shelf. `_deploy/firebase/storage.rules` admits
+  `image/*`, `video/*` and `text/plain*` under that prefix, capped at 200 MB, for any signed-in
+  user.
+- **Step 4 — the three screens.** `types/library-content.ts` mirrors the DTOs;
+  `utils/library-content.ts` holds the status badges, the per-type nouns, the accepted MIME
+  lists, `checkAsset`, `wordCount` and `paragraphsOf`. `pages/library/[id]/index.vue` splits on
+  `type` into `AppLibraryNovelPanel` + `AppLibraryChapterTable` or `AppLibraryGalleryPanel` +
+  `AppLibraryAssetGrid`, and hosts `AppLibraryChapterDialog`, the item form and the two delete
+  confirmations. `pages/library/[id]/[contentId].vue` is the reader and editor.
+- **Step 5 — the index overrides.** `firestore.indexes.json` switches off single-field indexing
+  on every `contents` field nothing queries — `title`, `language`, `words`, `contentUrl`,
+  `type`, `createdAt`, `updatedAt` — leaving `index`, `filename` and `status` indexed, which is
+  exactly what `findMatching` and `counts` use.
 
-The manager's jobs, in order:
+## Appendix
 
-1. **`require(itemId)`** via `LibraryRepository` — the 404 every route naming an item owes, and the
-   source of `type` for everything below.
-2. **Narrow by the parent's type** — the per-type field rules listed under the DTOs. A body carrying
-   a field its type has no room for is a `400`, not a silent drop, exactly as
-   `checkWritableMetadata` refuses metadata on an image item.
-3. **Derive `status`** from `contentUrl`. There is no status in the body to refuse.
-4. **Default `index`** to the next one up on create.
-5. **Maintain the parent's counters** after every create, replace and delete: read `counts(itemId)`,
-   then `updateCounters`. `discoveredCount` = every row (a manually added chapter *is* a discovered
-   chapter), `downloadedCount` = the rows that are `Ready`, `downloadedSize` = the summed `filesize`,
-   `discoveredAt` = now. This is what makes `412 / 640 ch.` on the listing true.
-6. **List** — the repository's ordered scan, then the `search` match (a chapter's title, an asset's
-   filename), then the slice. One code path, part 1's.
+### Known limits
 
-`downloadedDuration` stays `0`. Reading a clip's length needs media probing, which no part of this
-system has; a counter this cannot honestly fill is left alone.
-
-Spec cases: the per-type field rules both ways, `index` auto-assignment, status derived from
-`contentUrl`, the counter deltas across create → replace → delete, the 404 on an unknown item, and
-the 404 on a `contentId` belonging to another item.
-
-## Step 3 — Storage, for content this time
-
-`storage.rules` grows one path beside `covers/{userId}/{file}`, on the reasoning its comment already
-states — Cloud Storage *is* reached from the browser, so these rules are the whole guard on that
-path, not a second line behind one:
-
-```
-match /content/{itemId}/{file} {
-  allow read: if request.auth != null;
-  allow create, update: if request.auth != null
-    && request.resource.size < 200 * 1024 * 1024
-    && request.resource.contentType.matches('image/.*|video/.*|text/plain.*');
-  allow delete: if request.auth != null;
-}
-```
-
-200 MB is the mockup's own cap (*"JPG, PNG, WEBP, MP4 · max 200 MB"*), kept in step with
-`ASSET_MAX_MB` in `app/utils/library-content.ts` the way the cover cap is kept in step with
-`COVER_MAX_MB`. `text/plain` is there because a chapter body is an object too.
-
-**Keyed by the item, not the uploader** — and `covers/{userId}/` from part 1 is rekeyed to
-`covers/{itemId}/` to match. Files belong to the item they are files of, not to whoever
-happened to pick them: two people adding chapters to one novel are filling the same shelf,
-and an item's whole footprint should be one prefix under each of `covers/` and `content/`,
-findable from its id alone.
-
-The cost is that the path no longer carries an ownership check, so both rules are open to
-any signed-in user. That is not a loosening: a `LibraryItem` has no owner in Firestore
-either, and the API already lets any signed-in user edit any item. **If items ever gain an
-owner, both rules have to gain one too.**
-
-Rekeying the cover changes when it is uploaded. Part 1 held the picked file until the save
-and uploaded it before the `POST`; a cover filed under the item cannot be written before the
-item exists. So creating is now **create, then upload, then `PUT` the URL onto it**. Nothing
-is uploaded before the save either way, so a cancelled dialog still leaves the bucket
-untouched — and `AppLibraryFormDialog` remembers the id it just created, so a cover step that
-fails and is retried finishes that item rather than making a second one.
-
-## Step 4 — The three screens
-
-**Routing first.** `app/pages/library.vue` **moves to `app/pages/library/index.vue`**. Keeping
-`library.vue` beside a `library/` directory would make it a parent layout that has to render
-`<NuxtPage/>`, which is not what it is — the same reason the detail is `library/[id]/index.vue` and
-not `library/[id].vue`. `AppNavLink` already prefix-matches, so the sidebar's Library row stays lit
-on every child route; no navigation change is needed.
-
-| File | What it is |
-| --- | --- |
-| `app/components/AppPage.vue` | One more passthrough: a `#title` slot over `UDashboardNavbar`'s, so a screen can draw the mockup's `← Library / {title}` breadcrumb without restyling the navbar. `#leading` is the sidebar collapse's and stays it. |
-| `app/components/AppDialog.vue` | One confirmation for the whole app. It owns the act: runs the `action` it is given, holds the spinner, prints the failure in place, and closes and emits only once it worked. What differs between a deleted item and a deleted chapter is a sentence and a verb, not behaviour — so there is one of these and no per-thing delete dialog. Replaces `AppLibraryDeleteDialog` and `AppLibraryContentDeleteDialog`. |
-| `app/components/AppResizable.vue` | A column the reader can widen, with `UDashboardResizeHandle` beside it. Width in rem, remembered per `storageKey`, clamped between a min and a max; double-click resets and the arrow keys move it, so the separator is not pointer-only. |
-| `app/pages/library/index.vue` | Moved. Rows and cards become openable, and the "inert on purpose" comment goes. |
-| `app/components/AppLibraryTable.vue` · `AppLibraryGrid.vue` | The title becomes a `NuxtLink` to the item — a real link, so it is keyboard-reachable — and the row or card carries a `@click` for the pointer, with the `…` menu cell stopping propagation. |
-| `app/composables/useLibrary.ts` | Add `get(id)` returning `LibraryItemDetail`. The backend has had `GET /:id` since part 1 and nothing called it. |
-| `app/composables/useLibraryContents.ts` | `list`, `get`, `create`, `replace`, `remove` over `/library/:itemId/contents`. The one place a content path is written. |
-| `app/composables/useContentFiles.ts` | Storage, mirroring `useCovers.ts`: `uploadAsset(itemId, file)` (an image or clip, as picked), `uploadText(itemId, text)` (a chapter body as `text/plain; charset=utf-8`), `readText(url)` and `discard(url)`. Path `content/${itemId}/${crypto.randomUUID()}${extension}` — filed under the item, not the uploader — and the same prose-sentence errors rather than Storage's codes. |
-| `app/utils/library-content.ts` | Presentation helpers, auto-imported: `contentStatusTag` (Done / Queued / Failed over the mono badge scheme), `chapterLabel`, `assetMeta`, `wordCount(text)`, `ASSET_ACCEPT`, `ASSET_MAX_MB = 200`. |
-| `app/pages/library/[id]/index.vue` | Fetches the item through `useAsyncData` keyed on the route id, then branches: `type === 'novel'` renders the novel panes, anything else the gallery. Hosts the dialogs, reuses `AppLibraryFormDialog` unchanged for "Edit metadata", and gives `AppDialog` the delete actions — after an item delete it navigates back to `/library`. |
-| `app/components/AppLibraryNovelPanel.vue` | The left sidebar, 20rem by default and resizable: the 3:4 cover in an `AppBlueprint`, title, author, genre badges, the `<dl>` (Status, Chapters, Mode, Crawler, Source, Language, Updated) and the action stack. Its width is the caller's — `AppResizable` owns it. The step-3 review block already in `AppLibraryFormDialog` is the worked example for the `<dl>`. |
-| `app/components/AppLibraryChapterTable.vue` | The chapters table — checkbox, No., Title, Words, Status, Scraped, and the row's ghost **Open** / **Retry**. Hand-rolled `<table class="w-full table-fixed">` with `USkeleton` rows, as `AppLibraryTable` is. |
-| `app/components/AppLibraryChapterDialog.vue` | "Add chapter": a title, and an index defaulting to the next one. Also serves the rename, so the reader is not the only way to change a title. |
-| `app/components/AppLibraryGalleryPanel.vue` | The hero band: title, subtitle, the five uppercase stats (Assets · Mode · Crawler · Size · Updated) and the action cluster. |
-| `app/components/AppLibraryAssetGrid.vue` | The `minmax(180px,1fr)` grid: the dashed dropzone card first, then one square card per asset — wireframe thumb, the meta badge bottom-right, a `circle-play` overlay on a clip, filename, and a `…` menu whose one live item is Delete. |
-| `app/pages/library/[id]/[contentId].vue` | The chapter reader/editor: a resizable chapter navigator (17.5rem by default) with the **All chapters** back link and the active row tinted, a 52px toolbar (`Chapter {index}` eyebrow, title, word count, a Read/Edit toggle, **Save**), and a `max-w-180` centred column — paragraphs when reading, a title field over a `UTextarea` when editing. |
-
-Screen behaviour:
-
-- **Saving a chapter body** is upload-then-`PUT`, the shape `AppLibraryFormDialog.save()` already
-  uses for a cover: `uploadText` the body, `PUT` the row with the new `contentUrl` and the
-  `wordCount`, then `discard` the object it replaced. On a failed `PUT` the fresh object is discarded
-  instead, so a failure leaves nothing behind.
-- **Uploading assets** is the same, per file, with progress drawn as each settles. The dropzone
-  handles both the click and the drop, as `AppLibraryCoverField` does.
-- **Reading a chapter** fetches `contentUrl` and splits on newlines into paragraphs. A placeholder
-  chapter (`contentUrl` null) opens straight into Edit with an empty body rather than an empty
-  reading view.
-- **Selection** in the chapters table drives one live action, **Delete selected**, beside the
-  disabled **Scrape selected**. Checkboxes that could only feed a disabled control would be dead UI.
-- **Disabled controls** each get a `UTooltip`: *"Scraping arrives with the job runner."* **Retry
-  failed (n)** takes its `n` from the real count of `failed` rows, so the number is true even though
-  the button does nothing.
-- **Loading** is skeleton rows in the chapters table, skeleton cards in the asset grid; **empty** is
-  a dashed `AppBlueprint` offering "Add chapter" or the dropzone.
-- **After a mutation** the list refreshes and a `useToast` line confirms it, as the listing does.
-- **Styling**: tokens and Tailwind classes only, no `<style>` block, square corners, all four
-  registration marks on every framed element.
-
----
-
-## Known limits
-
-**`words` and `filesize` are the client's word.** The browser uploads the bytes, so only the browser
-counts them; the server stores what it is told. A client could claim `words: 999999`. The fix is the
-one that fixes it for real content — the job runner, which will write both itself.
-
-**A chapter body costs a second round trip, and edits race.** Reading one is `GET` the row then
-`fetch` the URL; two people editing the same chapter is last-write-wins, and the loser's object is
-orphaned rather than overwritten. Part 1's *No optimistic concurrency* limit, now with a second place
-to bite.
-
-**Orphaned Storage objects.** A content row deleted through the UI discards its object, but an item
-deleted whole does not — the backend has no Storage access by design, and deleting N objects from the
-browser is not something to trust. Abandoned editor sessions leak too. The fix is a sweep job, and
-filing everything under the item's id is what makes one cheap: an item's whole footprint is
-`covers/{itemId}/` plus `content/{itemId}/`, so a deleted item's files can be dropped by prefix
-without reconciling against Firestore at all.
-
-**`CONTENT_SCAN_LIMIT = 2000`, and search and paging happen in memory.** Correct while an item holds
-fewer rows than that, and wrong past it — silently, so the repository warns when a query fills the
-limit. The way out is `startAfter` cursor paging plus a `keywords` field for search, not a bigger
-number.
-
-**`downloadedDuration` stays `0`.** No media probing exists.
-
-**Chapter indexes are not unique and not transactional.** `index` defaults to the next one up, read
-and written without a transaction, so two simultaneous "Add chapter" calls can land on the same
-number. Nothing breaks — the order is merely arbitrary between them.
-
-**Counters are exact but not atomic with the write.** The aggregation runs after the content write,
-in a separate call. A crash between the two leaves the item's counters one row stale until the next
-content write recomputes them.
-
-**A Storage download URL is a bearer token.** `getDownloadURL` returns a long-lived tokenised URL,
-and anyone holding it can read the object regardless of `storage.rules`. Fine for this catalogue;
-worth knowing before anything private lands in it.
-
----
-
-## Running it locally
-
-```bash
-pnpm install
-pnpm dev:firebase      # Auth :9099, Firestore :8080, Storage :9199, Emulator UI :4000
-pnpm seed:firebase     # admin@datntdev.com / StrongPassword123!
-pnpm dev               # backend :3001 + frontend :3000
-```
-
-The emulators are stateless — restart them and re-run the seed.
-
-**Backend**, before any UI:
-
-```bash
-pnpm --filter @media-studio/backend run test -- library-content.manager
-pnpm lint && pnpm typecheck
-```
-
-Then `http://localhost:3001/docs` — the new routes appear under **Library content**, and
-`POST /api/v1/library/:itemId/contents` with `{ "title": "Chapter one" }` should answer `201` with
-`index: 1`, `status: "pending"`, `contentUrl: null`.
-
-**End to end through the UI**, which is the real check because the CRUD *is* the seeding:
-
-1. `/library` → create a manual **novel**, then click its title. The detail opens with an empty
-   chapters table.
-2. **Add chapter** twice. Both rows read **Queued**; go back to `/library` and the row now says
-   `0 / 2 ch.` — the counters moving is the whole point of step 2.
-3. Open a chapter, **Edit**, type a few paragraphs, **Save**. The row flips to **Done**, the word
-   count appears, `/library` reads `1 / 2 ch.`, and the Storage emulator UI at
-   `http://localhost:4000/storage` shows the object under `content/{uid}/`.
-4. Reload the reader — the body comes back from `contentUrl`. This is the one step that proves the
-   cross-origin read works against the emulator; if it fails, it fails here and nowhere else.
-5. Delete a chapter → the row goes, the counters drop, the object goes.
-6. Create a manual **image set**, open it, drop two files on the dropzone. Cards appear with their
-   dimensions; `/library` shows `2 images`. Repeat with a **video set** and check the play overlay
-   and the size stat.
-7. **Edit metadata** and **Delete item** on the detail page — the second should return to `/library`
-   with the item gone, and the Firestore UI should show its `contents` subcollection gone with it.
-8. Confirm every scraping control is disabled and tooltipped, and that **Retry failed (0)** shows a
-   real zero.
-
-Each step is one commit, and each leaves `pnpm lint`, `pnpm typecheck` and `pnpm build` green.
+- **`words` is whoever wrote the text's figure.** The count is computed in the browser by
+  `wordCount` and sent; nothing recomputes it server-side. `ScrapingJobManager.wordCount` is
+  deliberately the same function so a scraped chapter and an edited one agree — but a client
+  can send any number it likes.
+- **`filesize` is likewise the client's.** The server never probes the object.
+- **The 2000-row scan limit.** `findMatching` reads at most `CONTENT_SCAN_LIMIT` rows, and the
+  search and the slice run over those. A novel longer than that is searchable only within the
+  first two thousand rows.
+- **No substring index.** As in part 1, `search` is a case-insensitive `includes` in the
+  manager, over a chapter's title or an asset's filename.
+- **Deleting a row does not delete its bytes.** The API answers `204` and leaves the object;
+  the browser drops it through `files.discard` immediately after. A row deleted by any other
+  means leaves an orphan in the bucket, and nothing sweeps `content/{itemId}/` yet.
+- **A chapter's `index` is not unique.** Nothing stops two chapters sharing a number — which is
+  why part 5's package numbers body entries by position rather than by chapter number.
+- **Two rows may share a `filename`.** The list is ordered by it, not keyed on it.
+- **No bulk content endpoint.** Deleting a selection is a loop over the single-row route, one at
+  a time, so a partial failure leaves what it removed removed and says which row stopped it.

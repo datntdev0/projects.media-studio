@@ -6,6 +6,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Well above a healthy run, and well below the 6-hour default a hung step
+    # would otherwise bill for.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -54,6 +57,7 @@ jobs:
   e2e:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -71,8 +75,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Keyed on the lockfile, which is what moves when Playwright's version does —
+      # and the browser build is pinned to that version, so a stale entry cannot be
+      # used against a newer one.
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # The browser binary only. `--with-deps` is deliberately absent: it shells out
+      # to `sudo apt-get`, which on a hosted runner blocks with no timeout — behind
+      # the dpkg lock `unattended-upgrades` holds after boot, or on a `needrestart`
+      # prompt that never gets a TTY to answer it. Neither fails, so the job used to
+      # sit there until GitHub's 6-hour ceiling.
+      #
+      # Nothing is lost by dropping it: ubuntu-latest ships Google Chrome, so every
+      # shared library Playwright's Chromium links against is already on the image.
+      # A missing one would now be a launch error naming it, not a hang.
       - name: Install Chromium
-        run: pnpm --filter @media-studio/tests exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: pnpm --filter @media-studio/tests exec playwright install chromium
 
       # The emulators and Redis only. The scraping service is in the same file but
       # builds a stealth browser image, and nothing under test reaches it.

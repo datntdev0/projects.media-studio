@@ -1,579 +1,279 @@
 # Library — Part 1: basic management and the codebase it needs
 
-Source design: `_docs/design/1. Library.dc.html` (list screen, create modal), read against
-`DESIGN.md` for the visual system.
+## Overview
 
-## Goal of design
+Part 1 builds the listing page of the Library section, the CRUD behind it, and the persistence
+layer the rest of the product sits on. Source design: `_docs/design/1. Library.dc.html`, read
+against `DESIGN.md` for the visual system.
 
-Part 1 builds **the listing page of the Library section and the CRUD behind it**, plus the
-persistence layer the rest of the product will sit on. Nothing more.
+The persistence layer is a deliberately small `FirestoreRepository<T>` base — a collection
+reference and one mapping from a document to a domain object — proved end to end by a `System`
+repository that writes on every boot and that `GET /system` reads. Queries are not generic: a
+repository that needs one writes it in its own domain's terms.
 
-**In scope**
-
-- A repository layer on Firebase Firestore, proven end to end by a `System` repository that
-  `GET /system` reads from — the smallest real use of the layer, so the pattern is established
-  before the Library feature copies it.
-- `library` feature module — controller → manager → repository — with list, read, create,
-  replace and delete.
-- The `/library` screen: type tabs, search, status and source filters, table and grid views,
-  a create/edit dialog and a delete confirmation.
-
-**Out of scope — deliberately**
-
-| Deferred | Why |
-| --- | --- |
-| Scraping jobs, crawlers, discovery, progress | The `Scraping` and `Failed` statuses and every counter in `metadata` exist on the entity but no code moves them yet. |
-| The detail screens — novel chapters, chapter reader, gallery assets | Nothing on the listing page navigates. |
-| A real crawler registry and a real URL check | The mockup's 3-step create wizard is built, but steps 2 and 3 run against a mocked registry and a mocked validation in `app/utils/crawlers.ts`. Part 2 replaces both with the server's. The created item is still a draft — nothing queues a job. |
-| Somewhere to put an uploaded file | Needs Cloud Storage. The dialog has the uploader, but `utils/covers.ts` mocks it: the file is resized in a canvas and kept with the item as a `data:` URL. `coverUrl` stays a URL string either way, so the swap is one function body. Asset uploads are untouched. |
-| Full-text search | Firestore has no substring index — see [Known limits](#known-limits). |
+On top of that sits the `library` feature module: controller → manager → repository, over a
+`libraryItems` collection whose root shape never changes when a content type is added, because
+everything type-specific lives under `metadata`. The entity is a union discriminated on `type`,
+so `item.type === 'video'` narrows `metadata` to the one shape carrying `downloadedDuration`.
 
 The rule the whole part follows: **every field the later parts need exists on the entity now,
 and only the ones part 1 can honestly maintain are writable.**
 
----
+## Requirements
 
-## Contracts
+- **A repository layer with a real first consumer.** `FirestoreRepository<T>` owns
+  `collection`, `findById` and `delete`, plus `entityFrom` — which flattens every Firestore
+  `Timestamp` to an ISO string, recursively through maps and arrays, so no driver type reaches
+  a DTO. `SystemRepository` is the first user: `recordStart` writes in a transaction so
+  `installedAt` survives two instances booting together.
+- **Collection names live in one place.** `core/firebase/collections.ts` — a name that appears
+  in two files eventually disagrees with itself.
+- **The item's root shape is type-agnostic.** `type`, `title`, `coverUrl`, `sourceMode`,
+  `sourceName`, `sourceUrl`, `status`, `metadata`, `createdAt`, `updatedAt`. Adding a content
+  type adds a `metadata` shape and nothing else.
+- **`type` and `sourceMode` are immutable after creation.** Both decide the item's shape;
+  `checkImmutable` refuses a `PUT` that moves either.
+- **Statuses are split by ownership.** A person may set `Draft` or `Ready`. `Scraping` and
+  `Failed` are the job runner's, and `WRITABLE_STATUSES` plus `checkStatus` refuse them from a
+  client. The list filter still accepts all four — a filter reads data it does not write.
+- **Counters are split the same way.** `discoveredCount` and `discoveredAt` are the inventory
+  a client may state; `downloadedCount`, `downloadedSize` and `downloadedDuration` say what is
+  actually stored here, are omitted from every input DTO by `OmitType`, and are carried over
+  rather than read from a `PUT` body.
+- **Only a novel has descriptive metadata.** `checkWritableMetadata` refuses `status`,
+  `author`, `language`, `genres` and `description` on an image or video set — a set has nothing
+  to say about a work.
+- **A crawler item needs both a URL and a crawler; a manual item is refused a URL.** `source()`
+  enforces both, and names a manual item's source `Manual` whatever was sent.
+- **`PUT` replaces the whole writable representation.** An omitted field is a cleared field —
+  that is what `PUT` promises — with two documented exceptions carried over instead: the
+  downloaded counters, and `createdAt`.
+- **The listing is filtered in Firestore and searched in the manager.** Three equality filters
+  go to Firestore, which serves them by merging automatic single-field indexes; the search, the
+  `updatedAt` ordering and the page slice happen over what comes back. That is what keeps the
+  collection free of composite indexes.
+- **The screen is the mockup.** Type tabs, search, status and source filters, table and grid
+  views, a create/edit dialog and a delete confirmation.
 
-### Domain entities
+## Solution
 
-Entities are plain interfaces, one per feature module, under `entities/`. No ORM, no decorators —
-they describe what a Firestore document holds; `Timestamp` values become ISO strings on the way
-out.
+### Contract Skeleton
 
-#### `SystemInfo` — `backend/src/system/entities/system-info.entity.ts`
-
-One document, `system/current`. It exists so the repository layer has a first, real consumer.
-The entity covers everything `ServiceInfoDto` already answers with, plus what is now persisted:
-
-| Field | Type | Source | Notes |
+| Method | Path | Answers | Refuses |
 | --- | --- | --- | --- |
-| `id` | `string` | document id | Always `current` — a singleton. |
-| `name` | `string` | stored | `SERVICE_NAME` of the build that last started. |
-| `version` | `string` | stored | `SERVICE_VERSION` of that build. |
-| `schemaVersion` | `number` | stored | What data shape this deployment expects. Bumped by hand when a migration lands. |
-| `installedAt` | `string` (ISO) | stored | Written once, when the document is first created. |
-| `lastStartedAt` | `string` (ISO) | stored | Rewritten on every boot. Proves the write path works, not only the read path. |
-| `environment` | `NodeEnv` | derived | Read from configuration — a property of the running process, not of the record. |
-| `apiVersion` | `string` | derived | `v${API_VERSION}`. Same reason. |
+| `GET` | `/system` | `200 ServiceInfoDto` | — · version-neutral, outside `/api` |
+| `GET` | `/health` | `200 HealthDto` | — · version-neutral, outside `/api` |
+| `GET` | `/api/v1/library` | `200 LibraryItemPageDto` | `401` |
+| `GET` | `/api/v1/library/:id` | `200 LibraryItemDto` | `401` · `404` |
+| `POST` | `/api/v1/library` | `201 LibraryItemDto` | `400` source rules, or metadata the type has no room for · `401` |
+| `PUT` | `/api/v1/library/:id` | `200 LibraryItemDto` | `400` the creation rules, plus a changed `type` or `sourceMode`, or a runner-owned status · `401` · `404` |
+| `DELETE` | `/api/v1/library/:id` | `204` — and every chapter, image, clip and translation under it | `401` · `404` |
 
-`SystemRepository` persists the five stored fields; `SystemManager` overlays the two derived ones
-and hands back a whole `SystemInfo`. Keeping `name` and `version` in the document is what makes
-`lastStartedAt` worth reading — it says *which build* booted, not just that something did.
+**`QueryListLibraryItemsDto`** — every field optional.
 
-#### `LibraryItem` — `backend/src/library/entities/library-item.entity.ts`
-
-Collection `libraryItems`. One document per row of the listing. Everything type-specific lives
-under `metadata`, so the root shape never changes when a new content type is added.
-
-| Field | Type | Writable in part 1 | Notes |
+| Field | Type | Default | Applied by |
 | --- | --- | --- | --- |
-| `id` | `string` | — | Firestore document id. |
-| `type` | `LibraryItemType` | create only | `novel` \| `image` \| `video`. Immutable — the mockup says so ("Type and mode can not be changed after creation"), and it decides the shape of `metadata`. |
-| `title` | `string` | yes | The heading in both views. |
-| `coverUrl` | `string \| null` | yes | Rendered where the mockup draws a wireframe thumbnail; the wireframe stays when it is null. |
-| `sourceMode` | `LibrarySourceMode` | create only | `manual` \| `crawler`. Immutable, same reason. |
-| `sourceName` | `string` | yes | `Manual`, or the crawler's name (`novelbin.crawler`). Free text in part 1; part 2 turns it into a reference to a registered crawler. |
-| `sourceUrl` | `string \| null` | yes | Required when `sourceMode` is `crawler`, null otherwise. |
-| `status` | `LibraryItemStatus` | restricted | The pipeline status — see below. |
-| `metadata` | `LibraryItemMetadata` | partly | Discriminated by `type`. See the table under it. |
-| `createdAt` | `string` (ISO) | — | Set on create. |
-| `updatedAt` | `string` (ISO) | — | Set on every write. The list is ordered by it. |
+| `type` | `LibraryItemType` | — | Firestore equality |
+| `status` | `LibraryItemStatus` | — | Firestore equality |
+| `sourceMode` | `LibrarySourceMode` | — | Firestore equality |
+| `search` | `string` (≤200) | — | manager, over title / sourceName / author |
+| `page` | `int ≥ 1` | `1` | manager slice |
+| `pageSize` | `int 1–100` | `20` | manager slice |
 
-**Metadata** — `backend/src/library/entities/library-item-metadata.entity.ts`
+**`LibraryItemDto`** — what `GET /:id`, `POST` and `PUT` answer with.
 
-Three shapes over one common core. `discoveredAt` is when the source was last read for a
-content inventory; the counts are what is known and what is held.
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `string` | Firestore document id. |
+| `type` | `LibraryItemType` | `novel` \| `image` \| `video`. Immutable. |
+| `title` | `string` | |
+| `coverUrl` | `string \| null` | Null draws the wireframe placeholder. |
+| `sourceMode` | `LibrarySourceMode` | `manual` \| `crawler`. Immutable. |
+| `sourceName` | `string` | `Manual`, or the crawler's name. |
+| `sourceUrl` | `string \| null` | Required of a crawler item, null of a manual one. |
+| `status` | `LibraryItemStatus` | `draft` \| `scraping` \| `ready` \| `failed`. |
+| `metadata` | `oneOf` the three below | Which shape follows from `type`. |
+| `createdAt` / `updatedAt` | `string` (ISO) | |
+| `translations` | `LibraryTranslationCoverageDto[] \| null` | Added in part 4. Null on a set. |
+
+**Metadata** — `NovelMetadataDto`, `ImageSetMetadataDto`, `VideoSetMetadataDto`, over one base.
 
 | Shape | Fields |
 | --- | --- |
-| common | `discoveredCount: number`, `discoveredAt: string \| null`, `downloadedCount: number` |
-| `NovelMetadata` | common + `status: NovelStatus`, `author: string`, `language: string`, `genres: string[]`, `description: string` |
-| `ImageSetMetadata` | common + `downloadedSize: number` (bytes) |
-| `VideoSetMetadata` | common + `downloadedSize: number` (bytes), `downloadedDuration: number` (seconds) |
+| base | `discoveredCount: number`, `discoveredAt: string \| null`, `downloadedCount: number` |
+| novel | base + `status: NovelStatus`, `author`, `language`, `genres: string[]`, `description` |
+| image set | base + `downloadedSize: number` (bytes) |
+| video set | base + `downloadedSize: number`, `downloadedDuration: number` (seconds) |
 
-```ts
-type LibraryItemMetadata = NovelMetadata | ImageSetMetadata | VideoSetMetadata
+**Input DTOs** are derived, not restated: `NovelMetadataInputDto` is
+`PartialType(OmitType(NovelMetadataDto, ['downloadedCount']))`, and the two set shapes also drop
+`downloadedSize` and `downloadedDuration`. `CreateLibraryItemDto` requires `type`, `title` and
+`sourceMode`; `UpdateLibraryItemDto` is the same plus an optional `status` restricted by
+`@IsIn(WRITABLE_STATUSES)`.
 
-type LibraryItem = NovelItem | ImageSetItem | VideoSetItem   // discriminated on `type`
-```
+**`LibraryItemPageDto`** — `items: LibraryListItemDto[]`, `total`, `page`, `pageSize`.
+`LibraryListItemDto` is `OmitType(LibraryItemDto, ['createdAt', 'translations'])`: neither view
+draws the creation date, and coverage would be three aggregations per row for a question the
+listing never asks.
 
-The union is worth the small cost: `item.type === 'video'` narrows `item.metadata` to the one
-shape that has `downloadedDuration`, so a helper cannot read a field the type does not carry.
+**`SystemRecord` / `ServiceInfoDto`** — one document, `system/current`. `name`, `version`,
+`schemaVersion`, `environment`, `apiVersion`, `installedAt`, `lastStartedAt`. The build fields
+are *stored* rather than derived on purpose: `lastStartedAt` is only worth reading next to
+*what* started, and reading those from live configuration would report the answering process as
+though the record had said it.
 
-**Enums** (`entities/library-item.entity.ts`):
+**`HealthDto`** — `status: 'ok'`, `uptimeSeconds`, `firebaseStatus: 'up' | 'down'`.
 
-```ts
-enum LibraryItemType   { Novel = 'novel', Image = 'image', Video = 'video' }
-enum LibrarySourceMode { Manual = 'manual', Crawler = 'crawler' }
-enum LibraryItemStatus { Draft = 'draft', Scraping = 'scraping', Ready = 'ready', Failed = 'failed' }
-enum NovelStatus       { Ongoing = 'ongoing', Complete = 'complete', Hiatus = 'hiatus' }
-```
-
-Two different things are called "status" and they must not be confused: `LibraryItemStatus` is
-ours — where the item is in our pipeline — while `NovelStatus` is the work's own, as the source
-publishes it. Only the first appears in the list's status filter.
-
-`LibraryItemStatus` is split by ownership. A person may set `Draft` or `Ready`; `Scraping` and
-`Failed` belong to the job runner, and part 1 has no way to reach them honestly, so the write DTO
-rejects them. The list filter still accepts all four — a filter reads data it does not write.
-
-The counters split by ownership, and the line is what the source *has* against what *we* hold.
-`discoveredCount` and `discoveredAt` are the inventory — a client is describing a source it may
-well have read, so both are editable, on every type. `downloadedCount`, `downloadedSize` and
-`downloadedDuration` say what is actually stored here; they are the job runner's alone and absent
-from the write DTOs, because a client that could set them would be claiming content that does not
-exist. What that leaves editable inside `metadata` is the inventory for any type, plus the novel's
-descriptive block — `status`, `author`, `language`, `genres`, `description`. **Image and video
-items have nothing to say about a work, so those five are refused on them.**
-
-**Entity class diagram**
+### Component Diagrams
 
 ```mermaid
-classDiagram
-    direction LR
-
-    class LibraryItemBase {
-        <<interface>>
-        +string id
-        +string title
-        +string|null coverUrl
-        +LibrarySourceMode sourceMode
-        +string sourceName
-        +string|null sourceUrl
-        +LibraryItemStatus status
-        +string createdAt
-        +string updatedAt
-    }
-
-    class NovelItem {
-        <<interface>>
-        +LibraryItemType.Novel type
-        +NovelMetadata metadata
-    }
-    class ImageSetItem {
-        <<interface>>
-        +LibraryItemType.Image type
-        +ImageSetMetadata metadata
-    }
-    class VideoSetItem {
-        <<interface>>
-        +LibraryItemType.Video type
-        +VideoSetMetadata metadata
-    }
-
-    class LibraryItemMetadataBase {
-        <<interface>>
-        +number discoveredCount
-        +string|null discoveredAt
-        +number downloadedCount
-    }
-    class NovelMetadata {
-        <<interface>>
-        +NovelStatus status
-        +string author
-        +string language
-        +string[] genres
-        +string description
-    }
-    class ImageSetMetadata {
-        <<interface>>
-        +number downloadedSize
-    }
-    class VideoSetMetadata {
-        <<interface>>
-        +number downloadedSize
-        +number downloadedDuration
-    }
-
-    LibraryItemBase <|-- NovelItem
-    LibraryItemBase <|-- ImageSetItem
-    LibraryItemBase <|-- VideoSetItem
-
-    LibraryItemMetadataBase <|-- NovelMetadata
-    LibraryItemMetadataBase <|-- ImageSetMetadata
-    LibraryItemMetadataBase <|-- VideoSetMetadata
-
-    NovelItem *-- NovelMetadata
-    ImageSetItem *-- ImageSetMetadata
-    VideoSetItem *-- VideoSetMetadata
-
-    note for LibraryItemBase "LibraryItem = NovelItem | ImageSetItem | VideoSetItem,<br/>discriminated on `type`"
-```
-
-### Endpoints
-
-| Method | Path | Auth | Input | Answers |
-| --- | --- | --- | --- | --- |
-| `GET` | `/system` | none | — | `200 ServiceInfoDto` — now includes the persisted fields |
-| `GET` | `/health` | none | — | `200 HealthDto` — unchanged, stays free of the database |
-| `GET` | `/api/v1/library` | bearer | `ListLibraryItemsQueryDto` (query) | `200 LibraryItemPageDto` |
-| `GET` | `/api/v1/library/:id` | bearer | — | `200 LibraryItemDto` · `404` |
-| `POST` | `/api/v1/library` | bearer | `CreateLibraryItemDto` | `201 LibraryItemDto` · `400` |
-| `PUT` | `/api/v1/library/:id` | bearer | `ReplaceLibraryItemDto` | `200 LibraryItemDto` · `400` · `404` |
-| `DELETE` | `/api/v1/library/:id` | bearer | — | `204` · `404` |
-
-`PUT`, not `PATCH`: the body is the item's whole writable representation, so **an omitted optional
-field is cleared**, not left alone. That is the point — clearing `author` or `sourceUrl` has to be
-expressible, and with `PATCH` an absent key and an intentional erasure look identical.
-
-Because the body is a whole representation, it may carry `type` and `sourceMode`; both are
-immutable, so a value that differs from the stored one is a `400` rather than silently ignored.
-A client that reads, edits and writes back therefore needs no special handling.
-
-`LIBRARY_PATH = 'library'` joins `api.constants.ts`. The routes are versioned (`/api/v1/…`) and
-guarded by the existing `FirebaseAuthGuard`, exactly like `AuthController`.
-
-`GET /:id` is not the deferred detail screen — it is the read half of CRUD, used to refresh a row
-after an edit.
-
-### DTO classes
-
-**Backend — `backend/src/library/dto/`**
-
-| Class | Direction | Holds |
-| --- | --- | --- |
-| `LibraryItemDto` | out | The whole entity, dates as ISO strings. `metadata` documented as `oneOf` the three metadata DTOs. |
-| `NovelMetadataDto` · `ImageSetMetadataDto` · `VideoSetMetadataDto` | out | One per shape, so the OpenAPI document describes what each type actually returns. |
-| `LibraryItemPageDto` | out | `items: LibraryItemDto[]`, `total` (matching the filter), `page`, `pageSize`. |
-| `CreateLibraryItemDto` | in | `type`, `title`, `coverUrl?`, `sourceMode`, `sourceName?`, `sourceUrl?`, `metadata?` documented as `oneOf` the three create-metadata DTOs. |
-| `UpdateLibraryItemDto` | in | The `PUT` body, a class of its own: every field `CreateLibraryItemDto` has, plus `status?` (`Draft` \| `Ready`). |
-| `NovelMetadataInputDto` · `ImageSetMetadataInputDto` · `VideoSetMetadataInputDto` | in | The editable half of each response shape, derived from it: `PartialType(OmitType(…))` drops the downloaded counters and makes the rest optional. Both request bodies use these — nothing restates a metadata field. |
-| `ListLibraryItemsQueryDto` | in | `type?`, `status?`, `sourceMode?`, `search?`, `page = 1`, `pageSize = 20` (max 100). |
-
-Validation lives in two places, on purpose:
-
-- **The pipe** checks shapes — `@IsEnum`, `@IsString`, `@MaxLength`, `@IsUrl` on the two URLs at the
-  root of the body, `@ValidateNested` + `@Type` on `metadata`, and `@Type(() => Number)` on the
-  query's numbers, since query strings arrive as text and the global `ValidationPipe` runs with
-  `transform: true`.
-- **The manager** checks meaning — that an image or video item carries none of the novel-only
-  fields, that a crawler item carries a URL, that `type` and `sourceMode` match what is stored. The
-  document describes `metadata` per type, but the pipe validates every body against
-  `NovelMetadataInputDto`, the widest of the three: which type may carry what is a rule about
-  meaning, so it sits with the others rather than in a discriminator the body does not carry.
-
-Inside `metadata` the pipe checks membership and nothing else. The input classes are derived from
-the response ones, which carry no `class-validator` rules to inherit, so an unknown key is still
-refused — that is what `PartialType` registers — but a `description` of any length or a
-`discoveredCount` that is a string is not. Nothing reaches Firestore unchecked even so: the manager
-builds stored `metadata` field by field rather than spreading what arrived. Restoring the length
-and type rules means decorating the response classes, which the derived ones would then inherit.
-
-`UpdateLibraryItemDto` spells every field out rather than composing itself from the creation body.
-The two are the same shape today, but they are not the same request: this one describes an item
-that already exists, so `type` and `sourceMode` document that a value other than the stored one is
-refused, and `status` exists here and nowhere else — a new item is always a draft. The field
-limits both bodies check live in `library-item.constants.ts`, which is what keeps the two from
-drifting apart now that neither is derived from the other.
-
-The inventory is among those fields, and `PUT` treats it like every other editable one: a body
-that leaves it out clears it. What is downloaded is still carried over from the stored item.
-
-The two request files are named after what they describe rather than what they do —
-`library-item-create.dto.ts`, `library-item-update.dto.ts` — so everything about one entity sorts
-together in the folder.
-
-**DTO class diagram**
-
-```mermaid
-classDiagram
-    direction LR
-
-    class LibraryItemDto {
-        +string id
-        +LibraryItemType type
-        +string title
-        +string|null coverUrl
-        +LibrarySourceMode sourceMode
-        +string sourceName
-        +string|null sourceUrl
-        +LibraryItemStatus status
-        +LibraryItemMetadataDto metadata
-        +string createdAt
-        +string updatedAt
-    }
-    class LibraryItemMetadataBaseDto {
-        +number discoveredCount
-        +string|null discoveredAt
-        +number downloadedCount
-    }
-    class NovelMetadataDto {
-        +NovelStatus status
-        +string author
-        +string language
-        +string[] genres
-        +string description
-    }
-    class ImageSetMetadataDto {
-        +number downloadedSize
-    }
-    class VideoSetMetadataDto {
-        +number downloadedSize
-        +number downloadedDuration
-    }
-    class LibraryItemPageDto {
-        +LibraryItemDto[] items
-        +number total
-        +number page
-        +number pageSize
-    }
-
-    class CreateLibraryItemDto {
-        +LibraryItemType type
-        +string title
-        +string|null coverUrl?
-        +LibrarySourceMode sourceMode
-        +string sourceName?
-        +string|null sourceUrl?
-        +LibraryItemMetadataInputDto metadata?
-    }
-    class UpdateLibraryItemDto {
-        +LibraryItemType type
-        +string title
-        +string|null coverUrl?
-        +LibrarySourceMode sourceMode
-        +string sourceName?
-        +string|null sourceUrl?
-        +LibraryItemStatus status?
-        +LibraryItemMetadataInputDto metadata?
-    }
-    class NovelMetadataInputDto {
-        <<PartialType(OmitType)>>
-        +number discoveredCount?
-        +string|null discoveredAt?
-        +NovelStatus status?
-        +string author?
-        +string language?
-        +string[] genres?
-        +string description?
-    }
-    class ImageSetMetadataInputDto {
-        <<PartialType(OmitType)>>
-        +number discoveredCount?
-        +string|null discoveredAt?
-    }
-    class VideoSetMetadataInputDto {
-        <<PartialType(OmitType)>>
-        +number discoveredCount?
-        +string|null discoveredAt?
-    }
-
-    LibraryItemMetadataBaseDto <|-- NovelMetadataDto
-    LibraryItemMetadataBaseDto <|-- ImageSetMetadataDto
-    LibraryItemMetadataBaseDto <|-- VideoSetMetadataDto
-
-    LibraryItemDto o-- NovelMetadataDto
-    LibraryItemDto o-- ImageSetMetadataDto
-    LibraryItemDto o-- VideoSetMetadataDto
-    LibraryItemPageDto *-- LibraryItemDto
-
-    NovelMetadataDto <|.. NovelMetadataInputDto
-    ImageSetMetadataDto <|.. ImageSetMetadataInputDto
-    VideoSetMetadataDto <|.. VideoSetMetadataInputDto
-
-    CreateLibraryItemDto o-- NovelMetadataInputDto
-    CreateLibraryItemDto o-- ImageSetMetadataInputDto
-    CreateLibraryItemDto o-- VideoSetMetadataInputDto
-
-    UpdateLibraryItemDto o-- NovelMetadataInputDto
-    UpdateLibraryItemDto o-- ImageSetMetadataInputDto
-    UpdateLibraryItemDto o-- VideoSetMetadataInputDto
-
-    note for LibraryItemDto "out: `metadata` is oneOf the three response shapes"
-    note for NovelMetadataInputDto "Derived from the response class: the downloaded counters\nomitted, everything left optional. No field is restated."
-    note for CreateLibraryItemDto "in: `metadata` is oneOf the three input shapes,\nwhich one following from `type`"
-    note for UpdateLibraryItemDto "in: a class of its own, not composed from the creation body,\nbut carrying the same three metadata shapes."
-```
-
-**Backend — `backend/src/system/dto/`**
-
-`ServiceInfoDto` keeps `name`, `version`, `environment` and `apiVersion`, and grows
-`schemaVersion: number`, `installedAt: string` and `lastStartedAt: string`. `HealthDto` is
-untouched.
-
-**Frontend — `frontend/app/types/library.ts`**
-
-Hand-written mirrors of the response and request shapes: `LibraryItem` (the same discriminated
-union), the three metadata shapes, `LibraryItemPage`, `CreateLibraryItem`, `ReplaceLibraryItem`,
-`ListLibraryItemsQuery`, and the four string-union types matching the enums. There is no shared
-package between the two workspaces yet, and `profile.vue` already sets the precedent of declaring
-the shape client-side.
-
----
-
-## Shape of the system
-
-```mermaid
-flowchart LR
-    subgraph fe["Nuxt · :3000"]
-        PAGE["pages/library.vue"]
-        COMP["AppLibrary* components"]
-        HOOK["composables/useLibrary.ts"]
-        PAGE --> COMP
-        PAGE --> HOOK
+flowchart TB
+    subgraph fe["Nuxt 4 :3000"]
+        PAGE["pages/library/index.vue<br/>filters · paging"]
+        VIEWS["AppLibraryTable · AppLibraryGrid<br/>AppLibraryFilters · AppLibraryRowMenu"]
+        DLG["AppLibraryFormDialog<br/>AppDialog"]
+        UTIL["utils/library.ts<br/>labels · tags · summaries"]
+        COVERS["composables/useCovers.ts"]
     end
 
-    subgraph be["NestJS · :3001"]
-        CTRL["LibraryController<br/>HTTP, DTOs, status codes"]
-        MGR["LibraryManager<br/>rules, defaults, search, paging"]
-        REPO["LibraryRepository<br/>queries, mapping"]
-        BASE["FirestoreRepository&lt;T&gt;"]
-        SYS["SystemManager → SystemRepository"]
-        CTRL --> MGR --> REPO --> BASE
-        SYS --> BASE
+    subgraph be["NestJS :3001"]
+        CTRL["LibraryController"]
+        MGR["LibraryManager<br/>the rules"]
+        REPO["LibraryRepository"]
+        SYS["SystemController · SystemManager<br/>SystemRepository"]
+        BASE["FirestoreRepository&lt;T&gt;<br/>entityFrom"]
     end
 
-    FS["Firestore<br/>emulator :8080 · real project in prod"]
+    subgraph gcp["Firebase"]
+        FS[("Firestore<br/>system · libraryItems")]
+        ST[("Cloud Storage<br/>covers/{itemId}/")]
+    end
 
-    HOOK -- "Bearer ID token<br/>/api/v1/library" --> CTRL
-    BASE -- "firebase-admin" --> FS
-
-    style FS stroke-dasharray: 4 3
+    PAGE --> VIEWS
+    PAGE --> DLG
+    VIEWS --> UTIL
+    DLG --> COVERS
+    COVERS -- "uploadBytes · getDownloadURL" --> ST
+    PAGE -- "generated LibraryClient" --> CTRL
+    CTRL --> MGR --> REPO --> BASE --> FS
+    SYS --> BASE
 ```
 
-Three layers, each with one job: the **controller** knows HTTP and nothing about Firestore, the
-**manager** holds the rules and is framework-free so its spec needs no Nest fixture (the note
-already on `SystemManager`), the **repository** is the only place a collection name or a query is
-written.
+- **Where each rule lives.** The controller knows status codes and DTOs. The manager holds
+  every rule about meaning — the source rules, the immutability checks, the writable statuses,
+  the search and the paging. The repository is the only file that mentions Firestore, and would
+  not change if the store did. `entityFrom` is the seam that keeps `Timestamp` out of
+  everything above it.
+- **Covers never enter the API process.** The dialog resizes a picked file to 3:4 WebP in a
+  canvas (`utils/covers.ts`), uploads it straight to `covers/{itemId}/{uuid}.webp`, and sends
+  the API only the download URL. `storage.rules` is the whole guard on that path.
 
----
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as pages/library/index.vue
+    participant ST as Cloud Storage
+    participant BE as LibraryController
+    participant MG as LibraryManager
+    participant FS as Firestore
 
-## Step 1 — Firestore, and a `System` repository that uses it
+    rect rgb(240, 244, 248)
+    note over U, FS: List, filter, search
+    U->>FE: pick a type tab · type into search
+    FE->>FE: reset page to 1 · debounce 300ms
+    FE->>BE: GET /library?type&status&sourceMode&search&page&pageSize
+    BE->>MG: list(query)
+    MG->>FS: three equality filters, limit 500
+    FS-->>MG: matching documents
+    MG->>MG: filter by search · sort by updatedAt · slice
+    MG-->>BE: LibraryItemPageDto
+    BE-->>FE: 200
+    end
 
-The point of this step is the layer, not the feature. `GET /system` becomes the first endpoint
-whose answer is partly read from the database, so a broken Firestore setup is visible immediately
-rather than three files into the Library work.
-
-| File | What changes |
-| --- | --- |
-| `firebase.json` | Add the `firestore` emulator on `8080`, pointing at `firestore.rules` and `firestore.indexes.json`. |
-| `firestore.rules` | Deny every client read and write. All access is server-side through the Admin SDK, which bypasses rules by design; an open rule set would be a hole, not a convenience. |
-| `firestore.indexes.json` | Field overrides that keep the indexed set to exactly what is queried — see [Known limits](#known-limits). |
-| `.firebaserc` | Unchanged — `demo-media-studio` already lets the emulator run credential-free. |
-| `package.json` (root) | `dev:firebase` becomes `firebase emulators:start --only auth,firestore`; add `seed:firestore`. |
-| `backend/src/core/config/configuration.ts` | `FirebaseConfig.firestoreEmulatorHost`, read from `FIRESTORE_EMULATOR_HOST`. |
-| `backend/src/core/firebase/firebase-admin.service.ts` | Set `process.env.FIRESTORE_EMULATOR_HOST` when configured (the SDK reads the variable itself, same as the auth one), and expose a `firestore` getter over `getFirestore(this.app)` with `ignoreUndefinedProperties: true`. |
-| `backend/src/core/firebase/collections.ts` | The collection names, in one place: `SYSTEM_COLLECTION`, `LIBRARY_COLLECTION`. |
-| `backend/src/core/firebase/firestore.repository.ts` | `abstract class FirestoreRepository<T extends { id: string }>` — the collection reference, `toEntity(snapshot)` (document id + data, `Timestamp` → ISO string), and `findById` / `delete`. Small on purpose; a repository that needs a query writes it itself. |
-| `backend/src/system/entities/system-info.entity.ts` | The entity above. |
-| `backend/src/system/system.repository.ts` | `read()` and `recordStart()` — an upsert that sets `installedAt` only when the document is absent, and always rewrites `name`, `version` and `lastStartedAt`. |
-| `backend/src/system/system.manager.ts` | `getInfo()` becomes async: the stored record, with `environment` and `apiVersion` overlaid from configuration. Implements `OnModuleInit` to call `recordStart()`. |
-| `backend/src/system/system.module.ts` | Register `SystemRepository`; replace the "No repository" comment, which stops being true here. |
-| `backend/src/system/system.controller.ts` | `getInfo()` returns a promise. `getHealth()` is untouched — liveness must not depend on the database. |
-| `backend/.env.example` | `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`, with the same "leave it out to talk to the real project" note as the auth host. |
-| `scripts/seed-firestore.mjs` | Plain `fetch` against the emulator's REST surface, no dependency — the shape `seed-firebase-auth.mjs` already set. Seeds the eight sample items from the mockup, nested `metadata` included, so the listing page has something to show. Idempotent: it deletes the seeded ids before writing them. |
-
-A Firestore failure on `GET /system` propagates as a 500. That is the honest answer — the endpoint
-reports what this deployment *is*, and it cannot do that with half the record. `/health` stays
-database-free for whatever is watching the process.
-
-## Step 2 — The `library` module
-
-| File | What it is |
-| --- | --- |
-| `backend/src/core/api.constants.ts` | `export const LIBRARY_PATH = 'library'`, with the same one-line comment style as `AUTH_PATH`. |
-| `backend/src/library/entities/library-item.entity.ts` | The root entity, the union, and the four enums. |
-| `backend/src/library/entities/library-item-metadata.entity.ts` | The three metadata shapes over their common core. |
-| `backend/src/library/dto/*.ts` | One file per class, as the table above lists — matching `auth/dto/`'s one-class-per-file layout. |
-| `backend/src/library/library.repository.ts` | `findMatching(filter)`, `findById`, `create`, `replace`, `delete`. The only file that mentions Firestore. |
-| `backend/src/library/library.manager.ts` | Defaults on create (`status: Draft`, zeroed counters, `sourceName: 'Manual'` for a manual item), per-type metadata narrowing, the "crawler needs a URL" rule, the immutability check on `PUT`, the rejected statuses, `NotFoundException` on an unknown id, and the search / sort / page pass over what the repository returns. Framework-free. |
-| `backend/src/library/library.controller.ts` | `@ApiTags('Library')`, `@ApiBearerAuth()`, `@UseGuards(FirebaseAuthGuard)`, `@Controller(LIBRARY_PATH)`. `DELETE` carries `@HttpCode(NO_CONTENT)`, as `PATCH /auth/me/password` does. |
-| `backend/src/library/library.module.ts` | Controller, manager, repository; exports the manager. |
-| `backend/src/app.module.ts` | Import `LibraryModule`. |
-| `backend/src/library/library.manager.spec.ts` | The rules, against a hand-written fake repository — the create defaults, the crawler-URL rule, metadata rejected for an image item, a changed `type` on `PUT`, a rejected status, the 404. The repo has no specs yet; the framework-free manager is the cheapest place to start one. |
-
-**How a list request is served.** `type`, `sourceMode` and `status` go to Firestore as equality
-filters — the three fields the collection is indexed on. Everything after that happens in the
-manager, over at most `LIST_SCAN_LIMIT = 500` documents: the `search` match across `title`,
-`sourceName` and the novel's `author`, then `updatedAt` descending, then the page slice. One code
-path, no timestamp indexes, and no sort control on the API — the mockup has none either. The
-volume assumption behind it, and the way out of it, are in [Known limits](#known-limits).
-
-## Step 3 — The `/library` screen
-
-`frontend/app/pages/library.vue` currently renders an empty `AppPage`. It becomes the listing
-screen from the mockup.
-
-| File | What it is |
-| --- | --- |
-| `app/types/library.ts` | The client-side mirrors of the DTOs. |
-| `app/utils/library.ts` | Presentation helpers, auto-imported by Nuxt: `contentLabel(item)` (`412 / 640 ch.`, `248 images`, `42 clips · 3.1 GB`), `typeLabel`, `statusColor`, `relativeUpdated`. The metadata union is what makes these safe — size and duration are only reachable on the types that carry them. |
-| `app/composables/useLibrary.ts` | `list`, `create`, `replace`, `remove` over `useApi()`. The one place a library path is written. |
-| `app/pages/library.vue` | Owns the filter state, fetches through `useAsyncData` keyed on that state, and hosts the dialogs. |
-| `app/components/AppLibraryFilters.vue` | The 52px control bar: type tabs (`UTabs`), the search input, status and source selects, the `{visible} of {total}` count, and the table/grid toggle. |
-| `app/components/AppLibraryTable.vue` | The table view — cover or wireframe placeholder, title over description, type, source over URL, content, status, updated, and the row's `…` menu. |
-| `app/components/AppLibraryGrid.vue` | The grid view — `AppBlueprint` cards, 16:9 cover or wireframe head with the type and status tags, title, description, content and updated, and the same `…` menu. |
-| `app/components/AppLibraryFormDialog.vue` | One `UModal` for both create and edit. Creating is the mockup's wizard — 1: type and source mode as blueprint radio cards, 2: a crawler and its URL, or the metadata typed in, 3: the crawler's findings, reviewed. Editing is one form, because the `PUT` replaces the whole writable representation. The novel metadata block (novel status, author, language, genres, description) appears only for `type === 'novel'` — there is nothing else writable for a set. |
-| `app/components/AppLibraryCoverField.vue` | The cover picker — the mockup's dashed 3:4 plane, clicked or dropped onto, with the preview, the mocked upload and a link box for a cover that outlives this machine. |
-| `app/utils/covers.ts` | The mocked upload: type and size checks, a canvas resize to a 320px 3:4 WebP, and the `data:` URL it hands back. |
-| `app/utils/crawlers.ts` | The mocked crawler registry and the mocked URL check behind step 2 — a list to pick from, a call that can fail off-domain, and a metadata block to review. Derived from the URL, so the same URL always reads back the same item. |
-| `app/components/AppLibraryDeleteDialog.vue` | Names the item it is about to delete. Destructive action, so `--color-danger`. |
-| `app/components/AppPage.vue` | Add a passthrough `#trailing` slot over `UDashboardNavbar`, so the page can put the `{total} items` badge beside the title without any screen restyling the navbar. |
-
-Screen behaviour:
-
-- **Filters drive the request.** Every control writes to one reactive `filters` object; the
-  `useAsyncData` watcher refetches. Search is debounced (~300ms). Changing a filter resets `page`
-  to 1.
-- **Rows and cards are inert.** Clicking one does nothing — the detail screen is part 3, and a row
-  that looks clickable and is not would be worse than one that plainly is not. Edit and Delete
-  live in the `…` menu, which is the only interactive element on a row. No pointer cursor, no
-  hover-highlight-as-affordance.
-- **Counts come from the list response.** `total` is what matches the current filter; the navbar
-  badge and the `{visible} of {total}` line both read it. There is no per-tab count — that would
-  need a second endpoint, and part 1 does not earn one.
-- **After a mutation** the list refreshes and a `useToast` line confirms it — matching how
-  `profile.vue` reports a password change.
-- **Empty state**: a dashed `AppBlueprint` with the "New item" call to action. Distinguish "no
-  items at all" from "no items match the filter" — the second offers to clear the filter.
-- **Loading**: skeleton rows in the table view, skeleton cards in the grid.
-- **The navbar's `Scrapings 5` link** ships without its count badge; there are no jobs to count
-  until part 2.
-- **Styling**: tokens and Tailwind classes only, no `<style>` block, square corners, all four
-  registration marks on every framed element — `DESIGN.md`, and `profile.vue` as the worked
-  example.
-
----
-
-## Known limits
-
-**What is indexed.** The collection is queried on three fields and three only — `type`,
-`sourceMode` and `status`, all equality. Firestore indexes every field automatically, and
-equality-only filters with no `orderBy` on a *different* field are served by merging those
-single-field indexes, so **no composite index is needed**. `firestore.indexes.json` therefore
-carries no composite entries; what it does carry is `fieldOverrides` that switch automatic
-indexing **off** for the fields nothing filters on — `createdAt`, `updatedAt`, `title`,
-`coverUrl`, `sourceUrl` and the whole `metadata` map — because every indexed field is paid for on
-every write. The indexed set is exactly the queried set.
-
-That choice is what pins sorting and paging to the manager: ordering by `updatedAt` alongside a
-filter would require both an index on `updatedAt` and a composite for each filter combination.
-Part 1 does not want either.
-
-**Search, sort and paging happen in memory.** The manager reads at most `LIST_SCAN_LIMIT = 500`
-filtered documents, then matches `search`, orders by `updatedAt` and slices the page. Correct
-while the catalogue is small, and wrong past 500 items — silently, which is the dangerous part, so
-the repository logs a warning when a query fills the scan limit. The way out is not a bigger
-limit: it is a `keywords` array field (or Typesense/Algolia) for search, plus the timestamp
-composite indexes and cursor paging (`startAfter`) once ordering moves back to Firestore.
-
-**No optimistic concurrency.** Two editors saving the same item, last write wins — and with `PUT`
-that means the later save also reverts whatever the earlier one cleared. A `version` field
-checked in a transaction is the fix, and a later concern.
-
----
-
-## Running it locally
-
-```bash
-pnpm install
-pnpm dev:firebase      # Auth on :9099, Firestore on :8080, Emulator UI on :4000
-pnpm seed:firebase     # admin@datntdev.com / StrongPassword123!
-pnpm seed:firestore    # the eight sample library items
-pnpm dev               # backend :3001 + frontend :3000
+    rect rgb(244, 240, 240)
+    note over U, FS: Create, with a cover
+    U->>FE: fill the dialog · pick a cover
+    FE->>FE: prepareCover → 3:4 WebP blob
+    FE->>BE: POST /library
+    BE->>MG: create(input)
+    MG->>MG: checkWritableMetadata · source()
+    MG->>FS: set, status draft, downloaded counters 0
+    FS-->>MG: id + timestamps
+    MG-->>FE: 201 LibraryItemDto
+    FE->>ST: upload the cover under covers/{id}/
+    FE->>BE: PUT /library/:id with coverUrl
+    end
 ```
 
-The emulators are stateless — restart them and re-run both seeds.
+- **Listing.** Deleting the last row of a page leaves that page empty while the catalogue is
+  not, so the screen steps back to the last page that has something on it. A refetch with rows
+  already drawn keeps them — the skeleton appears only when there is nothing on screen yet.
+- **Creating.** The item is written before its cover is uploaded, because the object path is
+  keyed on the item id. A failed upload therefore leaves an item without a cover rather than an
+  orphaned object; a failed row write leaves nothing at all.
+- **Deleting.** The row goes first and its bytes after — `covers.discard` is quiet about a URL
+  that is not ours, which is what makes it safe on a cover somebody linked rather than
+  uploaded. `LibraryManager.remove` cascades by hand: contents, translations, the live import
+  node, then the item, because Firestore does not cascade.
+- **Boot.** `SystemManager.onModuleInit` fires `recordStart()` **without awaiting it**.
+  `NestFactory.create` does not resolve until every init hook has, so awaiting an unreachable
+  Firestore would hold the process short of `listen` — in total silence, with `bufferLogs` on —
+  and would take `/health` down with it, which is precisely the endpoint that has to answer
+  when the database does not.
 
-Each step is one commit, and each leaves `pnpm lint`, `pnpm typecheck` and `pnpm build` green.
+## Implementation Steps
+
+- **Step 1 — Firestore, and a `System` repository that uses it.**
+  `core/firebase/firebase-admin.service.ts` initialises the Admin app once, applies
+  `ignoreUndefinedProperties`, and reuses an existing app so a watch reload cannot throw.
+  `core/firebase/firestore.repository.ts` holds the base class and `entityFrom`.
+  `core/firebase/collections.ts` names the collections. `system/entities/system-info.entity.ts`
+  declares `SCHEMA_VERSION`, `SystemRecord` and `SystemInfo`; `system.repository.ts` writes the
+  boot record in a transaction; `system.manager.ts` adds the two deadlines —
+  `RECORD_DEADLINE_MS = 10_000` for the boot write and `PROBE_DEADLINE_MS = 2_000` for the
+  health probe — because the Firestore client retries an unreachable backend for minutes
+  without complaining.
+- **Step 2 — the `library` module.** `entities/library-item.entity.ts` and
+  `entities/library-item-metadata.entity.ts` declare the union and the four enums.
+  `library.repository.ts` adds `findMatching`, `create`, `replace`, `updateStatus` and
+  `updateCounters`, with `LIST_SCAN_LIMIT = 500` and a warning when a query fills it.
+  `library.manager.ts` holds the rules. `dto/` derives the input classes from the response
+  classes with `OmitType` and `PartialType`. `library.controller.ts` maps them onto HTTP, and
+  `library.module.ts` exports the managers for the parts that come later.
+- **Step 3 — the `/library` screen.** `types/library.ts` mirrors the DTOs by hand — names and
+  field order follow `backend/src/library/dto/` so drift is easy to spot. `utils/library.ts`
+  holds every label, tag and summary the two views share, plus `asLibraryItem`, which is the
+  one place the generated client's flattened `oneOf` is read back as the union.
+  `pages/library/index.vue` owns the filter state; `AppLibraryTable`, `AppLibraryGrid`,
+  `AppLibraryFilters` and `AppLibraryRowMenu` draw it; `AppLibraryFormDialog` and `AppDialog`
+  are the create/edit and delete dialogs; `AppLibraryCoverField` and `composables/useCovers.ts`
+  handle the cover.
+- **Step 4 — the index overrides.** `_deploy/firebase/firestore.indexes.json` switches off
+  single-field indexing on every `libraryItems` field nothing queries — `title`, `coverUrl`,
+  `sourceName`, `sourceUrl`, `metadata`, `createdAt`, `updatedAt` — so writes do not pay for
+  indexes no read uses.
+
+## Appendix
+
+### Known limits
+
+- **No full-text search.** Firestore has no substring index, so `search` runs in the manager
+  over the documents the filters returned. It matches title, `sourceName`, and a novel's
+  `author`, case-insensitively, as a plain `includes`.
+- **The 500-document scan limit is the honest ceiling.** `findMatching` reads at most
+  `LIST_SCAN_LIMIT` filtered documents, and search, ordering and paging all run over those.
+  Past that many matches, items beyond the limit are invisible to all three. The repository
+  logs a warning when a query fills it.
+- **`total` is what matched the scan**, not what matched the collection, for the same reason.
+- **Ordering is manager-side.** `orderBy('updatedAt')` alongside an equality filter would need
+  a composite index per filter combination. The trade is deliberate.
+- **Validation does not reach inside `metadata`.** The input classes are derived from the
+  *response* classes, which carry no `class-validator` rules to inherit — so `PartialType`
+  registers the fields with the pipe but checks no types or lengths inside them. The manager
+  still refuses fields a type has no room for.
+- **Nothing moves `Scraping` or `Failed` in this part.** Both statuses and every downloaded
+  counter exist on the entity and are read by the screen, but part 1 has no crawler and no job
+  runner to write them.
+- **No detail screen.** Nothing on the listing navigates in part 1; the create wizard's
+  crawler steps run against the static list in `utils/crawlers.ts` until part 3 replaces the
+  validation with the server's.
