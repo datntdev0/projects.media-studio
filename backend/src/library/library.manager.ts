@@ -1,27 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { RealtimeProvider } from '../core/providers/realtime.provider';
-import { CreateLibraryItemDto } from './dto/library-item-create.dto';
-import { LibraryItemDto, LibraryItemMetadataInputDto, NovelMetadataInputDto } from './dto/library-item.dto';
-import { LibraryItemPageDto, LibraryListItemDto } from './dto/library-item-list.dto';
-import { QueryListLibraryItemsDto } from './dto/query-list-library-items.dto';
-import { UpdateLibraryItemDto, WRITABLE_STATUSES } from './dto/library-item-update.dto';
-import { LibraryItemMetadataBase, NovelMetadata } from './entities/library-item-metadata.entity';
-import { LibraryItem, LibraryItemBase, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from './entities/library-item.entity';
-import { LibraryContentRepository } from './library-content.repository';
-import { LibraryTranslationManager } from './library-translation.manager';
+import { WRITABLE_STATUSES } from './dto/library-item.constants';
+import { CreateLibraryItemDto } from './dto/library-item.dto-create';
+import { ImageSetMetadataDto, LibraryItemDto, LibraryItemPageDto, NovelMetadataDto, QueryListLibraryItemsDto, VideoSetMetadataDto } from './dto/library-item.dto';
+import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
+import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelMetadata, NovelStatus } from './entities/library-item.entity';
 import { LibraryItemDraft, LibraryRepository } from './library.repository';
 
 /** What a manual item's source is called — it is its own. */
 const MANUAL_SOURCE = 'Manual';
 
-/** The novel-only fields — what a set's metadata has no room for. */
-const NOVEL_ONLY_FIELDS = ['status', 'author', 'language', 'genres', 'description'] as const;
+/** What every draft carries whatever its type: the root, minus the three metadata slots. */
+type LibraryItemRoot = Omit<LibraryItemDraft, 'novelMetadata' | 'imageMetadata' | 'videoMetadata'>;
 
-/** What every draft carries whatever its type: the root, minus what the repository stamps. */
-type LibraryItemRoot = Omit<LibraryItemBase, 'id' | 'createdAt' | 'updatedAt'>;
-
-/** The novel fields a client owns — the rest of `metadata` is the job runner's. */
-type WritableNovelMetadata = Omit<NovelMetadata, keyof LibraryItemMetadataBase>;
+/** The three metadata slots, as a create or an update hands them over. */
+interface MetadataInput {
+  novelMetadata?: NovelMetadataDto | null;
+  imageMetadata?: ImageSetMetadataDto | null;
+  videoMetadata?: VideoSetMetadataDto | null;
+}
 
 /**
  * The library's rules: what a client may decide, what the server decides for it,
@@ -32,12 +28,7 @@ type WritableNovelMetadata = Omit<NovelMetadata, keyof LibraryItemMetadataBase>;
  */
 @Injectable()
 export class LibraryManager {
-  constructor(
-    private readonly repository: LibraryRepository,
-    private readonly contents: LibraryContentRepository,
-    private readonly translations: LibraryTranslationManager,
-    private readonly realtime: RealtimeProvider,
-  ) {}
+  constructor(private readonly repository: LibraryRepository) {}
 
   /**
    * One page of the listing.
@@ -53,7 +44,7 @@ export class LibraryManager {
     const from = (query.page - 1) * query.pageSize;
 
     return {
-      items: found.slice(from, from + query.pageSize).map(listRow),
+      items: found.slice(from, from + query.pageSize).map(toDto),
       total: found.length,
       page: query.page,
       pageSize: query.pageSize,
@@ -62,20 +53,22 @@ export class LibraryManager {
 
   /** The read half of CRUD — what refreshes a row after an edit. */
   async get(id: string): Promise<LibraryItemDto> {
-    return this.withCoverage(await this.require(id));
+    return toDto(await this.require(id));
   }
 
   async create(input: CreateLibraryItemDto): Promise<LibraryItemDto> {
-    checkWritableMetadata(input.type, input.metadata);
+    checkMetadataMatchesType(input.type, input);
+    checkStatus(input.status);
 
     const root: LibraryItemRoot = {
+      type: input.type,
       title: input.title,
       coverUrl: input.coverUrl ?? null,
-      status: LibraryItemStatus.Draft,
+      status: input.status,
       ...source(input),
     };
 
-    return this.withCoverage(await this.repository.create(newDraft(input.type, root, input.metadata)));
+    return toDto(await this.repository.create(newDraft(input.type, root, input)));
   }
 
   /** The whole writable representation, so an omitted field is a cleared field. */
@@ -84,43 +77,23 @@ export class LibraryManager {
 
     checkImmutable(stored, input);
     checkStatus(input.status);
-    checkWritableMetadata(stored.type, input.metadata);
+    checkMetadataMatchesType(stored.type, input);
 
     const root: LibraryItemRoot = {
+      type: stored.type,
       title: input.title,
       coverUrl: input.coverUrl ?? null,
-      status: input.status ?? LibraryItemStatus.Draft,
+      status: input.status,
       ...source(input),
     };
 
-    return this.withCoverage(await this.repository.replace(stored, nextDraft(stored, root, input.metadata)));
+    return toDto(await this.repository.replace(stored, nextDraft(stored, root, input)));
   }
 
-  /**
-   * The item, and everything filed under it — Firestore does not cascade.
-   *
-   * A job still running over it is left alone: each of its messages finds the row gone
-   * and fails its task, so the job settles within a queue drain and the sweep takes its
-   * node a minute later.
-   */
+  /** The item. Every chapter, image or clip filed under it is another team's cascade. */
   async remove(id: string): Promise<void> {
     await this.require(id);
-    await this.contents.removeAll(id);
-    await this.translations.removeAll(id);
-    // The import node outlives the run that wrote it, so a reopened dialog can say
-    // what the last one did. This is the only thing that ever clears it.
-    await this.realtime.clearImport(id);
     await this.repository.delete(id);
-  }
-
-  /**
-   * The item as a whole-item response carries it: with how much of it each
-   * language covers, or null where it is a set and the question does not apply.
-   *
-   * Not on `list`, deliberately — see `LibraryListItemDto`.
-   */
-  private async withCoverage(item: LibraryItem): Promise<LibraryItemDto> {
-    return { ...item, translations: await this.translations.coverage(item) };
   }
 
   /** The item, or the 404 every route that names one owes. */
@@ -139,22 +112,13 @@ export class LibraryManager {
  * A brand new item's metadata: the editable block, over nothing downloaded. Part 1
  * has nothing that would fetch anything, so every downloaded counter starts at 0.
  */
-function newDraft(type: LibraryItemType, root: LibraryItemRoot, writable?: LibraryItemMetadataInputDto): LibraryItemDraft {
-  const found = { ...inventory(writable), downloadedCount: 0 };
-
-  switch (type) {
-    case LibraryItemType.Novel:
-      return { ...root, type, metadata: { ...found, ...novelBlock(writable) } };
-    case LibraryItemType.Image:
-      return { ...root, type, metadata: { ...found, downloadedSize: 0 } };
-    case LibraryItemType.Video:
-      return { ...root, type, metadata: { ...found, downloadedSize: 0, downloadedDuration: 0 } };
-  }
-}
-
-/** What the source is said to hold — a client may state it; what we hold, it may not. */
-function inventory(writable?: LibraryItemMetadataInputDto): Pick<LibraryItemMetadataBase, 'discoveredCount' | 'discoveredAt'> {
-  return { discoveredCount: writable?.discoveredCount ?? 0, discoveredAt: writable?.discoveredAt ?? null };
+function newDraft(type: LibraryItemType, root: LibraryItemRoot, input: MetadataInput): LibraryItemDraft {
+  return {
+    ...root,
+    novelMetadata: type === LibraryItemType.Novel ? newNovelMetadata(input.novelMetadata) : null,
+    imageMetadata: type === LibraryItemType.Image ? { ...inventory(input.imageMetadata), downloadedCount: 0, downloadedSize: 0 } : null,
+    videoMetadata: type === LibraryItemType.Video ? { ...inventory(input.videoMetadata), downloadedCount: 0, downloadedSize: 0, downloadedDuration: 0 } : null,
+  };
 }
 
 /**
@@ -165,23 +129,30 @@ function inventory(writable?: LibraryItemMetadataInputDto): Pick<LibraryItemMeta
  * The inventory is not: it is editable, so `PUT` treats it like every other
  * editable field and a body that leaves it out clears it.
  */
-function nextDraft(stored: LibraryItem, root: LibraryItemRoot, writable?: LibraryItemMetadataInputDto): LibraryItemDraft {
-  const found = inventory(writable);
+function nextDraft(stored: LibraryItem, root: LibraryItemRoot, input: MetadataInput): LibraryItemDraft {
+  return {
+    ...root,
+    novelMetadata: stored.type === LibraryItemType.Novel ? nextNovelMetadata(stored.novelMetadata!, input.novelMetadata) : null,
+    imageMetadata: stored.type === LibraryItemType.Image ? { ...inventory(input.imageMetadata), downloadedCount: stored.imageMetadata!.downloadedCount, downloadedSize: stored.imageMetadata!.downloadedSize } : null,
+    videoMetadata: stored.type === LibraryItemType.Video ? { ...inventory(input.videoMetadata), downloadedCount: stored.videoMetadata!.downloadedCount, downloadedSize: stored.videoMetadata!.downloadedSize, downloadedDuration: stored.videoMetadata!.downloadedDuration } : null,
+  };
+}
 
-  switch (stored.type) {
-    case LibraryItemType.Novel:
-      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found, ...novelBlock(writable) } };
-    // The two set cases have one body and stay two, because each narrows
-    // `stored.metadata` to the shape its type carries; merged, neither would.
-    case LibraryItemType.Image:
-      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found } };
-    case LibraryItemType.Video:
-      return { ...root, type: stored.type, metadata: { ...stored.metadata, ...found } };
-  }
+function newNovelMetadata(writable?: NovelMetadataDto | null): NovelMetadata {
+  return { ...inventory(writable), downloadedCount: 0, ...novelBlock(writable) };
+}
+
+function nextNovelMetadata(stored: NovelMetadata, writable?: NovelMetadataDto | null): NovelMetadata {
+  return { ...inventory(writable), downloadedCount: stored.downloadedCount, ...novelBlock(writable) };
+}
+
+/** What the source is said to hold — a client may state it; what we hold, it may not. */
+function inventory(writable?: { discoveredCount?: number; discoveredAt?: string | null } | null): Pick<NovelMetadata, 'discoveredCount' | 'discoveredAt'> {
+  return { discoveredCount: writable?.discoveredCount ?? 0, discoveredAt: writable?.discoveredAt ?? null };
 }
 
 /** Each field cleared where the request left it out — that is what `PUT` promises. */
-function novelBlock(writable?: NovelMetadataInputDto): WritableNovelMetadata {
+function novelBlock(writable?: NovelMetadataDto | null): Pick<NovelMetadata, 'status' | 'author' | 'language' | 'genres' | 'description'> {
   return {
     status: writable?.status ?? NovelStatus.Ongoing,
     author: writable?.author ?? '',
@@ -198,7 +169,7 @@ function novelBlock(writable?: NovelMetadataInputDto): WritableNovelMetadata {
  * either. A manual item is its own source: it is called `Manual` whatever was
  * sent, and a URL is refused rather than stored where nothing will read it.
  */
-function source(input: CreateLibraryItemDto): Pick<LibraryItemRoot, 'sourceMode' | 'sourceName' | 'sourceUrl'> {
+function source(input: CreateLibraryItemDto | UpdateLibraryItemDto): Pick<LibraryItemRoot, 'sourceMode' | 'sourceName' | 'sourceUrl'> {
   const name = input.sourceName?.trim();
 
   if (input.sourceMode === LibrarySourceMode.Crawler) {
@@ -221,25 +192,27 @@ function source(input: CreateLibraryItemDto): Pick<LibraryItemRoot, 'sourceMode'
 }
 
 /**
- * Every type may state its inventory. What only a novel has is what its source
- * says about the work — a set carrying any of that is a mistake worth saying out
- * loud rather than ignoring.
+ * Only the metadata slot matching `type` may be filled — a set carrying a novel's
+ * block, or the other way round, is a mistake worth saying out loud rather than
+ * ignoring.
  */
-function checkWritableMetadata(type: LibraryItemType, writable?: LibraryItemMetadataInputDto): void {
-  if (type === LibraryItemType.Novel || !writable) {
-    return;
-  }
+function checkMetadataMatchesType(type: LibraryItemType, input: MetadataInput): void {
+  const slots: [LibraryItemType, string, unknown][] = [
+    [LibraryItemType.Novel, 'novelMetadata', input.novelMetadata],
+    [LibraryItemType.Image, 'imageMetadata', input.imageMetadata],
+    [LibraryItemType.Video, 'videoMetadata', input.videoMetadata],
+  ];
 
-  const wrong = NOVEL_ONLY_FIELDS.filter((field) => field in writable);
+  const stray = slots.filter(([ofType, , value]) => ofType !== type && value != null).map(([, field]) => field);
 
-  if (wrong.length > 0) {
-    throw new BadRequestException(`An item of type \`${type}\` has no ${wrong.join(', ')} under metadata`);
+  if (stray.length > 0) {
+    throw new BadRequestException(`An item of type \`${type}\` has no ${stray.join(', ')}`);
   }
 }
 
-/** The DTO already refuses the runner's statuses; the rule itself belongs here. */
-function checkStatus(status?: LibraryItemStatus): void {
-  if (status && !WRITABLE_STATUSES.includes(status)) {
+/** `WRITABLE_STATUSES` is the client's half — the job runner sets the rest. */
+function checkStatus(status: LibraryItemStatus): void {
+  if (!WRITABLE_STATUSES.includes(status)) {
     throw new BadRequestException(`\`${status}\` is the job runner's to set, not a client's`);
   }
 }
@@ -255,21 +228,21 @@ function checkImmutable(stored: LibraryItem, input: UpdateLibraryItemDto): void 
   }
 }
 
-/**
- * A row of the listing. Field by field rather than a spread, so what the listing
- * does not draw — `createdAt` — cannot arrive in it by accident.
- */
-function listRow(item: LibraryItem): LibraryListItemDto {
+/** Field by field rather than a spread, so a field the entity gains cannot arrive in a response by accident. */
+function toDto(item: LibraryItem): LibraryItemDto {
   return {
     id: item.id,
     type: item.type,
     title: item.title,
-    coverUrl: item.coverUrl,
+    status: item.status,
     sourceMode: item.sourceMode,
     sourceName: item.sourceName,
     sourceUrl: item.sourceUrl,
-    status: item.status,
-    metadata: item.metadata,
+    coverUrl: item.coverUrl,
+    novelMetadata: item.novelMetadata,
+    imageMetadata: item.imageMetadata,
+    videoMetadata: item.videoMetadata,
+    createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
 }
@@ -282,7 +255,7 @@ function matchesSearch(item: LibraryItem, search?: string): boolean {
     return true;
   }
 
-  const author = item.type === LibraryItemType.Novel ? item.metadata.author : '';
+  const author = item.type === LibraryItemType.Novel ? item.novelMetadata!.author : '';
 
   return [item.title, item.sourceName, author].some((field) => field.toLowerCase().includes(needle));
 }

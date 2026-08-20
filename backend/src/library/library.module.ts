@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { LibraryController } from './library.controller';
+import { LibraryManager } from './library.manager';
+import { LibraryRepository } from './library.repository';
 
 /**
- * Contract skeleton only. The managers, the repositories and the import consumer
- * are parked while the DTOs and entities are refactored — see the `exclude` list
- * in `tsconfig.json`. Restore the providers and the exports from git alongside them.
+ * The content, translation and media providers, and the import consumer, are
+ * still parked while their DTOs and entities are refactored — see the `exclude`
+ * list in `tsconfig.json`. Restore them from git alongside their own routes.
  */
 @Module({
   controllers: [LibraryController],
+  providers: [LibraryManager, LibraryRepository],
 })
 export class LibraryModule {}

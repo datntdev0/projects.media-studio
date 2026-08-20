@@ -42,9 +42,6 @@
     "src/library/library-translation.manager.ts",
     "src/library/library-translation.manager.spec.ts",
     "src/library/library-translation.repository.ts",
-    "src/library/library.manager.ts",
-    "src/library/library.manager.spec.ts",
-    "src/library/library.repository.ts",
     "src/library/dto/library-package.dto.ts",
     "src/library/entities/library-package.entity.ts",
     "src/scraping"

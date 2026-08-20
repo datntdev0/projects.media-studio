@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from '../entities/library-item.entity';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_SEARCH } from './library-content.constants';
@@ -124,10 +125,10 @@ export class QueryListLibraryItemsDto {
   search?: string;
 
   @ApiPropertyOptional({ minimum: 1, default: 1 })
-  @IsOptional() @IsInt() @Min(1)
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   page: number = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE })
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_PAGE_SIZE)
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MAX_PAGE_SIZE)
   pageSize: number = DEFAULT_PAGE_SIZE;
 }

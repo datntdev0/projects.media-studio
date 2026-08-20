@@ -7,6 +7,7 @@ import { UpdateLibraryContentDto } from './dto/library-content.dto-update';
 import { LibraryItemDto, LibraryItemPageDto, QueryListLibraryItemsDto } from './dto/library-item.dto';
 import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
+import { LibraryManager } from './library.manager';
 
 /** Every route naming an item that is not there says so the same way. */
 const NOT_FOUND = 'No item under that id.';
@@ -26,32 +27,31 @@ const WRONG_LANGUAGE = 'A `language` on an image or video set, or one that is no
  * The library controller handles CRUD operations for library items and their contents.
  */
 @ApiTags('Library')
-@ApiBearerAuth()
-@UseGuards(FirebaseAuthGuard)
 @Controller("library")
 export class LibraryController {
+  constructor(private readonly manager: LibraryManager) {}
 
   @Get()
   @ApiOkResponse({ type: LibraryItemPageDto })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
-  list(@Query() _query: QueryListLibraryItemsDto): Promise<LibraryItemPageDto> {
-    throw new NotImplementedException();
+  list(@Query() query: QueryListLibraryItemsDto): Promise<LibraryItemPageDto> {
+    return this.manager.list(query);
   }
 
   @Post()
   @ApiCreatedResponse({ type: LibraryItemDto })
   @ApiBadRequestResponse({ description: 'A crawler item without its URL or crawler, a manual one with a URL, or metadata on an item that has none writable.' })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
-  create(@Body() _item: CreateLibraryItemDto): Promise<LibraryItemDto> {
-    throw new NotImplementedException();
+  create(@Body() item: CreateLibraryItemDto): Promise<LibraryItemDto> {
+    return this.manager.create(item);
   }
 
   @Get(':id')
   @ApiOkResponse({ type: LibraryItemDto })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: NOT_FOUND })
-  get(@Param('id') _id: string): Promise<LibraryItemDto> {
-    throw new NotImplementedException();
+  get(@Param('id') id: string): Promise<LibraryItemDto> {
+    return this.manager.get(id);
   }
 
   @Put(':id')
@@ -59,8 +59,8 @@ export class LibraryController {
   @ApiBadRequestResponse({ description: 'The creation rules, plus a changed `type` or `sourceMode`, or a status only the job runner may set.' })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: NOT_FOUND })
-  replace(@Param('id') _id: string, @Body() _item: UpdateLibraryItemDto): Promise<LibraryItemDto> {
-    throw new NotImplementedException();
+  replace(@Param('id') id: string, @Body() item: UpdateLibraryItemDto): Promise<LibraryItemDto> {
+    return this.manager.replace(id, item);
   }
 
   @Delete(':id')
@@ -68,8 +68,8 @@ export class LibraryController {
   @ApiNoContentResponse({ description: 'Deleted, and every chapter, image or clip filed under it with it.' })
   @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
   @ApiNotFoundResponse({ description: NOT_FOUND })
-  remove(@Param('id') _id: string): Promise<void> {
-    throw new NotImplementedException();
+  remove(@Param('id') id: string): Promise<void> {
+    return this.manager.remove(id);
   }
 
   @Get(':id/contents')
