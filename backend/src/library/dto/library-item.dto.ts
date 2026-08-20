@@ -1,57 +1,46 @@
-import { ApiExtraModels, ApiProperty, OmitType, PartialType, getSchemaPath } from '@nestjs/swagger';
-import { ImageSetMetadata, LibraryItemMetadataBase, NovelMetadata, VideoSetMetadata } from '../entities/library-item-metadata.entity';
-import type { LibraryItemMetadata } from '../entities/library-item-metadata.entity';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from '../entities/library-item.entity';
-import { LibraryTranslationCoverageDto } from './library-translation.dto';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_SEARCH } from './library-content.constants';
 
-/**
- * One item, and the three shapes its `metadata` can take — one file, because a
- * metadata DTO exists only to describe part of an item and is never returned on
- * its own.
- *
- * Each `implements` its entity, so a field added to one and forgotten here is a
- * compile error. The editable half of each shape is derived from it at the bottom
- * of this file, so a request body never restates a field either.
- */
-
-/** The counts every type carries. Server-owned: nothing here is writable in part 1. */
-export class LibraryItemMetadataBaseDto implements LibraryItemMetadataBase {
+/** The base metadata all library items share. */
+export class LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Pieces the source is known to have.', example: 640 })
   discoveredCount!: number;
 
-  @ApiProperty({ type: String, nullable: true, description: 'When the source was last read for that inventory.', example: null })
-  discoveredAt!: string | null;
-
   @ApiProperty({ description: 'How many of them are stored here.', example: 412 })
   downloadedCount!: number;
+
+  @ApiProperty({ description: 'When the source was last read for that inventory.', example: null })
+  discoveredAt!: string | null;
 }
 
 /** A novel: the counts, and what the source says about the work. */
-export class NovelMetadataDto extends LibraryItemMetadataBaseDto implements NovelMetadata {
-  @ApiProperty({ description: "The work's own status, as its source publishes it.", enum: NovelStatus, enumName: 'NovelStatus' })
+export class NovelMetadataDto extends LibraryItemMetadataBaseDto {
+  @ApiProperty({ description: "The work's own status, as its source publishes it.", enum: NovelStatus })
   status!: NovelStatus;
 
-  @ApiProperty({ example: 'Nguyen Van A' })
+  @ApiProperty({ description: "The author's name.", example: 'Nguyen Van A' })
   author!: string;
 
-  @ApiProperty({ example: 'en' })
+  @ApiProperty({ description: "The language the work is written in.", example: 'en' })
   language!: string;
 
-  @ApiProperty({ type: [String], example: ['fantasy', 'adventure'] })
+  @ApiProperty({ description: 'The genres the work belongs to.', example: ['fantasy', 'adventure'] })
   genres!: string[];
 
-  @ApiProperty({ example: 'A cartographer maps a coast that keeps moving.' })
+  @ApiProperty({ description: 'A brief summary of the work.', example: 'A cartographer maps a coast that keeps moving.' })
   description!: string;
 }
 
 /** An image set. */
-export class ImageSetMetadataDto extends LibraryItemMetadataBaseDto implements ImageSetMetadata {
+export class ImageSetMetadataDto extends LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Bytes held.', example: 882900275 })
   downloadedSize!: number;
 }
 
 /** A video set: bytes, and how long they run. */
-export class VideoSetMetadataDto extends LibraryItemMetadataBaseDto implements VideoSetMetadata {
+export class VideoSetMetadataDto extends LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Bytes held.', example: 3328599654 })
   downloadedSize!: number;
 
@@ -59,49 +48,19 @@ export class VideoSetMetadataDto extends LibraryItemMetadataBaseDto implements V
   downloadedDuration!: number;
 }
 
-/**
- * The editable half of each shape above, for the creation and the update body:
- * the same class, minus what the job runner owns, with everything optional.
- *
- * Derived rather than written out, so each field has one home. `OmitType` drops the
- * downloaded counters — they say what is actually stored here, and a client that
- * could set one would be claiming content that does not exist. `PartialType` makes
- * the rest optional, which is also what registers them with the validation pipe:
- * the pipe rejects a body whole when it reaches a class it knows nothing about.
- *
- * What this does not do is check types or lengths inside `metadata` — the response
- * classes carry no validation rules to inherit. The manager still refuses the
- * fields a type has no room for.
- */
-export class NovelMetadataInputDto extends PartialType(OmitType(NovelMetadataDto, ['downloadedCount'] as const)) {}
-
-export class ImageSetMetadataInputDto extends PartialType(OmitType(ImageSetMetadataDto, ['downloadedCount', 'downloadedSize'] as const)) {}
-
-export class VideoSetMetadataInputDto extends PartialType(OmitType(VideoSetMetadataDto, ['downloadedCount', 'downloadedSize', 'downloadedDuration'] as const)) {}
-
-/** Which shape a body carries follows from its `type`, never from the object itself. */
-export type LibraryItemMetadataInputDto = NovelMetadataInputDto | ImageSetMetadataInputDto | VideoSetMetadataInputDto;
-
-/**
- * One item, whole, as `GET /:id`, `POST` and `PUT` answer with it.
- *
- * Not `implements LibraryItem`: the entity is a union discriminated on `type`,
- * and a class is one shape. What keeps the two honest is `metadata`, documented
- * as `oneOf` the three DTOs above, each of which does implement its entity.
- */
-@ApiExtraModels(NovelMetadataDto, ImageSetMetadataDto, VideoSetMetadataDto)
+/** The whole item, as a client may send it. */
 export class LibraryItemDto {
-  @ApiProperty({ example: 'oWY5aMSyk2Xu6nqQKtF3' })
+  @ApiProperty({ description: 'The unique identifier of the library item.', example: 'oWY5aMSyk2Xu6nqQKtF3' })
   id!: string;
 
-  @ApiProperty({ description: 'Set on creation and immutable after it.', enum: LibraryItemType, enumName: 'LibraryItemType' })
+  @ApiProperty({ description: 'Set on creation and immutable after it.', enum: LibraryItemType })
   type!: LibraryItemType;
 
-  @ApiProperty({ example: 'The Silent Cartographer' })
+  @ApiProperty({ description: 'The title of the library item.', example: 'The Silent Cartographer' })
   title!: string;
 
-  @ApiProperty({ type: String, nullable: true, description: 'A cover image URL, or null where the listing draws its placeholder.', example: null })
-  coverUrl!: string | null;
+  @ApiProperty({ description: 'Where the item is in our pipeline.', enum: LibraryItemStatus })
+  status!: LibraryItemStatus;
 
   @ApiProperty({ description: 'Set on creation and immutable after it.', enum: LibrarySourceMode, enumName: 'LibrarySourceMode' })
   sourceMode!: LibrarySourceMode;
@@ -109,33 +68,66 @@ export class LibraryItemDto {
   @ApiProperty({ description: "`Manual`, or the crawler's name.", example: 'novel543' })
   sourceName!: string;
 
-  @ApiProperty({ type: String, nullable: true, description: 'What a crawler reads. Null for a manual item.', example: 'https://www.novel543.com/0413553971' })
-  sourceUrl!: string | null;
+  @ApiPropertyOptional({ description: 'What a crawler reads. Null for a manual item.', example: 'https://www.novel543.com/0413553971' })
+  sourceUrl?: string | null;
 
-  @ApiProperty({ description: 'Where the item is in our pipeline.', enum: LibraryItemStatus, enumName: 'LibraryItemStatus' })
-  status!: LibraryItemStatus;
+  @ApiPropertyOptional({ description: 'A cover image URL, or null where the listing draws its placeholder.', example: null })
+  coverUrl?: string | null;
 
-  @ApiProperty({
-    description: 'Everything type-specific. Which shape it is follows from `type`: a novel returns NovelMetadataDto, an image ImageSetMetadataDto, a video VideoSetMetadataDto.',
-    oneOf: [{ $ref: getSchemaPath(NovelMetadataDto) }, { $ref: getSchemaPath(ImageSetMetadataDto) }, { $ref: getSchemaPath(VideoSetMetadataDto) }],
-  })
-  metadata!: LibraryItemMetadata;
+  @ApiPropertyOptional({ description: 'Metadata specific to novels.', type: NovelMetadataDto,  })
+  novelMetadata?: NovelMetadataDto | null;
 
-  @ApiProperty({ example: '2026-08-10T09:12:04.113Z' })
+  @ApiPropertyOptional({ description: 'Metadata specific to image sets.', type: ImageSetMetadataDto })
+  imageMetadata?: ImageSetMetadataDto | null;
+
+  @ApiPropertyOptional({ description: 'Metadata specific to video sets.', type: VideoSetMetadataDto })
+  videoMetadata?: VideoSetMetadataDto | null;
+
+  @ApiProperty({ description: 'Set on creation.', example: '2026-08-10T09:12:04.113Z' })
   createdAt!: string;
 
   @ApiProperty({ description: 'Rewritten on every write. The listing is ordered by it.', example: '2026-08-10T09:12:04.113Z' })
   updatedAt!: string;
+}
 
-  // On the item rather than behind a route of its own: the dropdown that draws it
-  // is on a screen that has already fetched the item, so a second call would be a
-  // round trip to learn something this one could say. `LibraryListItemDto` omits
-  // it — twenty rows a page would be sixty aggregations for a question the listing
-  // does not ask.
-  @ApiProperty({
-    type: [LibraryTranslationCoverageDto],
-    nullable: true,
-    description: 'How many chapters each language covers — all three, zeroes included. Null on an image or video set, which has no translations.',
-  })
-  translations!: LibraryTranslationCoverageDto[] | null;
+/** One page of the listing, and enough to draw the pager and the counts around it. */
+export class LibraryItemPageDto {
+  @ApiProperty({ type: [LibraryItemDto], description: 'This page, ordered by `updatedAt` descending.' })
+  items!: LibraryItemDto[];
+
+  @ApiProperty({ description: 'What matches the filter, not what this page holds.', example: 640 })
+  total!: number;
+
+  @ApiProperty({ description: 'The current page number.', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: 'The number of items per page.', example: 50 })
+  pageSize!: number;
+}
+
+/** Query parameters for listing library items. */
+export class QueryListLibraryItemsDto {
+  @ApiPropertyOptional({ description: 'The type of the library item.', enum: LibraryItemType })
+  @IsOptional() @IsEnum(LibraryItemType)
+  type?: LibraryItemType;
+
+  @ApiPropertyOptional({ description: 'All four, including the two only the job runner sets — a filter reads data it does not write.', enum: LibraryItemStatus })
+  @IsOptional() @IsEnum(LibraryItemStatus)
+  status?: LibraryItemStatus;
+
+  @ApiPropertyOptional({ description: 'The source mode of the library item.', enum: LibrarySourceMode })
+  @IsOptional() @IsEnum(LibrarySourceMode)
+  sourceMode?: LibrarySourceMode;
+
+  @ApiPropertyOptional({ maxLength: MAX_SEARCH, description: "Case-insensitive, matched against the title, the source name and a novel's author." })
+  @IsOptional() @IsString() @MaxLength(MAX_SEARCH)
+  search?: string;
+
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional() @IsInt() @Min(1)
+  page: number = 1;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE })
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_PAGE_SIZE)
+  pageSize: number = DEFAULT_PAGE_SIZE;
 }

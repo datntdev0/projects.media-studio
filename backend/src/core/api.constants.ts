@@ -31,6 +31,12 @@ export const LIBRARY_PATH = 'library';
 /** Under an item. `/api/v1/library/:itemId/contents/…` */
 export const LIBRARY_CONTENT_PATH = 'contents';
 
+/** Under an item. `/api/v1/library/:itemId/audio/:contentId` — one chapter's narration. */
+export const LIBRARY_AUDIO_PATH = 'audio';
+
+/** Under an item. `/api/v1/library/:itemId/illustration/:contentId` — one chapter's pictures. */
+export const LIBRARY_ILLUSTRATION_PATH = 'illustration';
+
 /** Under an item. `/api/v1/library/:id/export` — the item packed into a .zip. */
 export const LIBRARY_EXPORT_PATH = 'export';
 

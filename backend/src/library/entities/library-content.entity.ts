@@ -1,73 +1,66 @@
 import { FirestoreEntity } from '../../core/firebase/firestore.repository';
-import { LibraryItemType } from './library-item.entity';
 
-/**
- * How far one piece of content has got — a life cycle rather than a derivation.
- *
- * `Discovered` is what the source turned out to hold and nothing more; `Pending` is
- * queued, or a placeholder added by hand; `Scraping` is in flight; `Completed` means
- * the bytes are stored. `Scraping` and `Failed` belong to the job runner, and the
- * manager still derives `Pending` and `Completed` from `contentUrl`.
- */
 export enum LibraryContentStatus {
   Discovered = 'discovered',
   Pending = 'pending',
-  Scraping = 'scraping',
+  Inprogress = 'inprogress',
   Completed = 'completed',
   Failed = 'failed',
 }
 
-/**
- * What a piece of content carries whatever its type. It lives in the `contents`
- * subcollection of its item, so the path is the parent reference — there is no
- * `libraryItemId` field to keep in step with anything.
- */
+export enum LibraryContentType {
+  Original = 'original',
+  Translation = 'translation',
+  Audio = 'audio',
+  Image = 'image',
+  Video = 'video',
+}
+
+export enum ContentLanguages {
+  Vietnamese = 'vi',
+  English = 'en',
+  Chinese = 'zh',
+}
+
+/** A piece of content, whatever its type. The base shape is the same for every type */
 export interface LibraryContentBase extends FirestoreEntity {
   id: string;
-  /** Where the piece came from. Null for a row added by hand, and what discovery matches on. */
-  sourceUrl: string | null;
-  /** Where the bytes are. Null while the row is a placeholder — a chapter added by title alone. */
-  contentUrl: string | null;
+  idx: number;
+  type: LibraryContentType;
   status: LibraryContentStatus;
+  sourceUrl: string | null;
   createdAt: string;
-  /** Rewritten on every write. */
   updatedAt: string;
 }
 
 /** One chapter of a novel. */
-export interface NovelChapter extends LibraryContentBase {
-  type: LibraryItemType.Novel;
-  /** The chapter number, and what the list is ordered by. */
-  index: number;
+export interface TextContent extends LibraryContentBase {
+  contentUrl: string | null;
+  language: ContentLanguages;
   title: string;
-  language: string;
-  /** How long the stored text runs. Zero until there is text. */
   words: number;
 }
 
+/** One audio file of a set. */
+export interface AudioContent extends LibraryContentBase {
+  contentUrl: string | null;
+  language: ContentLanguages;
+  subtitleUrl: string | null;
+}
+
 /** One image of a set. */
-export interface ImageAsset extends LibraryContentBase {
-  type: LibraryItemType.Image;
+export interface ImageContent extends LibraryContentBase {
+  contentUrl: string | null;
   filename: string;
-  /** Bytes. */
   filesize: number;
+  dimensions: string;
 }
 
 /** One clip of a set. */
-export interface VideoAsset extends LibraryContentBase {
-  type: LibraryItemType.Video;
+export interface VideoContent extends LibraryContentBase {
+  contentUrl: string | null;
   filename: string;
-  /** Bytes. */
   filesize: number;
+  dimensions: string;
+  duration: number;
 }
-
-/**
- * Discriminated on `type`, which is the item's own — so a row cannot claim a type
- * its parent is not, and `content.type === 'novel'` narrows to the one shape that
- * carries `index` and `words`.
- *
- * The two asset shapes are identical and stay two, for the reason the two set
- * metadata cases in `LibraryManager` stay two: each narrows off its own `type`,
- * and merged, neither would.
- */
-export type LibraryContent = NovelChapter | ImageAsset | VideoAsset;

@@ -1,4 +1,23 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "**/*spec.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*spec.ts",
+
+    "src/library/library-content.manager.ts",
+    "src/library/library-content.repository.ts",
+    "src/library/library-export.manager.ts",
+    "src/library/library-import.handler.ts",
+    "src/library/library-import.manager.ts",
+    "src/library/library-import.report.ts",
+    "src/library/library-import.writer.ts",
+    "src/library/library-translation.manager.ts",
+    "src/library/library-translation.repository.ts",
+    "src/library/library.manager.ts",
+    "src/library/library.repository.ts",
+    "src/library/dto/library-package.dto.ts",
+    "src/library/entities/library-package.entity.ts",
+    "src/scraping"
+  ]
 }
