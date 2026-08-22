@@ -7,8 +7,11 @@ import { UpdateLibraryContentDto } from './dto/library-content.dto-update';
 import { LibraryItemDto, LibraryItemPageDto, QueryListLibraryItemsDto } from './dto/library-item.dto';
 import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
+import { LibraryPackageDto } from './dto/library-package.dto';
+import { NOT_PACKAGEABLE } from './entities/library-package.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryItemManager } from './library-item.manager';
+import { LibraryPackageManager } from './library-package.manager';
 
 /** Every route naming an item that is not there says so the same way. */
 const NOT_FOUND = 'No item under that id.';
@@ -37,7 +40,8 @@ const WRONG_STATUS = 'A status only discovery or the job runner may set.';
 export class LibraryController {
   constructor(
     private readonly libraryItemManager: LibraryItemManager,
-    private readonly libraryContentManager: LibraryContentManager
+    private readonly libraryContentManager: LibraryContentManager,
+    private readonly libraryPackageManager: LibraryPackageManager
   ) {}
 
   @Get()
@@ -79,6 +83,15 @@ export class LibraryController {
   @ApiNotFoundResponse({ description: NOT_FOUND })
   remove(@Param('id') id: string): Promise<void> {
     return this.libraryItemManager.remove(id);
+  }
+
+  @Get(':id/export')
+  @ApiOkResponse({ type: LibraryPackageDto })
+  @ApiBadRequestResponse({ description: NOT_PACKAGEABLE })
+  @ApiUnauthorizedResponse({ description: UNAUTHORIZED })
+  @ApiNotFoundResponse({ description: NOT_FOUND })
+  export(@Param('id') id: string): Promise<LibraryPackageDto> {
+    return this.libraryPackageManager.export(id);
   }
 
   @Get(':id/contents')

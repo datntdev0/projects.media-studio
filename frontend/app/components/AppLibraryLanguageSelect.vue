@@ -35,7 +35,7 @@ const sourceCode = computed(() => {
 const options = computed(() => {
   const rows = TRANSLATION_LANGUAGES.map(({ code, name }) => code === sourceCode.value
     ? { value: null, label: `${name} · source` }
-    : { value: code, label: `${name} · ${coverageLabel(props.coverage?.find(row => row.language === code)?.translated ?? 0, props.total)}` })
+    : { value: code, label: `${name}` })
 
   return sourceCode.value ? rows : [{ value: null, label: `${props.sourceLanguage || 'Source'} · source` }, ...rows]
 })

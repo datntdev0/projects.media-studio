@@ -17,6 +17,7 @@ import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, Nov
 import { LibraryController } from './library.controller';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryItemManager } from './library-item.manager';
+import { LibraryPackageManager } from './library-package.manager';
 import { LibraryRepository } from './library.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
@@ -121,14 +122,14 @@ function snapshot(id: string, data?: Record<string, unknown>): DocumentSnapshot 
 }
 
 /** The real managers over the real repository, over a Firestore that lives only in memory. */
-function controllerOver(items: LibraryItem[] = [], contents: Record<string, LibraryContent[]> = {}): LibraryController {
+function controllerOver(items: LibraryItem[] = [], contents: Record<string, LibraryContent[]> = {}, packageManager?: LibraryPackageManager): LibraryController {
   const collection = FakeCollection.seeded(items, contents);
   const firestore = { collection: () => collection } as unknown as Firestore;
   const firebase = { firestore } as unknown as FirebaseAdminService;
 
   const repository = new LibraryRepository(firebase);
 
-  return new LibraryController(new LibraryItemManager(repository), new LibraryContentManager(repository));
+  return new LibraryController(new LibraryItemManager(repository), new LibraryContentManager(repository), packageManager ?? ({} as LibraryPackageManager));
 }
 
 function novel(over: Partial<LibraryItem> = {}): LibraryItem {
@@ -446,6 +447,19 @@ describe('LibraryController.replaceContent', () => {
 
   it('is a 404 for an item that is not there', async () => {
     await expect(controllerOver().replaceContent('missing', 'chapter-1', body)).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('LibraryController.export', () => {
+  it('delegates to the package manager', async () => {
+    const packaged = { url: 'https://storage.example.com/package.zip', filename: 'novel-1-export.zip', bytes: 4096, contents: 0, bodies: 0, translations: {} };
+    const exportFn = jest.fn().mockResolvedValue(packaged);
+    const packageManager = { export: exportFn } as unknown as LibraryPackageManager;
+
+    const answer = await controllerOver([novel()], {}, packageManager).export('novel-1');
+
+    expect(exportFn).toHaveBeenCalledWith('novel-1');
+    expect(answer).toBe(packaged);
   });
 });
 

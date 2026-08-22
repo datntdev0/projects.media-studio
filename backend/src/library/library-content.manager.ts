@@ -135,6 +135,22 @@ export class LibraryContentManager {
   }
 
   /**
+   * Every translated chapter of a novel, across every language, in reading order —
+   * what a package folds in beside the originals.
+   */
+  async translations(itemId: string): Promise<TextContent[]> {
+    const item = await this.requireItem(itemId);
+
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`A ${item.type} set has no translations to pack`);
+    }
+
+    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Translation });
+
+    return stored.filter((content): content is TextContent => content.type === LibraryContentType.Translation);
+  }
+
+  /**
    * The pieces the source has and we do not, appended as placeholders.
    *
    * Matched on `sourceUrl` — the source's own key, and the only field that survives

@@ -202,6 +202,9 @@ const chapters = computed(() => rows.value
 
 const assets = computed(() => rows.value.filter((row): row is LibraryAsset => row.type !== 'novel'))
 
+/** One past the highest chapter number among the loaded originals — what a placeholder is numbered. */
+const nextChapterIndex = computed(() => Math.max(0, ...chapters.value.filter(chapter => !chapter.translated).map(chapter => chapter.index)) + 1)
+
 const failed = computed(() => rows.value.filter(row => row.status === 'failed').length)
 
 /** What the scrape dialog counts against: the item's own inventory, not the filtered table's. */
@@ -355,7 +358,7 @@ async function onExport() {
 
     packages.download(packed.url)
 
-    toast.add({ title: `Packed ${countLabel(packed.chapters)} ${contentUnit('novel', packed.chapters)}`, icon: 'i-lucide-check', color: 'primary' })
+    toast.add({ title: `Packed ${countLabel(packed.contents)} ${contentUnit('novel', packed.contents)}`, icon: 'i-lucide-check', color: 'primary' })
   } catch (cause) {
     toast.add({ title: apiMessage(cause, 'Could not pack the item.'), icon: 'i-lucide-triangle-alert', color: 'error' })
   } finally {
@@ -459,6 +462,10 @@ async function onUpload(picked: FileList | null) {
 
   let added = 0
 
+  // One past the highest asset already held, then one past that for each upload
+  // in the batch — assets have no number of their own to keep, only an order.
+  let idx = assets.value.length
+
   for (const file of chosen) {
     let uploaded: string | null = null
 
@@ -466,8 +473,16 @@ async function onUpload(picked: FileList | null) {
       checkAsset(file, type)
 
       uploaded = await files.uploadAsset(itemId.value, file)
+      idx += 1
 
-      await libraryClient.createContent(itemId.value, { filename: file.name, filesize: file.size, contentUrl: uploaded })
+      await libraryClient.createContent(itemId.value, {
+        idx,
+        type,
+        status: 'completed',
+        ...(type === 'image'
+          ? { imageContent: { contentUrl: uploaded, filename: file.name, filesize: file.size, dimensions: '' } }
+          : { videoContent: { contentUrl: uploaded, filename: file.name, filesize: file.size, dimensions: '', duration: 0 } })
+      })
       added += 1
     } catch (cause) {
       // The row is what failed, so the object it would have pointed at goes —
@@ -723,6 +738,8 @@ async function onUpload(picked: FileList | null) {
       v-model:open="chapterOpen"
       :item-id="itemId"
       :chapter="renaming"
+      :next-index="nextChapterIndex"
+      :source-language="novel?.metadata.language ?? ''"
       @saved="onContentSaved"
     />
 

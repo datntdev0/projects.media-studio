@@ -136,15 +136,6 @@ export const TRANSLATION_LANGUAGES: { code: TranslationLanguage, name: string }[
   { code: 'zh', name: 'Chinese' }
 ]
 
-/** The three cases the mockup draws after a language's name: `none yet`, `complete`, `412 / 640`. */
-export function coverageLabel(translated: number, total: number): string {
-  if (translated === 0) {
-    return 'none yet'
-  }
-
-  return translated >= total ? 'complete' : `${countLabel(translated)} / ${countLabel(total)}`
-}
-
 /** Whether a value off the URL is a language we translate into. A hand-typed `?lang=de` reads as the source. */
 export const asTranslationLanguage = (value: unknown): TranslationLanguage | undefined =>
   TRANSLATION_LANGUAGES.find(language => language.code === value)?.code

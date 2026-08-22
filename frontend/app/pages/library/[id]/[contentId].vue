@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { LibraryContent, NovelChapter } from '~/types/library-content'
+import type { TextContentDtoLanguage } from '~/utils/api.clients'
+import type { LibraryContent, NovelChapter, TranslationLanguage } from '~/types/library-content'
 
 /**
  * One chapter, read or written. The navigator on the left is the whole novel, so
@@ -102,16 +103,49 @@ useIntersectionObserver(sentinel, ([entry]) => {
   }
 })
 
+/** The source row, the row actually shown, and the translation's own id — null where it does not exist yet. */
+interface ChapterView {
+  source: NovelChapter
+  active: NovelChapter
+  translationId: string | null
+}
+
+/**
+ * The translation row for one chapter, in one language — its own document, not a
+ * language-scoped read of the source's. Only the first 200 rows in the language are
+ * searched, the same cap every other list on this screen pages by.
+ */
+async function findTranslation(id: string, index: number, lang: TranslationLanguage): Promise<NovelChapter | null> {
+  const page = await libraryClient.listContents(id, undefined, lang, 'translation', undefined, 1, PAGE_SIZE)
+  const match = page.items.find(row => row.idx === index)
+
+  return match ? (asLibraryContent(match) as NovelChapter) : null
+}
+
 // Keyed on the language as well as the row: switching language is a different
 // chapter to fetch, not the same one redrawn.
-const { data: chapter, status: chapterStatus, error: chapterError, refresh: refreshChapter } = useAsyncData(
+const { data: chapterData, status: chapterStatus, error: chapterError, refresh: refreshChapter } = useAsyncData(
   () => `library-content-${contentId.value}-${language.value ?? 'source'}`,
-  () => libraryClient.getContent(itemId.value, contentId.value, language.value ?? undefined).then(row => asLibraryContent(row) as NovelChapter),
+  async (): Promise<ChapterView> => {
+    const source = asLibraryContent(await libraryClient.getContent(itemId.value, contentId.value)) as NovelChapter
+    const lang = language.value
+
+    if (!lang) {
+      return { source, active: source, translationId: null }
+    }
+
+    const translation = await findTranslation(itemId.value, source.index, lang)
+
+    return { source, active: translation ?? source, translationId: translation?.id ?? null }
+  },
   { watch: [contentId, language] }
 )
 
+/** The row this screen shows — the translation where one is stored, the source otherwise. */
+const chapter = computed(() => chapterData.value?.active ?? null)
+
 /** True where a language is selected and nothing is stored for this chapter in it. */
-const missingTranslation = computed(() => !!language.value && !!chapter.value && !chapter.value.translated)
+const missingTranslation = computed(() => !!language.value && !!chapterData.value && !chapterData.value.translationId)
 
 const siblings = computed(() => rows.value.filter((row): row is NovelChapter => row.type === 'novel'))
 
@@ -192,9 +226,9 @@ watch(chapter, async (loaded) => {
  * leaves nothing behind either way.
  */
 async function save() {
-  const stored = chapter.value
+  const current = chapterData.value
 
-  if (!stored || saving.value) {
+  if (!current || saving.value) {
     return
   }
 
@@ -214,23 +248,27 @@ async function save() {
   // whether the coverage moved and whether there is an old object to drop.
   const creating = missingTranslation.value
 
-  // The object this save replaces — and none where the row on screen is the
-  // *source* falling back, because that object is the source's text and dropping
-  // it would delete the chapter to write a translation of it.
-  const replaced = creating ? null : stored.contentUrl
+  // The object this save replaces — and none where it is bringing a translation
+  // into existence, because there is nothing stored in this language yet to drop.
+  const replaced = creating ? null : current.active.contentUrl
 
   let uploaded: string | null = null
 
   try {
     uploaded = text ? await files.uploadText(itemId.value, body.value) : null
 
-    await libraryClient.replaceContent(itemId.value, stored.id, {
-      title: named,
-      index: stored.index,
-      language: stored.language,
-      words: wordCount(body.value),
-      contentUrl: uploaded
-    }, language.value ?? undefined)
+    // `status` follows `contentUrl`, the rule `LibraryContentDto.status` itself
+    // documents. A translation carries no `sourceUrl` of its own — part 4's reason.
+    const status = uploaded ? 'completed' : 'pending'
+    const textContent = { contentUrl: uploaded, language: (language.value ?? current.source.language) as TextContentDtoLanguage, title: named, words: wordCount(body.value) }
+
+    if (!language.value) {
+      await libraryClient.replaceContent(itemId.value, current.source.id, { idx: current.source.index, type: 'original', status, sourceUrl: current.source.sourceUrl, textContent })
+    } else if (current.translationId) {
+      await libraryClient.replaceContent(itemId.value, current.translationId, { idx: current.source.index, type: 'translation', status, textContent })
+    } else {
+      await libraryClient.createContent(itemId.value, { idx: current.source.index, type: 'translation', status, textContent })
+    }
   } catch (cause) {
     await files.discard(uploaded)
     saveError.value = apiMessage(cause, FALLBACK_ERROR)

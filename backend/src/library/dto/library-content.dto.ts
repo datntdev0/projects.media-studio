@@ -1,48 +1,59 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
 import { ContentLanguages, LibraryContentStatus, LibraryContentType } from '../entities/library-content.entity';
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_SEARCH } from './library-content.constants';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_SEARCH, MAX_FILENAME, MAX_TITLE, MAX_URL } from './library-content.constants';
 
 /** One chapter of a novel. */
 export class TextContentDto {
   @ApiProperty({ description: 'The URL of the text content.', example: 'https://example.com/content.txt' })
+  @IsOptional() @IsUrl() @MaxLength(MAX_URL)
   contentUrl!: string | null;
 
   @ApiProperty({ description: 'The language of the text content.', enum: ContentLanguages, example: 'en' })
+  @IsOptional() @IsEnum(ContentLanguages)
   language!: ContentLanguages;
 
   @ApiProperty({ description: 'The title of the text content.', example: 'Nine Bells for the Harbour' })
+  @IsOptional() @IsString() @MaxLength(MAX_TITLE)
   title!: string;
 
   @ApiProperty({ description: 'How long the stored text runs. Zero until there is text.', example: 2744 })
+  @IsOptional() @IsInt() @Min(0)
   words!: number;
 }
 
 /** One audio content item. */
 export class AudioContentDto {
   @ApiProperty({ description: 'The URL of the audio content.', example: 'https://example.com/audio.mp3' })
+  @IsOptional() @IsUrl() @MaxLength(MAX_URL)
   contentUrl!: string | null;
 
   @ApiProperty({ description: 'The language of the audio content.', enum: ContentLanguages, example: 'en' })
+  @IsOptional() @IsEnum(ContentLanguages)
   language!: ContentLanguages;
 
   @ApiProperty({ description: 'The URL of the subtitle content.', example: 'https://example.com/subtitles.srt' })
+  @IsOptional() @IsUrl() @MaxLength(MAX_URL)
   subtitleUrl!: string | null;
 }
 
 /** One image of a set. */
 export class ImageContentDto {
   @ApiProperty({ description: 'The URL of the image content.', example: 'https://example.com/image.jpg' })
+  @IsOptional() @IsUrl() @MaxLength(MAX_URL)
   contentUrl!: string | null;
 
   @ApiProperty({ description: 'The filename of the image content.', example: 'img_001.jpg' })
+  @IsOptional() @IsString() @MaxLength(MAX_FILENAME)
   filename!: string;
 
   @ApiProperty({ description: 'The size of the image content in bytes.', example: 2088960 })
+  @IsOptional() @IsInt() @Min(0)
   filesize!: number;
 
   @ApiProperty({ description: 'The dimensions of the image content.', example: '1920x1080' })
+  @IsOptional() @IsString()
   dimensions!: string;
 }
 
@@ -50,18 +61,23 @@ export class ImageContentDto {
 /** One clip of a set. */
 export class VideoContentDto {
   @ApiProperty({ description: 'The URL of the video content.', example: 'https://example.com/clip_001.mp4' })
+  @IsOptional() @IsUrl() @MaxLength(MAX_URL)
   contentUrl!: string | null;
 
   @ApiProperty({ description: 'The filename of the video content.', example: 'clip_001.mp4' })
+  @IsOptional() @IsString() @MaxLength(MAX_FILENAME)
   filename!: string;
 
   @ApiProperty({ description: 'The size of the video content in bytes.', example: 74883072 })
+  @IsOptional() @IsInt() @Min(0)
   filesize!: number;
 
   @ApiProperty({ description: 'The dimensions of the video content.', example: '1920x1080' })
+  @IsOptional() @IsString()
   dimensions!: string;
 
   @ApiProperty({ description: 'The duration of the video content in seconds.', example: 412 })
+  @IsOptional() @IsInt() @Min(0)
   duration!: number;
 }
 

@@ -471,6 +471,55 @@ export class LibraryClient {
         return Promise.resolve<void>(null as any);
     }
 
+    export(id: string, signal?: AbortSignal): Promise<LibraryPackageDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/export";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processExport(_response);
+        });
+    }
+
+    protected processExport(response: Response): Promise<LibraryPackageDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryPackageDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Only a novel can be packaged", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LibraryPackageDto>(null as any);
+    }
+
     /**
      * @param status (optional) All five, including the ones only discovery and the job runner set — a filter reads data it does not write.
      * @param language (optional) The language of a chapter. Null for an asset.
@@ -1299,6 +1348,21 @@ export interface UpdateLibraryItemDto {
     imageMetadata?: any;
     /** The video metadata of the library item, shape depends on the `type`. */
     videoMetadata?: any;
+}
+
+export interface LibraryPackageDto {
+    /** Where the archive is. Tokenised, and ready to open. */
+    url: string;
+    /** What the browser saves it as. */
+    filename: string;
+    /** What the archive weighs. */
+    bytes: number;
+    /** Text rows written — original chapters and translations together. */
+    contents: number;
+    /** Of those, how many had text to pack. The rest are discovered chapters nobody has scraped. */
+    bodies: number;
+    /** Translated rows per language, zeroes included. */
+    translations: { [key: string]: number; };
 }
 
 export interface TextContentDto {

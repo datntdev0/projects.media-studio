@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
+import type { TextContentDtoLanguage } from '~/utils/api.clients'
 import type { NovelChapter } from '~/types/library-content'
 
 /**
- * Adding a chapter, and renaming one. A title is all it takes: the number defaults
- * to the next one up on the server, and the text is written in the reader.
+ * Adding a chapter, and renaming one. A title is all it takes: the number and the
+ * language are worked out from the novel around it, and the text is written in
+ * the reader.
  */
 const FALLBACK_ERROR = 'Could not save the chapter. Try again.'
 
@@ -14,6 +16,10 @@ const props = defineProps<{
   itemId: string
   /** The chapter to rename. Null while the dialog is adding. */
   chapter?: NovelChapter | null
+  /** One past the highest chapter number stored. Only read while adding. */
+  nextIndex: number
+  /** The novel's own language, stamped on a placeholder chapter. Only read while adding. */
+  sourceLanguage: string
 }>()
 
 const emit = defineEmits<{
@@ -49,17 +55,28 @@ async function save() {
 
   try {
     // A rename is a PUT of the whole row, so everything it keeps is restated —
-    // an omitted field would be a cleared one.
+    // an omitted field would be a cleared one. `status` follows `contentUrl`, the
+    // rule `LibraryContentDto.status` itself documents.
     if (props.chapter) {
       await libraryClient.replaceContent(props.itemId, props.chapter.id, {
-        title: title.value.trim(),
-        index: props.chapter.index,
-        language: props.chapter.language,
-        words: props.chapter.words,
-        contentUrl: props.chapter.contentUrl
+        idx: props.chapter.index,
+        type: 'original',
+        status: props.chapter.contentUrl ? 'completed' : 'pending',
+        sourceUrl: props.chapter.sourceUrl,
+        textContent: {
+          contentUrl: props.chapter.contentUrl,
+          language: props.chapter.language as TextContentDtoLanguage,
+          title: title.value.trim(),
+          words: props.chapter.words
+        }
       })
     } else {
-      await libraryClient.createContent(props.itemId, { title: title.value.trim() })
+      await libraryClient.createContent(props.itemId, {
+        idx: props.nextIndex,
+        type: 'original',
+        status: 'pending',
+        textContent: { contentUrl: null, language: props.sourceLanguage as TextContentDtoLanguage, title: title.value.trim(), words: 0 }
+      })
     }
   } catch (cause) {
     saveError.value = apiMessage(cause, FALLBACK_ERROR)

@@ -28,8 +28,6 @@
     "node_modules",
     "dist",
 
-    "src/library/library-export.manager.ts",
-    "src/library/library-export.manager.spec.ts",
     "src/library/library-import.handler.ts",
     "src/library/library-import.manager.ts",
     "src/library/library-import.manager.spec.ts",
@@ -38,8 +36,6 @@
     "src/library/library-import.writer.spec.ts",
     "src/library/library-translation.manager.ts",
     "src/library/library-translation.manager.spec.ts",
-    "src/library/library-translation.repository.ts",
-    "src/library/dto/library-package.dto.ts",
-    "src/library/entities/library-package.entity.ts"
+    "src/library/library-translation.repository.ts"
   ]
 }

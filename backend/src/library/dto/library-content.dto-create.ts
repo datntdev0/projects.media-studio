@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsUrl, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { LibraryContentStatus, LibraryContentType } from '../entities/library-content.entity';
 import { MAX_INDEX, MAX_URL } from './library-content.constants';
@@ -22,18 +23,18 @@ export class CreateLibraryContentDto {
   sourceUrl?: string | null;
 
   @ApiPropertyOptional({ description: 'The text content of the library item, shape depends on the `type`.', type: TextContentDto })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => TextContentDto)
   textContent?: TextContentDto | null;
 
   @ApiPropertyOptional({ description: 'The audio content of the library item, shape depends on the `type`.', type: AudioContentDto })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => AudioContentDto)
   audioContent?: AudioContentDto | null;
-  
+
   @ApiPropertyOptional({ description: 'The image content of the library item, shape depends on the `type`.', type: ImageContentDto })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => ImageContentDto)
   imageContent?: ImageContentDto | null;
 
   @ApiPropertyOptional({ description: 'The video content of the library item, shape depends on the `type`.', type: VideoContentDto })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => VideoContentDto)
   videoContent?: VideoContentDto | null;
 }
