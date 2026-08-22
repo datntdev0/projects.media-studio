@@ -46,7 +46,7 @@ export abstract class FirestoreRepository<T extends FirestoreEntity> {
   }
 }
 
-function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot): T | null {
+export function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot): T | null {
   const data = snapshot.data();
 
   if (!data) {

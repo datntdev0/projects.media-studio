@@ -28,9 +28,6 @@
     "node_modules",
     "dist",
 
-    "src/library/library-content.manager.ts",
-    "src/library/library-content.manager.spec.ts",
-    "src/library/library-content.repository.ts",
     "src/library/library-export.manager.ts",
     "src/library/library-export.manager.spec.ts",
     "src/library/library-import.handler.ts",

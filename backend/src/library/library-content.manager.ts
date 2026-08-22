@@ -1,268 +1,102 @@
-import { BadRequestException, Injectable, NotFoundException, NotImplementedException } from '@nestjs/common';
-import { CreateLibraryContentDto } from './dto/library-content-create.dto';
-import { LibraryContentPageDto } from './dto/library-content.dto';
-import { QueryListLibraryContentsDto } from './dto/query-list-library-contents.dto';
-import { UpdateLibraryContentDto } from './dto/library-content-update.dto';
-import { ImageAsset, LibraryContent, LibraryContentBase, LibraryContentStatus, NovelChapter } from './entities/library-content.entity';
-import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item.entity';
-import { TranslatedContent, TranslationLanguage } from './entities/library-translation.entity';
-import { LibraryContentCounts, LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
-import { LibraryTranslationManager, untranslated } from './library-translation.manager';
-import { LibraryItemRepository } from './library-item.repository';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { WRITABLE_CONTENT_STATUSES } from './dto/library-content.constants';
+import { AudioContentDto, ImageContentDto, LibraryContentDto, LibraryContentPageDto, QueryListLibraryContentsDto, TextContentDto, VideoContentDto } from './dto/library-content.dto';
+import { CreateLibraryContentDto } from './dto/library-content.dto-create';
+import { UpdateLibraryContentDto } from './dto/library-content.dto-update';
+import { AudioContent, ContentLanguages, ImageContent, LibraryContent, LibraryContentStatus, LibraryContentType, TextContent, VideoContent } from './entities/library-content.entity';
+import { LibraryItem, LibraryItemType } from './entities/library-item.entity';
+import { LibraryContentDraft, LibraryRepository } from './library.repository';
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
-type ContentRoot = Omit<LibraryContentBase, 'id' | 'createdAt' | 'updatedAt'>;
+type ContentRoot = Pick<LibraryContent, 'idx' | 'type' | 'status' | 'sourceUrl'>;
 
-/** The fields a chapter adds, once the request has been checked for them. */
-type ChapterBlock = Pick<NovelChapter, 'title' | 'language' | 'words'>;
-
-/** The fields an asset adds, likewise. */
-type AssetBlock = Pick<ImageAsset, 'filename' | 'filesize'>;
-
-/** One piece of content a source is known to hold, as discovery reports it. */
-export interface DiscoveredContent {
-  index: number;
-  title: string;
-  sourceUrl: string;
+/** The four content blocks, as an update hands them over. */
+interface ContentBlockInput {
+  textContent?: TextContentDto | null;
+  audioContent?: AudioContentDto | null;
+  imageContent?: ImageContentDto | null;
+  videoContent?: VideoContentDto | null;
 }
 
-/** What a completed scrape leaves on the row: where the bytes are, and how long they run. */
-export interface ScrapedRow {
-  contentUrl: string;
-  words: number;
-}
+/** Which content types a library item's type may hold. Audio narration is not built yet. */
+const ALLOWED_CONTENT_TYPES: Record<LibraryItemType, LibraryContentType[]> = {
+  [LibraryItemType.Novel]: [LibraryContentType.Original, LibraryContentType.Translation],
+  [LibraryItemType.Image]: [LibraryContentType.Image],
+  [LibraryItemType.Video]: [LibraryContentType.Video],
+};
 
 /**
- * The rules for what a library item holds: which fields belong to which type of
- * row, where a chapter's number comes from, and what the item's counters say once
- * the row has landed.
+ * The rules for one library item's content: which of the four blocks belongs to
+ * which row type, what a request is refused for, and what a listing is narrowed
+ * and searched by.
  *
- * Framework-free — the two repositories and nothing else — so its spec needs no
- * Nest fixture.
+ * Framework-free — the repository and nothing else — so its spec needs no Nest
+ * fixture.
  */
 @Injectable()
 export class LibraryContentManager {
-  constructor(
-    private readonly contents: LibraryContentRepository,
-    private readonly items: LibraryItemRepository,
-    private readonly translations: LibraryTranslationManager,
-  ) {}
+  constructor(private readonly repository: LibraryRepository) {}
 
   /**
    * One page of an item's content.
    *
-   * Firestore orders it and narrows by `status`; the search and the slice happen
-   * here, over what comes back — part 1's shape, and what keeps the subcollection
-   * free of composite indexes.
+   * Firestore orders it and narrows by `type` and `status`; the language match,
+   * the search and the slice happen here, over what comes back — the same
+   * bargain `LibraryItemManager.list` strikes for the item listing.
    */
   async list(itemId: string, query: QueryListLibraryContentsDto): Promise<LibraryContentPageDto> {
     const item = await this.requireItem(itemId);
-    const matching = await this.contents.findMatching(itemId, { type: item.type, status: query.status });
-    const found = matching.filter((content) => matchesSearch(content, query.search));
+
+    checkLanguageAllowed(item.type, query.language);
+
+    const matching = await this.repository.searchLibraryContents(itemId, { type: query.type, status: query.status });
+    const found = matching.filter((content) => matchesLanguage(content, query.language) && matchesSearch(content, query.search));
     const from = (query.page - 1) * query.pageSize;
 
     return {
-      // Translations are folded onto the page rather than the scan: the slice is at
-      // most `pageSize` rows, and the search that narrowed it ran over the source
-      // titles — see the known limits in the part 4 plan.
-      items: await this.translations.decorate(item, query.language, found.slice(from, from + query.pageSize)),
+      items: found.slice(from, from + query.pageSize).map(toDto),
       total: found.length,
       page: query.page,
       pageSize: query.pageSize,
     };
   }
 
-  async get(itemId: string, contentId: string, language?: TranslationLanguage): Promise<TranslatedContent> {
+  async get(itemId: string, contentId: string): Promise<LibraryContentDto> {
+    await this.requireItem(itemId);
+
+    return toDto(await this.requireContent(itemId, contentId));
+  }
+
+  async create(itemId: string, input: CreateLibraryContentDto): Promise<LibraryContentDto> {
     const item = await this.requireItem(itemId);
-    const stored = await this.requireContent(itemId, contentId);
-    // One row in, one row out — `decorate` maps rather than filters.
-    const [decorated] = await this.translations.decorate(item, language, [stored]);
 
-    return decorated;
+    checkStatus(input.status);
+
+    return toDto(await this.repository.createLibraryContent(itemId, draftOf(item.type, input)));
   }
 
-  /**
-   * The row, or null where there is none. For a caller that has no 404 to give: a
-   * queued message names a row that may have been deleted since, and that is an
-   * outcome rather than a failure.
-   */
-  find(itemId: string, contentId: string): Promise<LibraryContent | null> {
-    return this.contents.findOne(itemId, contentId);
-  }
-
-  /** The source row. A translation is written by `replace`, never created on its own. */
-  async create(itemId: string, input: CreateLibraryContentDto): Promise<TranslatedContent> {
-    const item = await this.requireItem(itemId);
-    const created = await this.contents.create(itemId, await this.newDraft(item, input));
-
-    await this.recount(item);
-
-    return untranslated(created);
-  }
-
-  /**
-   * The whole writable representation, so an omitted field is a cleared field.
-   *
-   * With a language it writes the translation instead, and the source chapter is
-   * left exactly as it was — which is also why the counters do not move: they say
-   * how much of the *source* we hold, and translating a chapter downloads nothing.
-   */
-  async replace(itemId: string, contentId: string, input: UpdateLibraryContentDto, language?: TranslationLanguage): Promise<TranslatedContent> {
+  /** The whole writable representation, so an omitted field is a cleared field. */
+  async replace(itemId: string, contentId: string, input: UpdateLibraryContentDto): Promise<LibraryContentDto> {
     const item = await this.requireItem(itemId);
     const stored = await this.requireContent(itemId, contentId);
 
-    if (language) {
-      return this.translations.save(item, language, stored, input);
-    }
+    checkImmutable(stored, input);
+    checkStatus(input.status);
 
-    const replaced = await this.contents.replace(itemId, stored, nextDraft(stored, input));
+    const updated = await this.repository.updateLibraryContent(itemId, contentId, draftOf(item.type, input));
 
-    await this.recount(item);
-
-    return untranslated(replaced);
+    return toDto(updated);
   }
 
   async remove(itemId: string, contentId: string): Promise<void> {
-    const item = await this.requireItem(itemId);
-
+    await this.requireItem(itemId);
     await this.requireContent(itemId, contentId);
-    await this.contents.remove(itemId, contentId);
-    // Firestore does not cascade, and a translation of a chapter that is gone is a
-    // document nothing can reach.
-    await this.translations.removeFor(itemId, contentId);
-    await this.recount(item);
-  }
-
-  /**
-   * The pieces the source has and we do not, appended as placeholders.
-   *
-   * Matched on `sourceUrl` — the source's own key, and the only field that survives
-   * a retitling or a chapter inserted above it. Answers with how many landed, so a
-   * caller can say so.
-   */
-  async appendDiscovered(itemId: string, found: DiscoveredContent[]): Promise<number> {
-    const item = await this.requireItem(itemId);
-
-    // A chapter is the only row this can build. An asset would need a filename and
-    // a size, and discovery reports neither — see `assetBlock`.
-    if (item.type !== LibraryItemType.Novel) {
-      throw new NotImplementedException(`Discovering the content of a ${item.type} set is not described yet`);
-    }
-
-    const stored = await this.contents.findMatching(itemId, { type: item.type });
-    const known = new Set(stored.map((content) => content.sourceUrl).filter(Boolean));
-    const fresh = found.filter((content) => !known.has(content.sourceUrl));
-
-    // Nothing new writes nothing and recounts nothing: a second run costs one read.
-    if (fresh.length === 0) {
-      return 0;
-    }
-
-    await this.contents.createMany(itemId, fresh.map((content) => chapterDraft(item, content)));
-    await this.recount(item);
-
-    return fresh.length;
-  }
-
-  /**
-   * Every chapter of a novel, in reading order — what a job selects from.
-   *
-   * Unpaged: a job is described against the whole novel, and the range it was given
-   * is meaningless over a slice of it.
-   */
-  async chapters(itemId: string): Promise<NovelChapter[]> {
-    const item = await this.requireItem(itemId);
-
-    if (item.type !== LibraryItemType.Novel) {
-      throw new NotImplementedException(`A ${item.type} set has no chapters to scrape`);
-    }
-
-    const stored = await this.contents.findMatching(itemId, { type: item.type });
-
-    // The query ordered by `index`, which only a chapter has — so every row it
-    // answered with is one.
-    return stored.filter((content): content is NovelChapter => content.type === LibraryItemType.Novel);
-  }
-
-  async markQueued(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
-    const item = await this.requireItem(itemId);
-
-    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Pending);
-    return this.recount(item);
-  }
-
-  async markScraping(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
-    const item = await this.requireItem(itemId);
-    
-    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Scraping);
-    return this.recount(item);
-  }
-
-  async markFailed(itemId: string, contentIds: string[]): Promise<LibraryContentCounts> {
-    const item = await this.requireItem(itemId);
-
-    await this.contents.updateStatus(itemId, contentIds, LibraryContentStatus.Failed);
-    return this.recount(item);
-  }
-
-  /**
-   * The bytes are stored, so the row points at them and the item is recounted.
-   *
-   * Answers with the counts `recount()` has just written, which is how a caller
-   * knows whether this was the last one.
-   */
-  async completeScrape(itemId: string, contentId: string, stored: ScrapedRow): Promise<LibraryContentCounts> {
-    const item = await this.requireItem(itemId);
-
-    await this.contents.patch(itemId, contentId, { status: LibraryContentStatus.Completed, contentUrl: stored.contentUrl, words: stored.words });
-
-    return this.recount(item);
-  }
-
- 
-
-  /**
-   * A brand new row. `index` is read from the store rather than sent, so "Add
-   * chapter" is a title and nothing else.
-   */
-  private async newDraft(item: LibraryItem, input: CreateLibraryContentDto): Promise<LibraryContentDraft> {
-    const root = rootOf(input);
-
-    switch (item.type) {
-      case LibraryItemType.Novel:
-        return { ...root, type: item.type, index: input.index ?? (await this.contents.highestIndex(item.id)) + 1, ...chapterBlock(input) };
-      // The two asset cases have one body and stay two, because each narrows the
-      // draft to the shape its type carries; merged, neither would.
-      case LibraryItemType.Image:
-        return { ...root, type: item.type, ...assetBlock(input, item.type) };
-      case LibraryItemType.Video:
-        return { ...root, type: item.type, ...assetBlock(input, item.type) };
-    }
-  }
-
-  /**
-   * What the item holds, after its content changed.
-   *
-   * Read back as aggregations rather than tracked as deltas: a count that is
-   * recomputed cannot drift, and a novel of twelve hundred chapters costs the same
-   * as one of twelve.
-   */
-  public async recount(item: LibraryItem): Promise<LibraryContentCounts> {
-    const counts = await this.contents.counts(item.id);
-
-    await this.items.updateCounters(item.id, {
-      discoveredCount: counts.total,
-      downloadedCount: counts.completed,
-      // A novel's metadata has no size field, so it is left out rather than added.
-      downloadedSize: item.type === LibraryItemType.Novel ? undefined : counts.bytes,
-    });
-
-    return counts;
+    await this.repository.deleteLibraryContent(itemId, contentId);
   }
 
   /** The item, or the 404 every route that names one owes. */
   private async requireItem(itemId: string): Promise<LibraryItem> {
-    const item = await this.items.findById(itemId);
+    const item = await this.repository.findLibrary(itemId);
 
     if (!item) {
       throw new NotFoundException(`No library item ${itemId}`);
@@ -271,13 +105,9 @@ export class LibraryContentManager {
     return item;
   }
 
-  /**
-   * The row, or a 404. Content of another item is not reachable from here — the
-   * subcollection path makes a cross-item read impossible rather than merely
-   * refused.
-   */
+  /** The row, or a 404. Content of another item is not reachable from here. */
   private async requireContent(itemId: string, contentId: string): Promise<LibraryContent> {
-    const content = await this.contents.findOne(itemId, contentId);
+    const content = await this.repository.findLibraryContent(itemId, contentId);
 
     if (!content) {
       throw new NotFoundException(`No content ${contentId} in library item ${itemId}`);
@@ -287,86 +117,147 @@ export class LibraryContentManager {
   }
 }
 
-/** The stored row, rewritten. Its type is the item's, and never the request's to move. */
-function nextDraft(stored: LibraryContent, input: UpdateLibraryContentDto): LibraryContentDraft {
-  // `sourceUrl` is the one root field a PUT does not rewrite. It is where the row came
-  // from — the key `appendDiscovered` matches on, and the only address a re-scrape
-  // has — so it belongs to discovery rather than to whoever is editing the text. Left
-  // to `rootOf`, a save that omitted it cleared it, and the chapter could never be
-  // fetched again: `ScrapingJobManager.start` drops a row with no source and counts it
-  // as skipped.
-  const root = { ...rootOf(input), sourceUrl: stored.sourceUrl };
+/**
+ * A row as a create or a replace hands it over. `type` decides which of the
+ * four blocks is read, and the other three are refused rather than ignored.
+ */
+function draftOf(itemType: LibraryItemType, input: CreateLibraryContentDto | UpdateLibraryContentDto): LibraryContentDraft {
+  checkContentTypeAllowed(itemType, input.type);
+  checkContentBlockMatchesType(input.type, input);
 
-  switch (stored.type) {
-    // `index` is the one field an omission does not clear: a chapter has no "no
-    // number" state, so leaving it out means leaving it where it is.
-    case LibraryItemType.Novel:
-      return { ...root, type: stored.type, index: input.index ?? stored.index, ...chapterBlock(input) };
-    case LibraryItemType.Image:
-      return { ...root, type: stored.type, ...assetBlock(input, stored.type) };
-    case LibraryItemType.Video:
-      return { ...root, type: stored.type, ...assetBlock(input, stored.type) };
+  const root: ContentRoot = { idx: input.idx, type: input.type, status: input.status, sourceUrl: input.sourceUrl ?? null };
+
+  switch (input.type) {
+    case LibraryContentType.Original:
+    case LibraryContentType.Translation:
+      return { ...root, type: input.type, ...textBlock(input) };
+    case LibraryContentType.Audio:
+      return { ...root, type: input.type, ...audioBlock(input) };
+    case LibraryContentType.Image:
+      return { ...root, type: input.type, ...imageBlock(input) };
+    case LibraryContentType.Video:
+      return { ...root, type: input.type, ...videoBlock(input) };
+  }
+}
+
+/** Only a novel holds text, only an image set holds images, only a video set holds clips. */
+function checkContentTypeAllowed(itemType: LibraryItemType, type: LibraryContentType): void {
+  if (!ALLOWED_CONTENT_TYPES[itemType].includes(type)) {
+    throw new BadRequestException(`A ${itemType} item has no content of type \`${type}\``);
   }
 }
 
 /**
- * What the row is, whatever its type: where it came from, where its bytes are, and
- * therefore where it stands. `status` is derived rather than sent — a row with a URL
- * holds something and a row without one does not, and no third answer is a client's
- * to give. The two states discovery and the runner set are theirs alone.
+ * Only the block matching `type` may be filled — a chapter carrying an asset's
+ * fields, or the other way round, is a mistake worth saying out loud.
  */
-function rootOf(input: CreateLibraryContentDto): ContentRoot {
-  const contentUrl = input.contentUrl ?? null;
+function checkContentBlockMatchesType(type: LibraryContentType, input: ContentBlockInput): void {
+  const isText = type === LibraryContentType.Original || type === LibraryContentType.Translation;
+  const blocks: [boolean, string, unknown][] = [
+    [isText, 'textContent', input.textContent],
+    [type === LibraryContentType.Audio, 'audioContent', input.audioContent],
+    [type === LibraryContentType.Image, 'imageContent', input.imageContent],
+    [type === LibraryContentType.Video, 'videoContent', input.videoContent],
+  ];
 
-  return { sourceUrl: input.sourceUrl ?? null, contentUrl, status: contentUrl ? LibraryContentStatus.Completed : LibraryContentStatus.Pending };
+  const stray = blocks.filter(([matches, , value]) => !matches && value != null).map(([, field]) => field);
+
+  if (stray.length > 0) {
+    throw new BadRequestException(`Content of type \`${type}\` has no ${stray.join(', ')}`);
+  }
 }
 
-/** A chapter is a title and the text under it — and is refused the fields of a file. */
-function chapterBlock(input: CreateLibraryContentDto): ChapterBlock {
-  const title = input.title?.trim();
+function textBlock(input: ContentBlockInput): Pick<TextContent, 'contentUrl' | 'language' | 'title' | 'words'> {
+  const title = input.textContent?.title?.trim();
+  const language = input.textContent?.language;
 
   if (!title) {
     throw new BadRequestException('A chapter needs a title');
   }
 
-  if (input.filename !== undefined || input.filesize !== undefined) {
-    throw new BadRequestException('A chapter is not a file — leave `filename` and `filesize` out');
+  if (!language) {
+    throw new BadRequestException('A chapter needs a language');
   }
 
-  return { title, language: input.language ?? '', words: input.words ?? 0 };
+  return { contentUrl: input.textContent?.contentUrl ?? null, language, title, words: input.textContent?.words ?? 0 };
 }
 
-/**
- * One chapter the source turned out to hold: its numbering and its title verbatim,
- * a placeholder for the text, and the language off the item — which the wizard set
- * from the crawler at creation, so discovery needs none of its own.
- */
-function chapterDraft(item: NovelItem, content: DiscoveredContent): LibraryContentDraft {
+function audioBlock(input: ContentBlockInput): Pick<AudioContent, 'contentUrl' | 'language' | 'subtitleUrl'> {
+  const language = input.audioContent?.language;
+
+  if (!language) {
+    throw new BadRequestException('An audio track needs a language');
+  }
+
+  return { contentUrl: input.audioContent?.contentUrl ?? null, language, subtitleUrl: input.audioContent?.subtitleUrl ?? null };
+}
+
+function imageBlock(input: ContentBlockInput): Pick<ImageContent, 'contentUrl' | 'filename' | 'filesize' | 'dimensions'> {
+  const filename = input.imageContent?.filename?.trim();
+
+  if (!filename) {
+    throw new BadRequestException('An image asset needs a filename');
+  }
+
+  return { contentUrl: input.imageContent?.contentUrl ?? null, filename, filesize: input.imageContent?.filesize ?? 0, dimensions: input.imageContent?.dimensions ?? '' };
+}
+
+function videoBlock(input: ContentBlockInput): Pick<VideoContent, 'contentUrl' | 'filename' | 'filesize' | 'dimensions' | 'duration'> {
+  const filename = input.videoContent?.filename?.trim();
+
+  if (!filename) {
+    throw new BadRequestException('A video asset needs a filename');
+  }
+
   return {
-    type: item.type,
-    index: content.index,
-    title: content.title,
-    language: item.metadata.language,
-    words: 0,
-    sourceUrl: content.sourceUrl,
-    contentUrl: null,
-    status: LibraryContentStatus.Discovered,
+    contentUrl: input.videoContent?.contentUrl ?? null,
+    filename,
+    filesize: input.videoContent?.filesize ?? 0,
+    dimensions: input.videoContent?.dimensions ?? '',
+    duration: input.videoContent?.duration ?? 0,
   };
 }
 
-/** An asset is a file — and is refused the fields of a chapter. */
-function assetBlock(input: CreateLibraryContentDto, type: LibraryItemType): AssetBlock {
-  const filename = input.filename?.trim();
-
-  if (!filename) {
-    throw new BadRequestException(`A ${type} asset needs a filename`);
+/** `WRITABLE_CONTENT_STATUSES` is the client's half — discovery and the job runner set the rest. */
+function checkStatus(status: LibraryContentStatus): void {
+  if (!WRITABLE_CONTENT_STATUSES.includes(status)) {
+    throw new BadRequestException(`\`${status}\` is discovery's or the job runner's to set, not a client's`);
   }
+}
 
-  if (input.index !== undefined || input.title !== undefined || input.language !== undefined || input.words !== undefined) {
-    throw new BadRequestException(`A ${type} asset is not a chapter — leave \`index\`, \`title\`, \`language\` and \`words\` out`);
+/** `type` decides the row's shape, so it cannot move under it. */
+function checkImmutable(stored: LibraryContent, input: UpdateLibraryContentDto): void {
+  if (input.type !== stored.type) {
+    throw new BadRequestException(`This content is a ${stored.type}, and a type cannot be changed after creation`);
   }
+}
 
-  return { filename, filesize: input.filesize ?? 0 };
+/** A `language` filter has nothing to match on an item whose content carries none. */
+function checkLanguageAllowed(itemType: LibraryItemType, language?: ContentLanguages): void {
+  if (language && itemType !== LibraryItemType.Novel) {
+    throw new BadRequestException(`A \`language\` filter has nothing to match on a ${itemType} item`);
+  }
+}
+
+/** Field by field rather than a spread, so a field the entity gains cannot arrive in a response by accident. */
+function toDto(content: LibraryContent): LibraryContentDto {
+  const isText = content.type === LibraryContentType.Original || content.type === LibraryContentType.Translation;
+
+  return {
+    id: content.id,
+    idx: content.idx,
+    type: content.type,
+    status: content.status,
+    sourceUrl: content.sourceUrl,
+    textContent: isText ? { contentUrl: content.contentUrl, language: content.language, title: content.title, words: content.words } : null,
+    audioContent: content.type === LibraryContentType.Audio ? { contentUrl: content.contentUrl, language: content.language, subtitleUrl: content.subtitleUrl } : null,
+    imageContent: content.type === LibraryContentType.Image ? { contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions } : null,
+    videoContent: content.type === LibraryContentType.Video
+      ? { contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions, duration: content.duration }
+      : null,
+    createdAt: content.createdAt,
+    updatedAt: content.updatedAt,
+  };
 }
 
 /** Across a chapter's title, or an asset's filename — whichever the row is named by. */
@@ -377,7 +268,16 @@ function matchesSearch(content: LibraryContent, search?: string): boolean {
     return true;
   }
 
-  const name = content.type === LibraryItemType.Novel ? content.title : content.filename;
+  const name = 'title' in content ? content.title : 'filename' in content ? content.filename : '';
 
   return name.toLowerCase().includes(needle);
+}
+
+/** Only a row with a language of its own — text or audio — can match one. */
+function matchesLanguage(content: LibraryContent, language?: ContentLanguages): boolean {
+  if (!language) {
+    return true;
+  }
+
+  return 'language' in content && content.language === language;
 }

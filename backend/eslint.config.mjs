@@ -13,13 +13,9 @@ export default tseslint.config(
     // Mirrors the `exclude` list in tsconfig.json.
     ignores: [
       'eslint.config.mjs',
-      'src/library/library-content.manager*.ts',
-      'src/library/library-content.repository.ts',
       'src/library/library-export.manager*.ts',
       'src/library/library-import.*.ts',
       'src/library/library-translation.*.ts',
-      'src/library/library.manager*.ts',
-      'src/library/library.repository.ts',
       'src/library/dto/library-package.dto.ts',
       'src/library/entities/library-package.entity.ts',
       'src/scraping/**',
@@ -45,14 +41,6 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       'max-len': 'off',
-    },
-  },
-  {
-    // The controller is a contract skeleton: its handlers declare the parameters
-    // Swagger reads and answer 501, so none of them is used yet.
-    files: ['src/library/library.controller.ts'],
-    rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
 );

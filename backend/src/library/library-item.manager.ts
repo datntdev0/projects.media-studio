@@ -4,7 +4,7 @@ import { ImageSetMetadataDto, LibraryItemDto, LibraryItemPageDto, NovelMetadataD
 import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
 import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelMetadata, NovelStatus } from './entities/library-item.entity';
-import { LibraryItemRepository } from './library-item.repository';
+import { LibraryRepository } from './library.repository';
 
 /** What a manual item's source is called — it is its own. */
 const MANUAL_SOURCE = 'Manual';
@@ -31,7 +31,7 @@ interface MetadataInput {
  */
 @Injectable()
 export class LibraryItemManager {
-  constructor(private readonly repository: LibraryItemRepository) {}
+  constructor(private readonly repository: LibraryRepository) {}
 
   /**
    * One page of the listing.
@@ -42,7 +42,7 @@ export class LibraryItemManager {
    * scan limit the honest ceiling on the catalogue's size.
    */
   async list(query: QueryListLibraryItemsDto): Promise<LibraryItemPageDto> {
-    const matching = await this.repository.findMatching({ type: query.type, status: query.status, sourceMode: query.sourceMode });
+    const matching = await this.repository.searchLibraries({ type: query.type, status: query.status, sourceMode: query.sourceMode });
     const found = matching.filter((item) => matchesSearch(item, query.search)).sort(byRecentChange);
     const from = (query.page - 1) * query.pageSize;
 
@@ -71,7 +71,7 @@ export class LibraryItemManager {
       ...source(input),
     };
 
-    return toDto(await this.repository.create(newDraft(input.type, root, input)));
+    return toDto(await this.repository.createLibrary(newDraft(input.type, root, input)));
   }
 
   /** The whole writable representation, so an omitted field is a cleared field. */
@@ -90,7 +90,7 @@ export class LibraryItemManager {
       ...source(input),
     };
 
-    const updated = await this.repository.update(id, { ...stored, ...nextDraft(stored, root, input) });
+    const updated = await this.repository.updateLibrary(id, { ...stored, ...nextDraft(stored, root, input) });
 
     return toDto(updated);
   }
@@ -98,12 +98,12 @@ export class LibraryItemManager {
   /** The item. Every chapter, image or clip filed under it is another team's cascade. */
   async remove(id: string): Promise<void> {
     await this.require(id);
-    await this.repository.delete(id);
+    await this.repository.deleteLibrary(id);
   }
 
   /** The item, or the 404 every route that names one owes. */
   private async require(id: string): Promise<LibraryItem> {
-    const item = await this.repository.findById(id);
+    const item = await this.repository.findLibrary(id);
 
     if (!item) {
       throw new NotFoundException(`No library item ${id}`);

@@ -1,4 +1,4 @@
-import { ContentLanguages, LibraryContentType } from "../entities/library-content.entity";
+import { ContentLanguages, LibraryContentStatus, LibraryContentType } from "../entities/library-content.entity";
 
 export const MAX_SEARCH = 200;
 
@@ -19,3 +19,6 @@ export const MAX_LANGUAGE = 32;
 export const MAX_URL = 2048;
 
 export const MAX_INDEX = 1_000_000;
+
+/** `discovered`, `inprogress` and `failed` are discovery's and the job runner's to set. */
+export const WRITABLE_CONTENT_STATUSES = [LibraryContentStatus.Pending, LibraryContentStatus.Completed];
