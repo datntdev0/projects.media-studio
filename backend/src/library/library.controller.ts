@@ -7,7 +7,7 @@ import { UpdateLibraryContentDto } from './dto/library-content.dto-update';
 import { LibraryItemDto, LibraryItemPageDto, QueryListLibraryItemsDto } from './dto/library-item.dto';
 import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
-import { LibraryManager } from './library.manager';
+import { LibraryItemManager } from './library-item.manager';
 
 /** Every route naming an item that is not there says so the same way. */
 const NOT_FOUND = 'No item under that id.';
@@ -29,7 +29,7 @@ const WRONG_LANGUAGE = 'A `language` on an image or video set, or one that is no
 @ApiTags('Library')
 @Controller("library")
 export class LibraryController {
-  constructor(private readonly manager: LibraryManager) {}
+  constructor(private readonly manager: LibraryItemManager) {}
 
   @Get()
   @ApiOkResponse({ type: LibraryItemPageDto })

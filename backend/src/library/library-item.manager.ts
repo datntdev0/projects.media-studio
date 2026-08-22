@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { WRITABLE_STATUSES } from './dto/library-item.constants';
-import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { ImageSetMetadataDto, LibraryItemDto, LibraryItemPageDto, NovelMetadataDto, QueryListLibraryItemsDto, VideoSetMetadataDto } from './dto/library-item.dto';
+import { CreateLibraryItemDto } from './dto/library-item.dto-create';
 import { UpdateLibraryItemDto } from './dto/library-item.dto-update';
 import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelMetadata, NovelStatus } from './entities/library-item.entity';
-import { LibraryItemDraft, LibraryRepository } from './library.repository';
+import { LibraryItemRepository } from './library-item.repository';
 
 /** What a manual item's source is called — it is its own. */
 const MANUAL_SOURCE = 'Manual';
+
+/** An item as a caller hands it over — the id and the dates are this class's to stamp. */
+type LibraryItemDraft = Omit<LibraryItem, 'id' | 'createdAt' | 'updatedAt'>;
 
 /** What every draft carries whatever its type: the root, minus the three metadata slots. */
 type LibraryItemRoot = Omit<LibraryItemDraft, 'novelMetadata' | 'imageMetadata' | 'videoMetadata'>;
@@ -27,8 +30,8 @@ interface MetadataInput {
  * spec needs no Nest fixture.
  */
 @Injectable()
-export class LibraryManager {
-  constructor(private readonly repository: LibraryRepository) {}
+export class LibraryItemManager {
+  constructor(private readonly repository: LibraryItemRepository) {}
 
   /**
    * One page of the listing.
@@ -87,7 +90,9 @@ export class LibraryManager {
       ...source(input),
     };
 
-    return toDto(await this.repository.replace(stored, nextDraft(stored, root, input)));
+    const updated = await this.repository.update(id, { ...stored, ...nextDraft(stored, root, input) });
+
+    return toDto(updated);
   }
 
   /** The item. Every chapter, image or clip filed under it is another team's cascade. */

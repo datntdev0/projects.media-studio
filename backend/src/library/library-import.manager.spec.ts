@@ -16,8 +16,8 @@ import { ImportConflict, PackageCheckState } from './entities/library-package.en
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryImportManager } from './library-import.manager';
 import { LibraryImportWriter } from './library-import.writer';
-import { LibraryManager } from './library.manager';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemManager } from './library-item.manager';
+import { LibraryItemRepository } from './library-item.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
 
@@ -146,12 +146,12 @@ class Around {
 }
 
 function managerOver(packaged: FakeArchive, item: LibraryItem | null = novel(), chapters: NovelChapter[] = [], around = new Around()) {
-  const items = { findById: () => Promise.resolve(item) } as unknown as LibraryRepository;
+  const items = { findById: () => Promise.resolve(item) } as unknown as LibraryItemRepository;
   const contents = { chapters: () => Promise.resolve(chapters) } as unknown as LibraryContentManager;
 
   return new LibraryImportManager(
     items,
-    around.library as unknown as LibraryManager,
+    around.library as unknown as LibraryItemManager,
     contents,
     around.writer as unknown as LibraryImportWriter,
     packaged as unknown as ArchiveProvider,

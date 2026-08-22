@@ -23,15 +23,11 @@ export interface SystemRecord extends FirestoreEntity {
   name: string;
   version: string;
   schemaVersion: number;
-  /** The environment that build was configured for. */
   environment: NodeEnv;
-  /** The version its versioned endpoints answer on when a client names none. */
   apiVersion: string;
-  /** First boot against this database. Written once, never rewritten. */
   installedAt: string;
-  /** Rewritten on every boot. */
   lastStartedAt: string;
 }
 
 /** What the service reports: the record, minus the id a client has nothing to do with. */
-export type SystemInfo = Omit<SystemRecord, 'id'>;
+export type SystemInfo = Omit<SystemRecord, 'id' | 'createdAt' | 'updatedAt'>;

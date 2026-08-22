@@ -4,18 +4,10 @@ import { FirebaseAdminService } from './firebase-admin.service';
 /** Anything a repository hands back: the document, carrying its own id. */
 export interface FirestoreEntity {
   id: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-/**
- * What every repository shares: where its documents live, and how one becomes a
- * domain object.
- *
- * Deliberately small. It owns the two things that would otherwise be rewritten
- * per collection — the collection reference and the mapping — and stops there.
- * Queries are not generic: a repository that needs one writes it, in terms its
- * own domain uses, rather than inheriting a `find(criteria)` that has to be
- * general enough for everything and is therefore honest about nothing.
- */
 export abstract class FirestoreRepository<T extends FirestoreEntity> {
   protected abstract readonly collectionName: string;
 
@@ -33,6 +25,18 @@ export abstract class FirestoreRepository<T extends FirestoreEntity> {
     return this.toEntity(await this.collection.doc(id).get());
   }
 
+  async create(draft: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<T> {
+    const document = this.collection.doc();
+    const now = Timestamp.now();
+    await document.set({ ...draft, createdAt: now, updatedAt: now });
+    return this.toEntity(await document.get())!;
+  }
+
+  async update(id: string, update: Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>): Promise<T> {
+    await this.collection.doc(id).update({ ...update, updatedAt: Timestamp.now() });
+    return this.toEntity(await this.collection.doc(id).get())!;
+  }
+
   async delete(id: string): Promise<void> {
     await this.collection.doc(id).delete();
   }
@@ -42,19 +46,7 @@ export abstract class FirestoreRepository<T extends FirestoreEntity> {
   }
 }
 
-/**
- * A document as the domain sees it: the id it is filed under, and its data with
- * every `Timestamp` flattened to an ISO string.
- *
- * The conversion is the point. A `Timestamp` is a Firestore type, and letting one
- * past this line would put the driver in the DTOs, the specs and the JSON — where
- * an ISO string is what everything already speaks.
- *
- * Free rather than only a method, because a subcollection is keyed by two ids and
- * so cannot inherit the one-key `findById` and `delete` above. Such a repository
- * still wants this mapping, and this is how it reaches it.
- */
-export function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot): T | null {
+function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot): T | null {
   const data = snapshot.data();
 
   if (!data) {
@@ -64,7 +56,6 @@ export function entityFrom<T extends FirestoreEntity>(snapshot: DocumentSnapshot
   return { id: snapshot.id, ...plain(data) } as T;
 }
 
-/** Recursive: timestamps nest inside maps and arrays as readily as at the root. */
 function plain(data: DocumentData): DocumentData {
   return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, plainValue(value)]));
 }

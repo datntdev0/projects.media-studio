@@ -5,7 +5,7 @@ import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '..
 import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryItemType, LibrarySourceMode, NovelStatus } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
-import { LibraryManager } from '../library/library.manager';
+import { LibraryItemManager } from '../library/library-item.manager';
 import { validateSourceUrl, Crawler, hostOf, requireCrawler } from './crawlers';
 import { DiscoverDto } from './dto/discover.dto';
 import { NovelPreviewDto, PreviewDto } from './dto/preview.dto';
@@ -32,7 +32,7 @@ export class ScrapingManager {
     private readonly scraping: ScrapingProvider,
     private readonly cache: CacheProvider,
     private readonly config: AppConfigService,
-    private readonly library: LibraryManager,
+    private readonly library: LibraryItemManager,
     private readonly contents: LibraryContentManager,
   ) {}
 

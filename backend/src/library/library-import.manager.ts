@@ -11,8 +11,8 @@ import { CHAPTERS_ENTRY, ITEM_ENTRY, ImportConflict, MANIFEST_ENTRY, NOT_PACKAGE
 import { LibraryContentManager } from './library-content.manager';
 import { report } from './library-import.report';
 import { LibraryImportWriter, bodyCount } from './library-import.writer';
-import { LibraryManager } from './library.manager';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemManager } from './library-item.manager';
+import { LibraryItemRepository } from './library-item.repository';
 
 /** What a package with nothing to read by is refused with. Its cause is logged, not shown. */
 const NO_MANIFEST = `The package has no readable ${MANIFEST_ENTRY}`;
@@ -59,8 +59,8 @@ export class LibraryImportManager {
   private readonly logger = new Logger(LibraryImportManager.name);
 
   constructor(
-    private readonly items: LibraryRepository,
-    private readonly library: LibraryManager,
+    private readonly items: LibraryItemRepository,
+    private readonly library: LibraryItemManager,
     private readonly contents: LibraryContentManager,
     private readonly writer: LibraryImportWriter,
     private readonly archive: ArchiveProvider,

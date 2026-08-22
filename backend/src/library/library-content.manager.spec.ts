@@ -12,7 +12,7 @@ import { TranslatedContent, TranslationLanguage } from './entities/library-trans
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryContentCounts, LibraryContentDraft, LibraryContentFilter, LibraryContentPatch, LibraryContentRepository } from './library-content.repository';
 import { LibraryTranslationManager } from './library-translation.manager';
-import { LibraryItemCounters, LibraryRepository } from './library.repository';
+import { LibraryItemCounters, LibraryItemRepository } from './library-item.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
 
@@ -134,7 +134,7 @@ class FakeTranslationManager {
 }
 
 function managerOver(contents: FakeContentRepository, items: FakeItemRepository, translations = new FakeTranslationManager()): LibraryContentManager {
-  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryRepository, translations as unknown as LibraryTranslationManager);
+  return new LibraryContentManager(contents as unknown as LibraryContentRepository, items as unknown as LibraryItemRepository, translations as unknown as LibraryTranslationManager);
 }
 
 function novel(over: Partial<NovelItem> = {}): NovelItem {

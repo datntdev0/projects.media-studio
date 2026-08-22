@@ -3,13 +3,13 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { SYSTEM_COLLECTION } from '../core/firebase/collections';
 import { FirebaseAdminService } from '../core/firebase/firebase-admin.service';
 import { FirestoreRepository } from '../core/firebase/firestore.repository';
-import { SystemRecord } from './entities/system-info.entity';
+import { SystemInfo, SystemRecord } from './entities/system-info.entity';
 
 /** The collection holds one document, and this is it. */
 const CURRENT = 'current';
 
 /** What a boot knows about itself. The dates are this class's own. */
-export type SystemBuild = Omit<SystemRecord, 'id' | 'installedAt' | 'lastStartedAt'>;
+export type SystemBuild = Omit<SystemInfo, 'id' | 'installedAt' | 'lastStartedAt'>;
 
 /**
  * The service's own record of itself.
@@ -59,6 +59,8 @@ export class SystemRepository extends FirestoreRepository<SystemRecord> {
       ...build,
       installedAt: installedAt.toDate().toISOString(),
       lastStartedAt: startedAt.toDate().toISOString(),
+      createdAt: installedAt.toDate().toISOString(),
+      updatedAt: startedAt.toDate().toISOString(),
     };
   }
 }

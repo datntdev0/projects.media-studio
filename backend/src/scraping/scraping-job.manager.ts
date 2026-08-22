@@ -8,7 +8,7 @@ import { LibraryItemDto } from '../library/dto/library-item.dto';
 import { LibraryContent, LibraryContentStatus, NovelChapter } from '../library/entities/library-content.entity';
 import { LibraryItemType, LibrarySourceMode } from '../library/entities/library-item.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
-import { LibraryManager } from '../library/library.manager';
+import { LibraryItemManager } from '../library/library-item.manager';
 import { validateSourceUrl, Crawler, requireCrawler } from './crawlers';
 import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
 import { CreateScrapingJobDto, ScrapingJobDto, ScrapingJobPageDto } from './dto/scraping-job.dto';
@@ -69,7 +69,7 @@ export class ScrapingJobManager {
   private readonly logger = new Logger(ScrapingJobManager.name);
 
   constructor(
-    private readonly libraryManager: LibraryManager,
+    private readonly libraryManager: LibraryItemManager,
     private readonly libraryContentManager: LibraryContentManager,
     private readonly scrapingJobRepository: ScrapingJobRepository,
     private readonly producer: QueueProducer,

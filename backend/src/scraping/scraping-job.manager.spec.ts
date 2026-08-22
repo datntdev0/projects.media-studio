@@ -13,7 +13,7 @@ import { LibraryContent, LibraryContentStatus, NovelChapter } from '../library/e
 import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from '../library/entities/library-item.entity';
 import { LibraryContentCounts } from '../library/library-content.repository';
 import { LibraryContentManager, ScrapedRow } from '../library/library-content.manager';
-import { LibraryManager } from '../library/library.manager';
+import { LibraryItemManager } from '../library/library-item.manager';
 import { QueryListScrapingJobsDto, ScrapingJobState } from './dto/query-list-scraping-jobs.dto';
 import { CreateScrapingJobDto } from './dto/scraping-job.dto';
 import { ScrapingJob, ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
@@ -187,7 +187,7 @@ function fixture(options: { items?: LibraryItem[], rows?: LibraryContent[], scra
   };
 
   const manager = new ScrapingJobManager(
-    library as unknown as LibraryManager,
+    library as unknown as LibraryItemManager,
     contents as unknown as LibraryContentManager,
     jobs as unknown as ScrapingJobRepository,
     producer as unknown as QueueProducer,

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LibraryController } from './library.controller';
-import { LibraryManager } from './library.manager';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemManager } from './library-item.manager';
+import { LibraryItemRepository } from './library-item.repository';
 
 /**
  * The content, translation and media providers, and the import consumer, are
@@ -10,6 +10,6 @@ import { LibraryRepository } from './library.repository';
  */
 @Module({
   controllers: [LibraryController],
-  providers: [LibraryManager, LibraryRepository],
+  providers: [LibraryItemManager, LibraryItemRepository],
 })
 export class LibraryModule {}

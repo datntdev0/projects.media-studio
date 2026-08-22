@@ -9,7 +9,7 @@ import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ScrapedChapter, ScrapedCover, ScrapedNovel, ScrapingProvider } from '../core/providers/scraping.provider';
 import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelItem, NovelStatus } from '../library/entities/library-item.entity';
 import { DiscoveredContent, LibraryContentManager } from '../library/library-content.manager';
-import { LibraryManager } from '../library/library.manager';
+import { LibraryItemManager } from '../library/library-item.manager';
 import { PreviewDto } from './dto/preview.dto';
 import { ScrapingManager } from './scraping.manager';
 
@@ -179,7 +179,7 @@ function fixture(items: LibraryItem[] = [novel()]) {
     scraping as unknown as ScrapingProvider,
     cache as unknown as CacheProvider,
     config,
-    library as unknown as LibraryManager,
+    library as unknown as LibraryItemManager,
     contents as unknown as LibraryContentManager,
   );
 

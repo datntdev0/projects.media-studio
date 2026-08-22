@@ -13,7 +13,7 @@ import { TRANSLATION_LANGUAGES, TranslationLanguage } from './entities/library-t
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryExportManager } from './library-export.manager';
 import { LibraryTranslationRepository } from './library-translation.repository';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemRepository } from './library-item.repository';
 
 const NOW = '2026-08-11T09:12:04.113Z';
 
@@ -123,7 +123,7 @@ interface Fixture {
 function managerOver({ item = novel(), chapters = [], translations = {} }: Fixture) {
   const archive = new FakeArchive();
 
-  const items = { findById: () => Promise.resolve(item) } as unknown as LibraryRepository;
+  const items = { findById: () => Promise.resolve(item) } as unknown as LibraryItemRepository;
   const contents = { chapters: () => Promise.resolve(chapters) } as unknown as LibraryContentManager;
 
   const stored = {

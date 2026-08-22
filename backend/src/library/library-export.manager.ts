@@ -12,7 +12,7 @@ import { CHAPTERS_ENTRY, ITEM_ENTRY, MANIFEST_ENTRY, NOT_PACKAGEABLE, PACKAGE_SC
 import { TRANSLATION_LANGUAGES, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentManager } from './library-content.manager';
 import { LibraryTranslationRepository } from './library-translation.repository';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemRepository } from './library-item.repository';
 
 /** Where a packed item is filed, beside `content/{itemId}/` and `covers/{itemId}/`. */
 const PACKAGE_PREFIX = 'packages';
@@ -41,7 +41,7 @@ interface PackagedLanguage {
 @Injectable()
 export class LibraryExportManager {
   constructor(
-    private readonly items: LibraryRepository,
+    private readonly items: LibraryItemRepository,
     private readonly contents: LibraryContentManager,
     private readonly translations: LibraryTranslationRepository,
     private readonly archive: ArchiveProvider,
@@ -193,7 +193,7 @@ async function copy(into: ArchiveWriter, bodies: PackagedBody[]): Promise<void> 
 
 /**
  * The item as a `POST /library` body, so an import that creates one passes this
- * straight to `LibraryManager.create` — a field added to an item is a field the
+ * straight to `LibraryItemManager.create` — a field added to an item is a field the
  * package carries without anything here changing.
  *
  * `coverUrl` is the exporting workspace's and is dead everywhere else. It is carried

@@ -8,7 +8,7 @@ import { LibraryItem, LibraryItemType, NovelItem } from './entities/library-item
 import { TranslatedContent, TranslationLanguage } from './entities/library-translation.entity';
 import { LibraryContentCounts, LibraryContentDraft, LibraryContentRepository } from './library-content.repository';
 import { LibraryTranslationManager, untranslated } from './library-translation.manager';
-import { LibraryRepository } from './library.repository';
+import { LibraryItemRepository } from './library-item.repository';
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
 type ContentRoot = Omit<LibraryContentBase, 'id' | 'createdAt' | 'updatedAt'>;
@@ -44,7 +44,7 @@ export interface ScrapedRow {
 export class LibraryContentManager {
   constructor(
     private readonly contents: LibraryContentRepository,
-    private readonly items: LibraryRepository,
+    private readonly items: LibraryItemRepository,
     private readonly translations: LibraryTranslationManager,
   ) {}
 
