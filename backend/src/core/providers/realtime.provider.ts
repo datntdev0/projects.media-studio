@@ -87,7 +87,7 @@ export interface LibraryImportSnapshot {
  * Every method funnels through `attempt`, which logs and swallows, and that is the whole
  * of this class's error handling — which is why no caller has a `try`.
  *
- * Two trees, one writer each. `ScrapingJobManager` writes the jobs; `LibraryImportWriter`
+ * Two trees, one writer each. `ScrapingManager` writes the jobs; `LibraryImportWriter`
  * writes the imports. The library's own managers keep their Firestore writes and publish
  * nothing, because a job's progress is the job's to publish.
  */

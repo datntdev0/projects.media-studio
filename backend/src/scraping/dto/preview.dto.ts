@@ -1,25 +1,30 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
 import { LibraryItemType, NovelStatus } from '../../library/entities/library-item.entity';
 
+const MAX_URL = 2048;
+
 /**
- * What the source says about a book, before anything is created.
- *
- * One shape doing three jobs: it is what the endpoint answers with, what the cache
- * stores, and what the review screen renders. That is what makes a cached answer a
- * parse rather than a re-derivation — and why the mapping out of the source's
- * vocabulary happens before any of the three.
+ * What to read, and with what. Two fields, because that is the whole question —
+ * everything else about the answer follows from the crawler's own entry.
  */
+export class PreviewRequestDto {
+  @ApiProperty({ description: 'One of the registered crawlers. A name that is not registered is a 404.', example: 'novel543' })
+  @IsString()
+  @MinLength(1)
+  crawler!: string;
 
-/** One chapter, as the source lists it. */
-export class PreviewChapterDto {
-  @ApiProperty({ description: 'Reading order, from 1.', example: 1 })
-  index!: number;
+  @ApiProperty({ description: "The book's URL on the source site. A URL on another site is a 400.", example: 'https://www.novel543.com/0413553971' })
+  @IsUrl()
+  @MaxLength(MAX_URL)
+  sourceUrl!: string;
 
-  @ApiProperty({ example: '第1章：雨中少女' })
-  title!: string;
-
-  @ApiProperty({ example: 'https://www.novel543.com/0413553971/8095_1.html' })
-  url!: string;
+  @ApiPropertyOptional({ description: 'Skip the cached answer and read the source again.', default: false })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  refresh: boolean = false;
 }
 
 /** The novel as we describe it, rather than as the source spells it. */
@@ -45,6 +50,9 @@ export class NovelPreviewMetadataDto {
   @ApiProperty({ example: 'A cartographer maps a coast that keeps moving.' })
   description!: string;
 
+  @ApiProperty({ description: 'How many chapters the source has, or how many it says it has.', example: 1305 })
+  chapters!: number;
+
   @ApiProperty({ description: 'The newest chapter, as the source names it.', example: '第1305章：力量的誘惑' })
   latest!: string;
 
@@ -62,9 +70,6 @@ export class NovelPreviewMetadataDto {
 export class NovelPreviewDto {
   @ApiProperty({ type: NovelPreviewMetadataDto })
   metadata!: NovelPreviewMetadataDto;
-
-  @ApiProperty({ type: [PreviewChapterDto], description: 'Every chapter, in reading order. The preview draws a count from it; the job runner will draw content.' })
-  chapters!: PreviewChapterDto[];
 
   @ApiProperty({
     type: String,
@@ -88,5 +93,5 @@ export class PreviewDto {
   type!: LibraryItemType;
 
   @ApiProperty({ type: NovelPreviewDto })
-  content!: NovelPreviewDto;
+  novelContent!: NovelPreviewDto;
 }

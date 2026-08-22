@@ -8,8 +8,8 @@ import { QueueMessage, QueueTopic, ScrapingJobRequested } from '../core/queues/q
 import { LibraryItemType } from '../library/entities/library-item.entity';
 import { ScrapingJob, ScrapingJobStatus } from './entities/scraping-job.entity';
 import { ScrapingJobPublishConsumer } from './scraping-job.handler';
-import { ScrapingJobManager } from './scraping-job.manager';
-import { ScrapingJobRepository } from './scraping-job.repository';
+import { ScrapingRepository } from './scraping.repository';
+import { ScrapingManager } from './scraping.manager';
 
 const NOW = '2026-08-11T09:12:04.113Z';
 
@@ -40,8 +40,8 @@ function record(status: ScrapingJobStatus): ScrapingJob {
 
 function fixture(job: ScrapingJob | null = record(ScrapingJobStatus.Queued)) {
   const manager = { publishScrapingTaskMessages: jest.fn().mockResolvedValue(undefined) };
-  const jobs = { findById: jest.fn().mockResolvedValue(job) };
-  const consumer = new ScrapingJobPublishConsumer(manager as unknown as ScrapingJobManager, jobs as unknown as ScrapingJobRepository);
+  const jobs = { findScrapingJob: jest.fn().mockResolvedValue(job) };
+  const consumer = new ScrapingJobPublishConsumer(manager as unknown as ScrapingManager, jobs as unknown as ScrapingRepository);
 
   return { consumer, manager, jobs };
 }
@@ -65,7 +65,7 @@ describe('ScrapingJobPublishConsumer', () => {
 
     await consumer.process(message());
 
-    expect(jobs.findById).toHaveBeenCalledWith('job-1');
+    expect(jobs.findScrapingJob).toHaveBeenCalledWith('job-1');
     expect(manager.publishScrapingTaskMessages).toHaveBeenCalledWith(record(ScrapingJobStatus.Queued));
   });
 

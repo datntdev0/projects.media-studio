@@ -40,7 +40,6 @@
     "src/library/library-translation.manager.spec.ts",
     "src/library/library-translation.repository.ts",
     "src/library/dto/library-package.dto.ts",
-    "src/library/entities/library-package.entity.ts",
-    "src/scraping"
+    "src/library/entities/library-package.entity.ts"
   ]
 }

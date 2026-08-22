@@ -18,7 +18,6 @@ export default tseslint.config(
       'src/library/library-translation.*.ts',
       'src/library/dto/library-package.dto.ts',
       'src/library/entities/library-package.entity.ts',
-      'src/scraping/**',
     ],
   },
   eslint.configs.recommended,

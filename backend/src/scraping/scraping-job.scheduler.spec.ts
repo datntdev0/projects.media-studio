@@ -3,12 +3,12 @@
 // here talks to Firebase, so an empty module is enough.
 jest.mock('firebase-admin/auth', () => ({}));
 
-import { ScrapingJobManager } from './scraping-job.manager';
+import { ScrapingManager } from './scraping.manager';
 import { ScrapingJobScheduler } from './scraping-job.scheduler';
 
 function fixture() {
   const jobs = { runDueToScheduledJobs: jest.fn().mockResolvedValue(undefined), sweep: jest.fn().mockResolvedValue(undefined) };
-  const scheduler = new ScrapingJobScheduler(jobs as unknown as ScrapingJobManager);
+  const scheduler = new ScrapingJobScheduler(jobs as unknown as ScrapingManager);
 
   return { scheduler, jobs };
 }

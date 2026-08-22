@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { LibraryContentDto, LibraryContentPageDto, QueryListLibraryContentsDto } from './dto/library-content.dto';
 import { CreateLibraryContentDto } from './dto/library-content.dto-create';
@@ -31,7 +31,8 @@ const WRONG_STATUS = 'A status only discovery or the job runner may set.';
 /**
  * The library controller handles CRUD operations for library items and their contents.
  */
-@ApiTags('Library')
+@ApiBearerAuth()
+@UseGuards(FirebaseAuthGuard)
 @Controller("library")
 export class LibraryController {
   constructor(

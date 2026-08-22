@@ -2,8 +2,8 @@ import { Processor } from '@nestjs/bullmq';
 import { QueueMessage, SCRAPING_JOB_QUEUE, ScrapingJobRequested } from '../core/queues/queue.messages';
 import { QueueConsumer } from '../core/queues/queue.consumer';
 import { ScrapingJob, ScrapingJobStatus } from './entities/scraping-job.entity';
-import { ScrapingJobManager } from './scraping-job.manager';
-import { ScrapingJobRepository } from './scraping-job.repository';
+import { ScrapingRepository } from './scraping.repository';
+import { ScrapingManager } from './scraping.manager';
 
 /** One job at a time: each message is a whole novel's worth of writes and sends. */
 const PUBLISH_CONCURRENCY = 1;
@@ -21,18 +21,18 @@ const PUBLISH_CONCURRENCY = 1;
 @Processor(SCRAPING_JOB_QUEUE, { concurrency: PUBLISH_CONCURRENCY })
 export class ScrapingJobPublishConsumer extends QueueConsumer<ScrapingJobRequested> {
   constructor(
-    private readonly scrapingJobManager: ScrapingJobManager,
-    private readonly scrapingJobRepository: ScrapingJobRepository
+    private readonly scrapingManager: ScrapingManager,
+    private readonly scrapingRepository: ScrapingRepository
   ) {
     super();
   }
 
   protected async handle({ payload }: QueueMessage<ScrapingJobRequested>): Promise<void> {
-    const job = await this.scrapingJobRepository.findById(payload.jobId);
+    const job = await this.scrapingRepository.findScrapingJob(payload.jobId);
 
     if (!this.validate(payload, job)) return;
 
-    await this.scrapingJobManager.publishScrapingTaskMessages(job!);
+    await this.scrapingManager.publishScrapingTaskMessages(job!);
   }
 
   private validate(payload: ScrapingJobRequested, job: ScrapingJob | null): boolean {

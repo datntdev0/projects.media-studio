@@ -6,13 +6,12 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { ScrapingContentRequested, QueueMessage, QueueTopic } from '../core/queues/queue.messages';
-import { LibraryContent, LibraryContentStatus } from '../library/entities/library-content.entity';
-import { LibraryItemType } from '../library/entities/library-item.entity';
+import { ContentLanguages, LibraryContent, LibraryContentStatus, LibraryContentType } from '../library/entities/library-content.entity';
 import { LibraryContentManager } from '../library/library-content.manager';
 import { ScrapingJobStatus, ScrapingTask } from './entities/scraping-job.entity';
 import { ScrapingContentConsumer } from './scraping-content.handler';
-import { ScrapingJobManager } from './scraping-job.manager';
-import { ScrapingJobRepository } from './scraping-job.repository';
+import { ScrapingRepository } from './scraping.repository';
+import { ScrapingManager } from './scraping.manager';
 
 const NOW = '2026-08-14T00:00:00.000Z';
 
@@ -34,10 +33,10 @@ const WHOLE_RUN_MS = 60_000;
 function content(): LibraryContent {
   return {
     id: 'chapter-1',
-    type: LibraryItemType.Novel,
-    index: 1,
+    idx: 1,
+    type: LibraryContentType.Original,
     title: 'Nine Bells for the Harbour',
-    language: 'zh',
+    language: ContentLanguages.Chinese,
     words: 0,
     sourceUrl: PAYLOAD.sourceUrl,
     contentUrl: null,
@@ -60,6 +59,8 @@ function task(status = ScrapingJobStatus.Queued): ScrapingTask {
     startAt: null,
     completedAt: null,
     error: null,
+    createdAt: NOW,
+    updatedAt: NOW,
   };
 }
 
@@ -70,7 +71,7 @@ function task(status = ScrapingJobStatus.Queued): ScrapingTask {
 function fixture(options: { content?: LibraryContent | null, task?: ScrapingTask | null } = {}) {
   const jobs = { scrape: jest.fn().mockResolvedValue(undefined), settleJob: jest.fn().mockResolvedValue(undefined) };
   const repository = {
-    task: jest.fn().mockResolvedValue(options.task === undefined ? task() : options.task),
+    getTask: jest.fn().mockResolvedValue(options.task === undefined ? task() : options.task),
     startTask: jest.fn().mockResolvedValue(undefined),
     completeTask: jest.fn().mockResolvedValue(undefined),
     patchTask: jest.fn().mockResolvedValue(undefined),
@@ -83,8 +84,8 @@ function fixture(options: { content?: LibraryContent | null, task?: ScrapingTask
   const realtime = { publishTask: jest.fn().mockResolvedValue(undefined), publishJob: jest.fn().mockResolvedValue(undefined) };
 
   const consumer = new ScrapingContentConsumer(
-    jobs as unknown as ScrapingJobManager,
-    repository as unknown as ScrapingJobRepository,
+    jobs as unknown as ScrapingManager,
+    repository as unknown as ScrapingRepository,
     contents as unknown as LibraryContentManager,
     realtime as unknown as RealtimeProvider,
   );

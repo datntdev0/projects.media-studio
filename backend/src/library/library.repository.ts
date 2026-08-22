@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { CollectionReference, Query, Timestamp } from 'firebase-admin/firestore';
+import { iso } from '../_shared/helper';
 import { CONTENT_SUBCOLLECTION, LIBRARY_COLLECTION } from '../core/firebase/collections';
 import { FirebaseAdminService } from '../core/firebase/firebase-admin.service';
-import { entityFrom } from '../core/firebase/firestore.repository';
+import { entityFrom, FirestoreRepository } from '../core/firebase/firestore.repository';
 import { LibraryContent, LibraryContentStatus, LibraryContentType } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemStatus, LibraryItemType, LibrarySourceMode } from './entities/library-item.entity';
 
@@ -36,17 +37,20 @@ export type LibraryContentDraft = WithoutStamps<LibraryContent>;
  * The library's documents: one item, and the `contents` subcollection filed
  * under it. The only file that mentions Firestore — the managers above it work
  * in items, drafts and rows, and would not change if the store did.
+ *
+ * Extends the shared base for the item collection itself; the `contents`
+ * subcollection, which the base knows nothing of, is this class's own.
  */
 @Injectable()
-export class LibraryRepository {
-  constructor(private readonly firebase: FirebaseAdminService) {}
+export class LibraryRepository extends FirestoreRepository<LibraryItem> {
+  protected readonly collectionName = LIBRARY_COLLECTION;
 
-  private get items(): CollectionReference {
-    return this.firebase.firestore.collection(LIBRARY_COLLECTION);
+  constructor(firebase: FirebaseAdminService) {
+    super(firebase);
   }
 
   async findLibrary(id: string): Promise<LibraryItem | null> {
-    return entityFrom<LibraryItem>(await this.items.doc(id).get());
+    return this.findById(id);
   }
 
   /**
@@ -56,7 +60,7 @@ export class LibraryRepository {
    * single-field indexes, so no composite index is needed for any combination.
    */
   async searchLibraries(filter: LibraryItemFilter): Promise<LibraryItem[]> {
-    let query: Query = this.items;
+    let query: Query = this.collection;
 
     if (filter.type) {
       query = query.where('type', '==', filter.type);
@@ -77,23 +81,21 @@ export class LibraryRepository {
   }
 
   async createLibrary(draft: Omit<LibraryItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<LibraryItem> {
-    const document = this.items.doc();
+    const document = this.collection.doc();
     const now = Timestamp.now();
 
     await document.set({ ...draft, createdAt: now, updatedAt: now });
 
-    return entityFrom<LibraryItem>(await document.get())!;
+    return { ...draft, id: document.id, createdAt: iso(now), updatedAt: iso(now) };
   }
 
   /** The whole writable representation, in place — an omitted field is a cleared field. */
   async updateLibrary(id: string, update: Partial<Omit<LibraryItem, 'id' | 'createdAt' | 'updatedAt'>>): Promise<LibraryItem> {
-    await this.items.doc(id).update({ ...update, updatedAt: Timestamp.now() });
-
-    return (await this.findLibrary(id))!;
+    return this.update(id, update);
   }
 
   async deleteLibrary(id: string): Promise<void> {
-    await this.items.doc(id).delete();
+    return this.delete(id);
   }
 
   /**
@@ -103,7 +105,7 @@ export class LibraryRepository {
    * than `updateLibrary`: a job runner holds an id and a state, not an item.
    */
   async updateStatus(itemId: string, status: LibraryItemStatus): Promise<void> {
-    await this.items.doc(itemId).update({ status, updatedAt: Timestamp.now() });
+    await this.collection.doc(itemId).update({ status, updatedAt: Timestamp.now() });
   }
 
   /**
@@ -127,7 +129,7 @@ export class LibraryRepository {
       fields['metadata.downloadedSize'] = counters.downloadedSize;
     }
 
-    await this.items.doc(itemId).update(fields);
+    await this.collection.doc(itemId).update(fields);
   }
 
   async findLibraryContent(itemId: string, contentId: string): Promise<LibraryContent | null> {
@@ -158,7 +160,7 @@ export class LibraryRepository {
 
     await document.set({ ...draft, createdAt: now, updatedAt: now });
 
-    return entityFrom<LibraryContent>(await document.get())!;
+    return { ...draft, id: document.id, createdAt: iso(now), updatedAt: iso(now) };
   }
 
   /** The whole writable representation, in place — an omitted field is a cleared field. */
@@ -174,6 +176,6 @@ export class LibraryRepository {
 
   /** Under one item: its `contents` subcollection, keyed by a chapter, image or clip's own id. */
   private contentsOf(itemId: string): CollectionReference {
-    return this.items.doc(itemId).collection(CONTENT_SUBCOLLECTION);
+    return this.collection.doc(itemId).collection(CONTENT_SUBCOLLECTION);
   }
 }

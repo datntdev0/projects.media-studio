@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { WRITABLE_CONTENT_STATUSES } from './dto/library-content.constants';
 import { AudioContentDto, ImageContentDto, LibraryContentDto, LibraryContentPageDto, QueryListLibraryContentsDto, TextContentDto, VideoContentDto } from './dto/library-content.dto';
 import { CreateLibraryContentDto } from './dto/library-content.dto-create';
@@ -6,6 +6,19 @@ import { UpdateLibraryContentDto } from './dto/library-content.dto-update';
 import { AudioContent, ContentLanguages, ImageContent, LibraryContent, LibraryContentStatus, LibraryContentType, TextContent, VideoContent } from './entities/library-content.entity';
 import { LibraryItem, LibraryItemType } from './entities/library-item.entity';
 import { LibraryContentDraft, LibraryRepository } from './library.repository';
+
+/** One piece of content a source is known to hold, as discovery reports it. */
+export interface DiscoveredContent {
+  index: number;
+  title: string;
+  sourceUrl: string;
+}
+
+/** What a completed scrape leaves on the row: where the bytes are, and how long they run. */
+export interface ScrapedRow {
+  contentUrl: string;
+  words: number;
+}
 
 /** What every draft carries whatever its type: the root, minus what the repository stamps. */
 type ContentRoot = Pick<LibraryContent, 'idx' | 'type' | 'status' | 'sourceUrl'>;
@@ -92,6 +105,115 @@ export class LibraryContentManager {
     await this.requireItem(itemId);
     await this.requireContent(itemId, contentId);
     await this.repository.deleteLibraryContent(itemId, contentId);
+  }
+
+  /**
+   * The row, or null where there is none. For a caller that has no 404 to give: a
+   * queued message names a row that may have been deleted since, and that is an
+   * outcome rather than a failure.
+   */
+  find(itemId: string, contentId: string): Promise<LibraryContent | null> {
+    return this.repository.findLibraryContent(itemId, contentId);
+  }
+
+  /**
+   * Every original chapter of a novel, in reading order — what a job selects from.
+   *
+   * Unpaged: a job is described against the whole novel, and the range it was given
+   * is meaningless over a slice of it.
+   */
+  async chapters(itemId: string): Promise<TextContent[]> {
+    const item = await this.requireItem(itemId);
+
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`A ${item.type} set has no chapters to scrape`);
+    }
+
+    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Original });
+
+    return stored.filter((content): content is TextContent => content.type === LibraryContentType.Original);
+  }
+
+  /**
+   * The pieces the source has and we do not, appended as placeholders.
+   *
+   * Matched on `sourceUrl` — the source's own key, and the only field that survives
+   * a retitling or a chapter inserted above it. Answers with how many landed, so a
+   * caller can say so.
+   */
+  async appendDiscovered(itemId: string, found: DiscoveredContent[]): Promise<number> {
+    const item = await this.requireItem(itemId);
+
+    if (item.type !== LibraryItemType.Novel) {
+      throw new NotImplementedException(`Discovering the content of a ${item.type} set is not described yet`);
+    }
+
+    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Original });
+    const known = new Set(stored.map((content) => content.sourceUrl).filter(Boolean));
+    const fresh = found.filter((content) => !known.has(content.sourceUrl));
+
+    // Nothing new writes nothing and recounts nothing: a second run costs one read.
+    if (fresh.length === 0) {
+      return 0;
+    }
+
+    for (const content of fresh) {
+      await this.repository.createLibraryContent(itemId, chapterDraft(item, content));
+    }
+
+    await this.recount(item);
+
+    return fresh.length;
+  }
+
+  async markQueued(itemId: string, contentIds: string[]): Promise<void> {
+    await this.updateStatuses(itemId, contentIds, LibraryContentStatus.Pending);
+  }
+
+  async markScraping(itemId: string, contentIds: string[]): Promise<void> {
+    await this.updateStatuses(itemId, contentIds, LibraryContentStatus.Inprogress);
+  }
+
+  async markFailed(itemId: string, contentIds: string[]): Promise<void> {
+    await this.updateStatuses(itemId, contentIds, LibraryContentStatus.Failed);
+  }
+
+  /** The bytes are stored, so the row points at them and the item is recounted. */
+  async completeScrape(itemId: string, contentId: string, stored: ScrapedRow): Promise<void> {
+    const item = await this.requireItem(itemId);
+    const content = await this.requireContent(itemId, contentId);
+
+    await this.repository.updateLibraryContent(itemId, contentId, { ...draftFromStored(content), status: LibraryContentStatus.Completed, contentUrl: stored.contentUrl, words: stored.words } as LibraryContentDraft);
+
+    await this.recount(item);
+  }
+
+  /** One status, over many rows at once — what a job publish or a settle moves together. */
+  private async updateStatuses(itemId: string, contentIds: string[], status: LibraryContentStatus): Promise<void> {
+    for (const contentId of contentIds) {
+      const content = await this.requireContent(itemId, contentId);
+
+      await this.repository.updateLibraryContent(itemId, contentId, { ...draftFromStored(content), status });
+    }
+  }
+
+  /**
+   * What the item holds, after its content changed.
+   *
+   * Read back as a full scan rather than tracked as deltas: a count that is
+   * recomputed cannot drift, and `list` already pays this same cost for a page.
+   */
+  private async recount(item: LibraryItem): Promise<void> {
+    const contents = await this.repository.searchLibraryContents(item.id, {});
+    const completed = contents.filter((content) => content.status === LibraryContentStatus.Completed);
+    const bytes = completed.reduce((sum, content) => sum + ('filesize' in content ? content.filesize : 0), 0);
+
+    await this.repository.updateCounters(item.id, {
+      discoveredCount: contents.length,
+      downloadedCount: completed.length,
+      // A novel's metadata has no size field, so it is left out rather than added.
+      downloadedSize: item.type === LibraryItemType.Novel ? undefined : bytes,
+    });
   }
 
   /** The item, or the 404 every route that names one owes. */
@@ -252,9 +374,7 @@ function toDto(content: LibraryContent): LibraryContentDto {
     textContent: isText ? { contentUrl: content.contentUrl, language: content.language, title: content.title, words: content.words } : null,
     audioContent: content.type === LibraryContentType.Audio ? { contentUrl: content.contentUrl, language: content.language, subtitleUrl: content.subtitleUrl } : null,
     imageContent: content.type === LibraryContentType.Image ? { contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions } : null,
-    videoContent: content.type === LibraryContentType.Video
-      ? { contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions, duration: content.duration }
-      : null,
+    videoContent: content.type === LibraryContentType.Video ? { contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions, duration: content.duration } : null,
     createdAt: content.createdAt,
     updatedAt: content.updatedAt,
   };
@@ -280,4 +400,43 @@ function matchesLanguage(content: LibraryContent, language?: ContentLanguages): 
   }
 
   return 'language' in content && content.language === language;
+}
+
+/**
+ * One chapter the source turned out to hold: its numbering and its title verbatim,
+ * a placeholder for the text, and the language off the item — which the wizard set
+ * from the crawler at creation, so discovery needs none of its own.
+ */
+function chapterDraft(item: LibraryItem, content: DiscoveredContent): LibraryContentDraft {
+  return {
+    idx: content.index,
+    type: LibraryContentType.Original,
+    status: LibraryContentStatus.Discovered,
+    sourceUrl: content.sourceUrl,
+    contentUrl: null,
+    language: item.novelMetadata!.language as ContentLanguages,
+    title: content.title,
+    words: 0,
+  };
+}
+
+/**
+ * The stored row, minus what the repository stamps — the base a status or a
+ * scrape result is applied over. Field by field rather than a spread, so a
+ * field the entity gains cannot arrive on an unrelated type by accident.
+ */
+function draftFromStored(content: LibraryContent): LibraryContentDraft {
+  const root: ContentRoot = { idx: content.idx, type: content.type, status: content.status, sourceUrl: content.sourceUrl };
+
+  switch (content.type) {
+    case LibraryContentType.Original:
+    case LibraryContentType.Translation:
+      return { ...root, type: content.type, contentUrl: content.contentUrl, language: content.language, title: content.title, words: content.words };
+    case LibraryContentType.Audio:
+      return { ...root, type: content.type, contentUrl: content.contentUrl, language: content.language, subtitleUrl: content.subtitleUrl };
+    case LibraryContentType.Image:
+      return { ...root, type: content.type, contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions };
+    case LibraryContentType.Video:
+      return { ...root, type: content.type, contentUrl: content.contentUrl, filename: content.filename, filesize: content.filesize, dimensions: content.dimensions, duration: content.duration };
+  }
 }

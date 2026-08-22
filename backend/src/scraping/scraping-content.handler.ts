@@ -1,8 +1,8 @@
 import { Processor } from '@nestjs/bullmq';
 import { SCRAPING_CONTENT_QUEUE, ScrapingContentRequested, QueueMessage } from '../core/queues/queue.messages';
 import { QueueConsumer } from '../core/queues/queue.consumer';
-import { ScrapingJobManager } from './scraping-job.manager';
-import { ScrapingJobRepository } from './scraping-job.repository';
+import { ScrapingRepository } from './scraping.repository';
+import { ScrapingManager } from './scraping.manager';
 import { ScrapingJobStatus } from './entities/scraping-job.entity';
 import { RealtimeProvider } from '../core/providers/realtime.provider';
 import { nowIso } from '../_shared/helper';
@@ -26,8 +26,8 @@ const BACKOFF_MS = 1_000;
 @Processor(SCRAPING_CONTENT_QUEUE, { concurrency: SCRAPE_CONCURRENCY })
 export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentRequested> {
   constructor(
-    private readonly scrapingJobManager: ScrapingJobManager,
-    private readonly scrapingJobRepository: ScrapingJobRepository,
+    private readonly scrapingManager: ScrapingManager,
+    private readonly scrapingRepository: ScrapingRepository,
     private readonly libraryContentManager: LibraryContentManager,
     private readonly realtimeProvider: RealtimeProvider
   ) {
@@ -43,7 +43,7 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
    */
   protected async handle({ payload }: QueueMessage<ScrapingContentRequested>): Promise<void> {
     const content = await this.libraryContentManager.find(payload.itemId, payload.contentId);
-    const task = await this.scrapingJobRepository.task(payload.jobId, payload.contentId);
+    const task = await this.scrapingRepository.getTask(payload.jobId, payload.contentId);
 
     if (!task) {
       this.logger.warn(`Task ${payload.contentId} of job ${payload.jobId} is gone — ${payload.sourceUrl} will not be scraped`);
@@ -59,7 +59,7 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
     if (!content) {
       this.logger.warn(`Content ${payload.contentId} of item ${payload.itemId} is gone — ${payload.sourceUrl} will not be scraped`);
       await this.markTaskFailed(payload, 'The library row is gone');
-      await this.scrapingJobManager.settleJob(payload.jobId);
+      await this.scrapingManager.settleJob(payload.jobId);
       return;
     }
 
@@ -68,9 +68,9 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
     // `retry` counts the retries, so the attempt that earns them is not one of them.
     for (let attempt = 0; attempt <= payload.retry; attempt += 1) {
       try {
-        await this.scrapingJobManager.scrape(payload, content);
+        await this.scrapingManager.scrape(payload, content);
         await this.markTaskCompleted(payload);
-        await this.scrapingJobManager.settleJob(payload.jobId);
+        await this.scrapingManager.settleJob(payload.jobId);
         this.logger.debug(`Scraped ${payload.sourceUrl} of ${payload.itemId}`);
         return;
       } catch (cause: unknown) {
@@ -79,7 +79,7 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
 
         if (attempt === payload.retry) {
           await this.markTaskFailed(payload, error);
-          await this.scrapingJobManager.settleJob(payload.jobId);
+          await this.scrapingManager.settleJob(payload.jobId);
           throw cause;
         }
 
@@ -90,19 +90,19 @@ export class ScrapingContentConsumer extends QueueConsumer<ScrapingContentReques
 
   private async markTaskRunning(payload: ScrapingContentRequested): Promise<void> {
     await this.libraryContentManager.markScraping(payload.itemId, [payload.contentId]);
-    await this.scrapingJobRepository.startTask(payload.jobId, payload.contentId, nowIso());
+    await this.scrapingRepository.startTask(payload.jobId, payload.contentId, nowIso());
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Running);
     await this.realtimeProvider.publishJob({ id: payload.jobId, status: ScrapingJobStatus.Running });
   }
 
   private async markTaskCompleted(payload: ScrapingContentRequested): Promise<void> {
-    await this.scrapingJobRepository.completeTask(payload.jobId, payload.contentId, nowIso());
+    await this.scrapingRepository.completeTask(payload.jobId, payload.contentId, nowIso());
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Completed);
   }
 
   private async markTaskFailed(payload: ScrapingContentRequested, error: string): Promise<void> {
     await this.libraryContentManager.markFailed(payload.itemId, [payload.contentId]);
-    await this.scrapingJobRepository.patchTask(payload.jobId, payload.contentId, { status: ScrapingJobStatus.Failed, error });
+    await this.scrapingRepository.patchTask(payload.jobId, payload.contentId, { status: ScrapingJobStatus.Failed, error });
     await this.realtimeProvider.publishTask(payload.jobId, payload.contentId, ScrapingJobStatus.Failed);
   }
 }

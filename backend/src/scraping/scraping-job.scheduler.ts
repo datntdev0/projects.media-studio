@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { ScrapingJobManager } from './scraping-job.manager';
+import { ScrapingManager } from './scraping.manager';
 
 /**
  * The clock over the job records.
@@ -17,7 +17,7 @@ import { ScrapingJobManager } from './scraping-job.manager';
 export class ScrapingJobScheduler {
   private readonly logger = new Logger(ScrapingJobScheduler.name);
 
-  constructor(private readonly scrapingJobManager: ScrapingJobManager) {}
+  constructor(private readonly scrapingManager: ScrapingManager) {}
 
   /**
    * Nothing awaits a tick, so what one throws is caught here rather than left to
@@ -27,7 +27,7 @@ export class ScrapingJobScheduler {
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<void> {
     try {
-      await this.scrapingJobManager.runDueToScheduledJobs();
+      await this.scrapingManager.runDueToScheduledJobs();
     } catch (cause: unknown) {
       this.logger.error('The scheduled-job tick failed', cause);
     }
@@ -35,7 +35,7 @@ export class ScrapingJobScheduler {
     // Its own `try`: a publish that threw must not cost the sweep its turn, or a
     // settled job's node would sit in the live tree until the next clean tick.
     try {
-      await this.scrapingJobManager.sweep();
+      await this.scrapingManager.sweep();
     } catch (cause: unknown) {
       this.logger.error('The live-tree sweep failed', cause);
     }

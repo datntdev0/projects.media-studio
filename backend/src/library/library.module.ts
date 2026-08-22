@@ -8,9 +8,13 @@ import { LibraryRepository } from './library.repository';
  * The translation and media providers, and the import consumer, are still
  * parked while their DTOs and entities are refactored — see the `exclude`
  * list in `tsconfig.json`. Restore them from git alongside their own routes.
+ *
+ * The two managers are exported for `ScrapingModule`, which reads and writes
+ * through them rather than through `LibraryRepository` directly.
  */
 @Module({
   controllers: [LibraryController],
   providers: [LibraryItemManager, LibraryContentManager, LibraryRepository],
+  exports: [LibraryItemManager, LibraryContentManager],
 })
 export class LibraryModule {}
