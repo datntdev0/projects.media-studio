@@ -35,10 +35,12 @@ service firebase.storage {
 
       // Kept in step with ASSET_MAX_MB in frontend/app/utils/library-content.ts.
       // `text/plain` is here because a chapter body is an object too — the API
-      // stores its URL, never its words.
+      // stores its URL, never its words. `audio/.*` and `application/x-subrip`
+      // are a chapter's narration and the .srt that times it; a browser gives an
+      // .srt no type of its own, so `uploadSubtitle` sets that one itself.
       allow create, update: if request.auth != null
         && request.resource.size < 200 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|video/.*|text/plain.*');
+        && request.resource.contentType.matches('image/.*|video/.*|text/plain.*|audio/.*|application/x-subrip');
 
       allow delete: if request.auth != null;
     }

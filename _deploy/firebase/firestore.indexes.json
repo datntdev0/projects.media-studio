@@ -13,6 +13,34 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "libraryItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "idx",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -233,6 +261,96 @@
     },
     {
       "collectionGroup": "translation_zh",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_vi",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_vi",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_vi",
+      "fieldPath": "subtitleUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_vi",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_vi",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_en",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_en",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_en",
+      "fieldPath": "subtitleUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_en",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_en",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_zh",
+      "fieldPath": "language",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_zh",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_zh",
+      "fieldPath": "subtitleUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_zh",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audio_zh",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "illustration",
+      "fieldPath": "contentUrl",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "illustration",
+      "fieldPath": "createdAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "illustration",
       "fieldPath": "updatedAt",
       "indexes": []
     }

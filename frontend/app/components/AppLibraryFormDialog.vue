@@ -82,9 +82,9 @@ const step = ref(1)
 /** What the crawler found, and the gate on step 3: no preview, no continuing. */
 const preview = ref<CrawlerPreview | null>(null)
 
-const validating = ref(false)
+const previewing = ref(false)
 
-const validateError = ref<string | null>(null)
+const previewError = ref<string | null>(null)
 
 const editing = computed(() => !!props.item)
 
@@ -158,10 +158,10 @@ const nextLabel = computed(() => {
 const backLabel = computed(() => editing.value || step.value === 1 ? 'Cancel' : 'Back')
 
 /** What the source said, once it has been read. */
-const found = computed(() => preview.value?.content.metadata ?? null)
+const found = computed(() => preview.value?.novelContent.metadata ?? null)
 
 /** How many pieces the source holds — a count of what it listed, not a claim of its own. */
-const foundCount = computed(() => preview.value?.content.chapters.length ?? 0)
+const foundCount = computed(() => preview.value?.novelContent.metadata.chapters ?? 0)
 
 /** The line under the reviewed title, from whatever the source gave us. */
 const previewByline = computed(() => {
@@ -199,7 +199,7 @@ watch(open, (isOpen) => {
 })
 
 // A crawler reads one type of item, so changing the type changes the shortlist —
-// and anything already validated was validated against the old one.
+// and anything already previewed was previewed against the old one.
 watch(() => form.type, () => {
   if (editing.value) {
     return
@@ -213,7 +213,7 @@ watch([() => form.sourceUrl, () => form.sourceName], clearPreview)
 
 function clearPreview() {
   preview.value = null
-  validateError.value = null
+  previewError.value = null
 }
 
 function fromItem(item: LibraryItem): FormState {
@@ -259,25 +259,25 @@ function validate(state: FormState): FormError[] {
  * The crawler read, on the server. Slow — a cold source is tens of seconds — and
  * cached there, so `refresh` is what the review step's re-read asks for.
  */
-async function onValidate(refresh = false) {
+async function onPreview(refresh = false) {
   const crawler = selectedCrawler.value
 
   if (!crawler) {
     return
   }
 
-  validating.value = true
-  validateError.value = null
+  previewing.value = true
+  previewError.value = null
 
   try {
-    const read = await scrapingClient.validate({ crawler: crawler.name, sourceUrl: form.sourceUrl.trim() }, refresh)
+    const read = await scrapingClient.preview({ crawler: crawler.name, sourceUrl: form.sourceUrl.trim(), refresh })
 
     await applyPreview(read)
     preview.value = read
   } catch (cause) {
-    validateError.value = apiMessage(cause, 'Could not read that URL.')
+    previewError.value = apiMessage(cause, 'Could not read that URL.')
   } finally {
-    validating.value = false
+    previewing.value = false
   }
 }
 
@@ -291,7 +291,7 @@ async function onValidate(refresh = false) {
  * in `coverFile` for the save to upload — the same path a chosen file takes.
  */
 async function applyPreview(read: CrawlerPreview) {
-  const { metadata, coverBinary } = read.content
+  const { metadata, coverBinary } = read.novelContent
 
   // Not `form.sourceUrl`: writing it here would trip the watcher that drops a
   // preview when the URL changes, throwing away the reading it belongs to. The
@@ -315,23 +315,30 @@ async function applyPreview(read: CrawlerPreview) {
     form.coverFile = draft.blob
     form.coverUrl = draft.preview
   } catch {
-    // A cover we cannot read is not worth failing a validation for: everything
+    // A cover we cannot read is not worth failing a preview for: everything
     // else the source said is still good, and one can be picked by hand.
   }
 }
 
 /** What is sent. A manual item carries no URL, and only a novel has a descriptive block. */
 function payload(coverUrl: string | null): CreateLibraryItem {
+  const metadata = metadataPayload()
+
   return {
     type: form.type,
     title: form.title.trim(),
+    status: form.status,
     coverUrl,
     sourceMode: form.sourceMode,
     sourceName: isCrawler.value ? form.sourceName.trim() : undefined,
     // The URL the source answered with, where one was read: two spellings of the
     // same book normalise to one, and the item stores what was actually crawled.
     sourceUrl: isCrawler.value ? (found.value?.sourceUrl ?? form.sourceUrl.trim()) : null,
-    metadata: metadataPayload()
+    // Only the slot matching the item's own type — the other two are left out
+    // rather than sent as an empty block nothing reads.
+    novelMetadata: form.type === 'novel' ? metadata : undefined,
+    imageMetadata: form.type === 'image' ? metadata : undefined,
+    videoMetadata: form.type === 'video' ? metadata : undefined
   }
 }
 
@@ -613,18 +620,18 @@ function cardTone(selected: boolean, fixed = editing.value) {
               <UInput
                 v-model="form.sourceUrl"
                 :placeholder="`https://${selectedCrawler?.domain ?? ''}/0413553971`"
-                help="The URL the crawler should read. It is validated before continuing."
+                help="The URL the crawler should read. It is previewed before continuing."
                 class="flex-1"
               />
 
               <UButton
-                label="Validate"
+                label="Preview"
                 color="neutral"
                 variant="subtle"
                 class="flex-none"
-                :loading="validating"
+                :loading="previewing"
                 :disabled="!form.sourceUrl.trim() || !selectedCrawler"
-                @click="onValidate()"
+                @click="onPreview()"
               />
             </div>
           </UFormField>
@@ -635,10 +642,10 @@ function cardTone(selected: boolean, fixed = editing.value) {
             {{ form.sourceName }} read it · {{ countLabel(foundCount) }} {{ contentNoun(preview.type) }} detected
           </p>
 
-          <p v-else-if="validateError" class="flex items-center gap-2 -mt-4 text-label text-error" role="alert">
+          <p v-else-if="previewError" class="flex items-center gap-2 -mt-4 text-label text-error" role="alert">
             <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
 
-            {{ validateError }}
+            {{ previewError }}
           </p>
         </template>
 
@@ -778,15 +785,15 @@ function cardTone(selected: boolean, fixed = editing.value) {
                 variant="ghost"
                 size="sm"
                 class="ms-auto"
-                :loading="validating"
-                @click="onValidate(true)"
+                :loading="previewing"
+                @click="onPreview(true)"
               />
             </div>
 
-            <p v-if="validateError" class="flex items-center gap-2 mt-2 text-label text-error" role="alert">
+            <p v-if="previewError" class="flex items-center gap-2 mt-2 text-label text-error" role="alert">
               <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
 
-              {{ validateError }}
+              {{ previewError }}
             </p>
           </div>
         </div>

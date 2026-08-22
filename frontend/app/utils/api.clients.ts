@@ -213,15 +213,14 @@ export class LibraryClient {
     }
 
     /**
-     * The items matching a filter, most recently changed first
-     * @param type (optional) 
+     * @param type (optional) The type of the library item.
      * @param status (optional) All four, including the two only the job runner sets — a filter reads data it does not write.
-     * @param sourceMode (optional) 
+     * @param sourceMode (optional) The source mode of the library item.
      * @param search (optional) Case-insensitive, matched against the title, the source name and a novel's author.
      * @param page (optional) 
      * @param pageSize (optional) 
      */
-    list(type?: LibraryItemType | undefined, status?: LibraryItemStatus | undefined, sourceMode?: LibrarySourceMode | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryItemPageDto> {
+    list(type?: Type | undefined, status?: Status | undefined, sourceMode?: SourceMode | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryItemPageDto> {
         let url_ = this.baseUrl + "/api/v1/library?";
         if (type === null)
             throw new globalThis.Error("The parameter 'type' cannot be null.");
@@ -283,9 +282,6 @@ export class LibraryClient {
         return Promise.resolve<LibraryItemPageDto>(null as any);
     }
 
-    /**
-     * Add an item
-     */
     create(body: CreateLibraryItemDto, signal?: AbortSignal): Promise<LibraryItemDto> {
         let url_ = this.baseUrl + "/api/v1/library";
         url_ = url_.replace(/[?&]$/, "");
@@ -332,9 +328,6 @@ export class LibraryClient {
         return Promise.resolve<LibraryItemDto>(null as any);
     }
 
-    /**
-     * One item
-     */
     get(id: string, signal?: AbortSignal): Promise<LibraryItemDto> {
         let url_ = this.baseUrl + "/api/v1/library/{id}";
         if (id === undefined || id === null)
@@ -380,9 +373,6 @@ export class LibraryClient {
         return Promise.resolve<LibraryItemDto>(null as any);
     }
 
-    /**
-     * Replace an item's whole writable representation
-     */
     replace(id: string, body: UpdateLibraryItemDto, signal?: AbortSignal): Promise<LibraryItemDto> {
         let url_ = this.baseUrl + "/api/v1/library/{id}";
         if (id === undefined || id === null)
@@ -437,7 +427,6 @@ export class LibraryClient {
     }
 
     /**
-     * Delete an item
      * @return Deleted, and every chapter, image or clip filed under it with it.
      */
     remove(id: string, signal?: AbortSignal): Promise<void> {
@@ -483,197 +472,30 @@ export class LibraryClient {
     }
 
     /**
-     * Pack an item's metadata, chapters and translations into a .zip
-     * @return Filed in the bucket. Open `url` to download it.
-     */
-    export(id: string, signal?: AbortSignal): Promise<LibraryPackageDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{id}/export";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "POST",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processExport(_response);
-        });
-    }
-
-    protected processExport(response: Response): Promise<LibraryPackageDto> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryPackageDto;
-            return result200;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("An image or video set. Only a novel can be packaged.", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            return throwException("No item under that id.", status, _responseText, _headers);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<LibraryPackageDto>(null as any);
-    }
-
-    /**
-     * Say what an uploaded package holds, and what importing it would do
-     * @return Read, compared against this item, and nothing written. A warning does not stop an import; a failure does.
-     */
-    validateImport(id: string, body: LibraryPackageRefDto, signal?: AbortSignal): Promise<LibraryPackageReportDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{id}/import/validate";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(body);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processValidateImport(_response);
-        });
-    }
-
-    protected processValidateImport(response: Response): Promise<LibraryPackageReportDto> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryPackageReportDto;
-            return result200;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("An image or video set. Only a novel can be packaged. A URL that is not an object in this bucket, or a package that will not open.", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            return throwException("No item under that id.", status, _responseText, _headers);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<LibraryPackageReportDto>(null as any);
-    }
-
-    /**
-     * Unpack a package into this item, or into a new one, in the background
-     * @return Queued. Watch `libraryImports/{itemId}` in the Realtime Database for how far it has got.
-     */
-    startImport(id: string, body: StartLibraryImportDto, signal?: AbortSignal): Promise<LibraryImportDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{id}/import";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(body);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processStartImport(_response);
-        });
-    }
-
-    protected processStartImport(response: Response): Promise<LibraryImportDto> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 202) {
-            return response.text().then((_responseText) => {
-            let result202: any = null;
-            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryImportDto;
-            return result202;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("An image or video set. Only a novel can be packaged. A package that will not open, or one whose report is not valid.", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            return throwException("No item under that id.", status, _responseText, _headers);
-            });
-        } else if (status === 409) {
-            return response.text().then((_responseText) => {
-            return throwException("An import is already running over this item.", status, _responseText, _headers);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<LibraryImportDto>(null as any);
-    }
-
-    /**
-     * One item's content — chapters by their number, assets by their name
-     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
      * @param status (optional) All five, including the ones only discovery and the job runner set — a filter reads data it does not write.
+     * @param language (optional) The language of a chapter. Null for an asset.
+     * @param type (optional) The type of content.
      * @param search (optional) Case-insensitive, matched against a chapter's title or an asset's filename.
      * @param page (optional) 
      * @param pageSize (optional) 
      */
-    listContents(itemId: string, language?: TranslationLanguage | undefined, status?: LibraryContentStatus | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents?";
-        if (itemId === undefined || itemId === null)
-            throw new globalThis.Error("The parameter 'itemId' must be defined.");
-        url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
-        if (language === null)
-            throw new globalThis.Error("The parameter 'language' cannot be null.");
-        else if (language !== undefined)
-            url_ += "language=" + encodeURIComponent("" + language) + "&";
+    listContents(id: string, status?: Status2 | undefined, language?: Language | undefined, type?: Type2 | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/contents?";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         if (status === null)
             throw new globalThis.Error("The parameter 'status' cannot be null.");
         else if (status !== undefined)
             url_ += "status=" + encodeURIComponent("" + status) + "&";
+        if (language === null)
+            throw new globalThis.Error("The parameter 'language' cannot be null.");
+        else if (language !== undefined)
+            url_ += "language=" + encodeURIComponent("" + language) + "&";
+        if (type === null)
+            throw new globalThis.Error("The parameter 'type' cannot be null.");
+        else if (type !== undefined)
+            url_ += "type=" + encodeURIComponent("" + type) + "&";
         if (search === null)
             throw new globalThis.Error("The parameter 'search' cannot be null.");
         else if (search !== undefined)
@@ -712,7 +534,7 @@ export class LibraryClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
+            return throwException("A `language` filter that has nothing to match on an image or video item.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -730,14 +552,11 @@ export class LibraryClient {
         return Promise.resolve<LibraryContentPageDto>(null as any);
     }
 
-    /**
-     * Add a chapter, image or clip
-     */
-    createContent(itemId: string, body: CreateLibraryContentDto, signal?: AbortSignal): Promise<NovelChapterDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents";
-        if (itemId === undefined || itemId === null)
-            throw new globalThis.Error("The parameter 'itemId' must be defined.");
-        url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
+    createContent(id: string, body: CreateLibraryContentDto, signal?: AbortSignal): Promise<LibraryContentDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/contents";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(body);
@@ -757,18 +576,18 @@ export class LibraryClient {
         });
     }
 
-    protected processCreateContent(response: Response): Promise<NovelChapterDto> {
+    protected processCreateContent(response: Response): Promise<LibraryContentDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 201) {
             return response.text().then((_responseText) => {
             let result201: any = null;
-            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as NovelChapterDto;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryContentDto;
             return result201;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Fields belonging to a type the item is not \u2014 a filename on a chapter, an index on an asset \u2014 or a chapter without a title.", status, _responseText, _headers);
+            return throwException("A content type the item does not hold, fields belonging to a type the row is not, or a chapter without a title or a language. A status only discovery or the job runner may set.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -776,32 +595,24 @@ export class LibraryClient {
             });
         } else if (status === 404) {
             return response.text().then((_responseText) => {
-            return throwException("No item under that id, or no content under that one.", status, _responseText, _headers);
+            return throwException("No item under that id.", status, _responseText, _headers);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<NovelChapterDto>(null as any);
+        return Promise.resolve<LibraryContentDto>(null as any);
     }
 
-    /**
-     * One chapter, image or clip
-     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
-     */
-    getContent(itemId: string, contentId: string, language?: TranslationLanguage | undefined, signal?: AbortSignal): Promise<NovelChapterDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}?";
-        if (itemId === undefined || itemId === null)
-            throw new globalThis.Error("The parameter 'itemId' must be defined.");
-        url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
+    getContent(id: string, contentId: string, signal?: AbortSignal): Promise<LibraryContentDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/contents/{contentId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         if (contentId === undefined || contentId === null)
             throw new globalThis.Error("The parameter 'contentId' must be defined.");
         url_ = url_.replace("{contentId}", encodeURIComponent("" + contentId));
-        if (language === null)
-            throw new globalThis.Error("The parameter 'language' cannot be null.");
-        else if (language !== undefined)
-            url_ += "language=" + encodeURIComponent("" + language) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -817,18 +628,14 @@ export class LibraryClient {
         });
     }
 
-    protected processGetContent(response: Response): Promise<NovelChapterDto> {
+    protected processGetContent(response: Response): Promise<LibraryContentDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
             let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as NovelChapterDto;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryContentDto;
             return result200;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -843,25 +650,17 @@ export class LibraryClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<NovelChapterDto>(null as any);
+        return Promise.resolve<LibraryContentDto>(null as any);
     }
 
-    /**
-     * Replace a row's whole writable representation, or write a translation of it
-     * @param language (optional) A novel only. Reads the translation, falling back to the source chapter where there is none.
-     */
-    replaceContent(itemId: string, contentId: string, body: UpdateLibraryContentDto, language?: TranslationLanguage | undefined, signal?: AbortSignal): Promise<NovelChapterDto> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}?";
-        if (itemId === undefined || itemId === null)
-            throw new globalThis.Error("The parameter 'itemId' must be defined.");
-        url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
+    replaceContent(id: string, contentId: string, body: UpdateLibraryContentDto, signal?: AbortSignal): Promise<LibraryContentDto> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/contents/{contentId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         if (contentId === undefined || contentId === null)
             throw new globalThis.Error("The parameter 'contentId' must be defined.");
         url_ = url_.replace("{contentId}", encodeURIComponent("" + contentId));
-        if (language === null)
-            throw new globalThis.Error("The parameter 'language' cannot be null.");
-        else if (language !== undefined)
-            url_ += "language=" + encodeURIComponent("" + language) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(body);
@@ -881,18 +680,18 @@ export class LibraryClient {
         });
     }
 
-    protected processReplaceContent(response: Response): Promise<NovelChapterDto> {
+    protected processReplaceContent(response: Response): Promise<LibraryContentDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
             let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as NovelChapterDto;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryContentDto;
             return result200;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Fields belonging to a type the item is not \u2014 a filename on a chapter, an index on an asset \u2014 or a chapter without a title. A `language` on an image or video set, or one that is not a language we translate into.", status, _responseText, _headers);
+            return throwException("A content type the item does not hold, fields belonging to a type the row is not, or a chapter without a title or a language. A status only discovery or the job runner may set. A changed `type` is refused too.", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -907,18 +706,17 @@ export class LibraryClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<NovelChapterDto>(null as any);
+        return Promise.resolve<LibraryContentDto>(null as any);
     }
 
     /**
-     * Delete a chapter, image or clip
      * @return Deleted. The stored bytes are not — whoever uploaded them drops them.
      */
-    removeContent(itemId: string, contentId: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v1/library/{itemId}/contents/{contentId}";
-        if (itemId === undefined || itemId === null)
-            throw new globalThis.Error("The parameter 'itemId' must be defined.");
-        url_ = url_.replace("{itemId}", encodeURIComponent("" + itemId));
+    removeContent(id: string, contentId: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v1/library/{id}/contents/{contentId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         if (contentId === undefined || contentId === null)
             throw new globalThis.Error("The parameter 'contentId' must be defined.");
         url_ = url_.replace("{contentId}", encodeURIComponent("" + contentId));
@@ -970,16 +768,8 @@ export class ScrapingClient {
         this.baseUrl = baseUrl ?? "";
     }
 
-    /**
-     * Read a source, and answer with what the preview screen draws
-     * @param refresh (optional) Skip the cached answer and read the source again.
-     */
-    validate(body: ValidateDto, refresh?: boolean | undefined, signal?: AbortSignal): Promise<PreviewDto> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/validate?";
-        if (refresh === null)
-            throw new globalThis.Error("The parameter 'refresh' cannot be null.");
-        else if (refresh !== undefined)
-            url_ += "refresh=" + encodeURIComponent("" + refresh) + "&";
+    preview(body: PreviewRequestDto, signal?: AbortSignal): Promise<PreviewDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/preview";
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(body);
@@ -995,11 +785,11 @@ export class ScrapingClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processValidate(_response);
+            return this.processPreview(_response);
         });
     }
 
-    protected processValidate(response: Response): Promise<PreviewDto> {
+    protected processPreview(response: Response): Promise<PreviewDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
@@ -1037,10 +827,9 @@ export class ScrapingClient {
     }
 
     /**
-     * Read an item's source, and append the content it turns out to hold
      * @return Read, compared, appended. The counters are as they now stand.
      */
-    discover(body: DiscoverDto, signal?: AbortSignal): Promise<LibraryItemDto> {
+    discover(body: DiscoverDto, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/scrapings/discover";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -1052,7 +841,6 @@ export class ScrapingClient {
             signal,
             headers: {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
             }
         };
 
@@ -1061,14 +849,12 @@ export class ScrapingClient {
         });
     }
 
-    protected processDiscover(response: Response): Promise<LibraryItemDto> {
+    protected processDiscover(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        if (status === 202) {
             return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LibraryItemDto;
-            return result200;
+            return;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
@@ -1099,69 +885,10 @@ export class ScrapingClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<LibraryItemDto>(null as any);
+        return Promise.resolve<void>(null as any);
     }
 
     /**
-     * Record a job over an item's chapters, and publish it now or at a set time
-     * @return Persisted, and published or booked. A range that matched nothing is a `completed` record with `total: 0`.
-     */
-    createJob(body: CreateScrapingJobDto, signal?: AbortSignal): Promise<ScrapingJobDto> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/jobs";
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(body);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processCreateJob(_response);
-        });
-    }
-
-    protected processCreateJob(response: Response): Promise<ScrapingJobDto> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 201) {
-            return response.text().then((_responseText) => {
-            let result201: any = null;
-            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobDto;
-            return result201;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("A manual item, a range that will not parse, or a `startAt` that has passed.", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            return throwException("No item under that id, or no crawler under its `sourceName`.", status, _responseText, _headers);
-            });
-        } else if (status === 501) {
-            return response.text().then((_responseText) => {
-            return throwException("A crawler item that is not a novel.", status, _responseText, _headers);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<ScrapingJobDto>(null as any);
-    }
-
-    /**
-     * One page of the job records — a tab of the Scrapings screen
      * @param state (optional) One of the screen's three tabs. Omitted lists every job.
      * @param libraryType (optional) The type of the item scraped, as it was when the job was described.
      * @param libraryId (optional) Every job over one item — what an item screen asks for.
@@ -1169,8 +896,8 @@ export class ScrapingClient {
      * @param pageSize (optional) 
      * @return Newest first, each with the tasks it described.
      */
-    listJobs(state?: ScrapingJobState | undefined, libraryType?: LibraryItemType | undefined, libraryId?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<ScrapingJobPageDto> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/jobs?";
+    listJobs(state?: State | undefined, libraryType?: LibraryType | undefined, libraryId?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<ScrapingJobPageDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/scraping/jobs?";
         if (state === null)
             throw new globalThis.Error("The parameter 'state' cannot be null.");
         else if (state !== undefined)
@@ -1228,11 +955,116 @@ export class ScrapingClient {
     }
 
     /**
-     * Start, pause, resume or cancel a job
+     * @return Persisted, and published or booked. A range that matched nothing is a `completed` record with `total: 0`.
+     */
+    createJob(body: CreateScrapingJobDto, signal?: AbortSignal): Promise<ScrapingJobDto> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/scraping/jobs";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(body);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateJob(_response);
+        });
+    }
+
+    protected processCreateJob(response: Response): Promise<ScrapingJobDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ScrapingJobDto;
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A manual item, a range that will not parse, or a `startAt` that has passed.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No item under that id, or no crawler under its `sourceName`.", status, _responseText, _headers);
+            });
+        } else if (status === 501) {
+            return response.text().then((_responseText) => {
+            return throwException("A crawler item that is not a novel.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScrapingJobDto>(null as any);
+    }
+
+    /**
+     * @return Deleted, and every task filed under it with it.
+     */
+    deleteJob(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v1/scrapings/scraping/jobs/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteJob(_response);
+        });
+    }
+
+    protected processDeleteJob(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A job that has not settled \u2014 cancel it first, then delete it.", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            return throwException("No job under that id.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
      * @return Written, published where the new status is `queued`, and mirrored.
      */
     updateJobStatus(id: string, body: UpdateScrapingJobStatusDto, signal?: AbortSignal): Promise<ScrapingJobDto> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/jobs/{id}/status";
+        let url_ = this.baseUrl + "/api/v1/scrapings/scraping/jobs/{id}/status";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{id}", encodeURIComponent("" + id));
@@ -1282,56 +1114,6 @@ export class ScrapingClient {
             });
         }
         return Promise.resolve<ScrapingJobDto>(null as any);
-    }
-
-    /**
-     * Delete a settled job
-     * @return Deleted, and every task filed under it with it.
-     */
-    deleteJob(id: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v1/scrapings/jobs/{id}";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "DELETE",
-            signal,
-            headers: {
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processDeleteJob(_response);
-        });
-    }
-
-    protected processDeleteJob(response: Response): Promise<void> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
-            return response.text().then((_responseText) => {
-            return;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("A job that has not settled \u2014 cancel it first, then delete it.", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            return throwException("Missing or invalid ID token.", status, _responseText, _headers);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            return throwException("No job under that id.", status, _responseText, _headers);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<void>(null as any);
     }
 }
 
@@ -1387,115 +1169,35 @@ export interface ChangePasswordDto {
     newPassword: string;
 }
 
-/** The item's own type. Set from the parent, never sent. */
-export type NovelChapterType = "novel";
-
-/** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
-export type LibraryContentStatus = "discovered" | "pending" | "scraping" | "completed" | "failed";
-
-export interface NovelChapterDto {
-    id: string;
-    /** The item's own type. Set from the parent, never sent. */
-    type: NovelChapterType;
-    /** Where the piece came from. Null for a row added by hand. */
-    sourceUrl: string | null;
-    /** Where the bytes are. Null while the row is a placeholder. */
-    contentUrl: string | null;
-    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
-    status: LibraryContentStatus;
-    createdAt: string;
-    updatedAt: string;
-    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
-    translated: boolean;
-    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
-    sourceTitle: string | null;
-    /** The chapter number, and what the list is ordered by. */
-    index: number;
-    title: string;
-    language: string;
-    /** How long the stored text runs. Zero until there is text. */
-    words: number;
-}
-
-/** The item's own type. Set from the parent, never sent. */
-export type ImageAssetType = "image";
-
-export interface ImageAssetDto {
-    id: string;
-    /** The item's own type. Set from the parent, never sent. */
-    type: ImageAssetType;
-    /** Where the piece came from. Null for a row added by hand. */
-    sourceUrl: string | null;
-    /** Where the bytes are. Null while the row is a placeholder. */
-    contentUrl: string | null;
-    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
-    status: LibraryContentStatus;
-    createdAt: string;
-    updatedAt: string;
-    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
-    translated: boolean;
-    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
-    sourceTitle: string | null;
-    filename: string;
-    /** Bytes. */
-    filesize: number;
-}
-
-/** The item's own type. Set from the parent, never sent. */
-export type VideoAssetType = "video";
-
-export interface VideoAssetDto {
-    id: string;
-    /** The item's own type. Set from the parent, never sent. */
-    type: VideoAssetType;
-    /** Where the piece came from. Null for a row added by hand. */
-    sourceUrl: string | null;
-    /** Where the bytes are. Null while the row is a placeholder. */
-    contentUrl: string | null;
-    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
-    status: LibraryContentStatus;
-    createdAt: string;
-    updatedAt: string;
-    /** Whether this row is a translation. False for the source, and false for a chapter no one has translated into the language asked for. */
-    translated: boolean;
-    /** What the chapter is called in its own language, for the line under a translated title. Null when this row is the source. */
-    sourceTitle: string | null;
-    filename: string;
-    /** Bytes. */
-    filesize: number;
-}
-
-export type LibraryItemType = "novel" | "image" | "video";
-
-export type LibraryItemStatus = "draft" | "scraping" | "ready" | "failed";
-
+/** Set on creation and immutable after it. */
 export type LibrarySourceMode = "manual" | "crawler";
-
-/** The work's own status, as its source publishes it. */
-export type NovelStatus = "ongoing" | "complete" | "hiatus";
 
 export interface NovelMetadataDto {
     /** Pieces the source is known to have. */
     discoveredCount: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt: string | null;
     /** How many of them are stored here. */
     downloadedCount: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt: string | null;
     /** The work's own status, as its source publishes it. */
-    status: NovelStatus;
+    status: NovelMetadataDtoStatus;
+    /** The author's name. */
     author: string;
+    /** The language the work is written in. */
     language: string;
+    /** The genres the work belongs to. */
     genres: string[];
+    /** A brief summary of the work. */
     description: string;
 }
 
 export interface ImageSetMetadataDto {
     /** Pieces the source is known to have. */
     discoveredCount: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt: string | null;
     /** How many of them are stored here. */
     downloadedCount: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt: string | null;
     /** Bytes held. */
     downloadedSize: number;
 }
@@ -1503,257 +1205,232 @@ export interface ImageSetMetadataDto {
 export interface VideoSetMetadataDto {
     /** Pieces the source is known to have. */
     discoveredCount: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt: string | null;
     /** How many of them are stored here. */
     downloadedCount: number;
+    /** When the source was last read for that inventory. */
+    discoveredAt: string | null;
     /** Bytes held. */
     downloadedSize: number;
     /** Seconds held. */
     downloadedDuration: number;
 }
 
-export interface LibraryListItemDto {
+export interface LibraryItemDto {
+    /** The unique identifier of the library item. */
     id: string;
     /** Set on creation and immutable after it. */
-    type: LibraryItemType;
+    type: LibraryItemDtoType;
+    /** The title of the library item. */
     title: string;
-    /** A cover image URL, or null where the listing draws its placeholder. */
-    coverUrl: string | null;
+    /** Where the item is in our pipeline. */
+    status: LibraryItemDtoStatus;
     /** Set on creation and immutable after it. */
     sourceMode: LibrarySourceMode;
     /** `Manual`, or the crawler's name. */
     sourceName: string;
     /** What a crawler reads. Null for a manual item. */
-    sourceUrl: string | null;
-    /** Where the item is in our pipeline. */
-    status: LibraryItemStatus;
-    /** Everything type-specific. Which shape it is follows from `type`: a novel returns NovelMetadataDto, an image ImageSetMetadataDto, a video VideoSetMetadataDto. */
-    metadata: NovelMetadataDto;
+    sourceUrl?: string | null;
+    /** A cover image URL, or null where the listing draws its placeholder. */
+    coverUrl?: string | null;
+    /** Metadata specific to novels. */
+    novelMetadata?: NovelMetadata | null;
+    /** Metadata specific to image sets. */
+    imageMetadata?: ImageMetadata | null;
+    /** Metadata specific to video sets. */
+    videoMetadata?: VideoMetadata | null;
+    /** Set on creation. */
+    createdAt: string;
     /** Rewritten on every write. The listing is ordered by it. */
     updatedAt: string;
 }
 
 export interface LibraryItemPageDto {
     /** This page, ordered by `updatedAt` descending. */
-    items: LibraryListItemDto[];
-    /** How many items match the filter — not how many this page holds. */
+    items: LibraryItemDto[];
+    /** What matches the filter, not what this page holds. */
     total: number;
-    /** 1-based. */
+    /** The current page number. */
     page: number;
+    /** The number of items per page. */
     pageSize: number;
-}
-
-export type TranslationLanguage = "vi" | "en" | "zh";
-
-export interface LibraryTranslationCoverageDto {
-    language: TranslationLanguage;
-    /** Chapters translated into it. Zero until one is written. */
-    translated: number;
-}
-
-export interface LibraryItemDto {
-    id: string;
-    /** Set on creation and immutable after it. */
-    type: LibraryItemType;
-    title: string;
-    /** A cover image URL, or null where the listing draws its placeholder. */
-    coverUrl: string | null;
-    /** Set on creation and immutable after it. */
-    sourceMode: LibrarySourceMode;
-    /** `Manual`, or the crawler's name. */
-    sourceName: string;
-    /** What a crawler reads. Null for a manual item. */
-    sourceUrl: string | null;
-    /** Where the item is in our pipeline. */
-    status: LibraryItemStatus;
-    /** Everything type-specific. Which shape it is follows from `type`: a novel returns NovelMetadataDto, an image ImageSetMetadataDto, a video VideoSetMetadataDto. */
-    metadata: NovelMetadataDto;
-    createdAt: string;
-    /** Rewritten on every write. The listing is ordered by it. */
-    updatedAt: string;
-    /** How many chapters each language covers — all three, zeroes included. Null on an image or video set, which has no translations. */
-    translations: LibraryTranslationCoverageDto[] | null;
-}
-
-export interface NovelMetadataInputDto {
-    /** Pieces the source is known to have. */
-    discoveredCount?: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt?: string | null;
-    /** The work's own status, as its source publishes it. */
-    status?: NovelStatus;
-    author?: string;
-    language?: string;
-    genres?: string[];
-    description?: string;
-}
-
-export interface ImageSetMetadataInputDto {
-    /** Pieces the source is known to have. */
-    discoveredCount?: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt?: string | null;
-}
-
-export interface VideoSetMetadataInputDto {
-    /** Pieces the source is known to have. */
-    discoveredCount?: number;
-    /** When the source was last read for that inventory. */
-    discoveredAt?: string | null;
 }
 
 export interface CreateLibraryItemDto {
     /** Immutable after creation — it decides the shape of `metadata`. */
-    type: LibraryItemType;
+    type: CreateLibraryItemDtoType;
+    /** The title of the library item. */
     title: string;
-    /** A link to a cover image. Null, or left out, for the placeholder. */
-    coverUrl?: string | null;
+    /** The status of the library item. */
+    status: CreateLibraryItemDtoStatus;
     /** Immutable after creation — it decides how content arrives. */
-    sourceMode: LibrarySourceMode;
+    sourceMode: CreateLibraryItemDtoSourceMode;
     /** Which crawler, for a crawler item — required of one. A manual item is `Manual`, whatever is sent. */
     sourceName?: string;
     /** What the crawler reads. Required of a crawler item, and refused of a manual one. */
-    sourceUrl?: string | null;
-    /** The editable fields for this `type`. Every type may state the inventory; only a novel has anything else to say. */
-    metadata?: NovelMetadataInputDto;
+    sourceUrl?: any;
+    /** A link to a cover image. Null, or left out, for the placeholder. */
+    coverUrl?: any;
+    /** The novel metadata of the library item, shape depends on the `type`. */
+    novelMetadata?: any;
+    /** The image metadata of the library item, shape depends on the `type`. */
+    imageMetadata?: any;
+    /** The video metadata of the library item, shape depends on the `type`. */
+    videoMetadata?: any;
 }
-
-/** Defaults to `draft` when left out, like every other omitted field. */
-export type WritableLibraryItemStatus = "draft" | "ready";
 
 export interface UpdateLibraryItemDto {
-    /** Immutable — a value other than the stored one is refused. */
-    type: LibraryItemType;
+    /** Immutable after creation — it decides the shape of `metadata`. */
+    type: UpdateLibraryItemDtoType;
+    /** The title of the library item. */
     title: string;
-    /** A link to a cover image. Null, or left out, clears the one it has. */
-    coverUrl?: string | null;
-    /** Immutable — a value other than the stored one is refused. */
-    sourceMode: LibrarySourceMode;
+    /** The status of the library item. */
+    status: UpdateLibraryItemDtoStatus;
+    /** Immutable after creation — it decides how content arrives. */
+    sourceMode: UpdateLibraryItemDtoSourceMode;
     /** Which crawler, for a crawler item — required of one. A manual item is `Manual`, whatever is sent. */
     sourceName?: string;
     /** What the crawler reads. Required of a crawler item, and refused of a manual one. */
-    sourceUrl?: string | null;
-    /** Defaults to `draft` when left out, like every other omitted field. */
-    status?: WritableLibraryItemStatus;
-    /** The editable fields for this `type`. Every type may state the inventory; only a novel has anything else to say. */
-    metadata?: NovelMetadataInputDto;
+    sourceUrl?: any;
+    /** A link to a cover image. Null, or left out, for the placeholder. */
+    coverUrl?: any;
+    /** The novel metadata of the library item, shape depends on the `type`. */
+    novelMetadata?: any;
+    /** The image metadata of the library item, shape depends on the `type`. */
+    imageMetadata?: any;
+    /** The video metadata of the library item, shape depends on the `type`. */
+    videoMetadata?: any;
 }
 
-export interface LibraryPackageDto {
-    /** Where the archive is. Tokenised, and ready to open. */
-    url: string;
-    /** What the browser saves it as. */
+export interface TextContentDto {
+    /** The URL of the text content. */
+    contentUrl: string | null;
+    /** The language of the text content. */
+    language: TextContentDtoLanguage;
+    /** The title of the text content. */
+    title: string;
+    /** How long the stored text runs. Zero until there is text. */
+    words: number;
+}
+
+export interface AudioContentDto {
+    /** The URL of the audio content. */
+    contentUrl: string | null;
+    /** The language of the audio content. */
+    language: AudioContentDtoLanguage;
+    /** The URL of the subtitle content. */
+    subtitleUrl: string | null;
+}
+
+export interface ImageContentDto {
+    /** The URL of the image content. */
+    contentUrl: string | null;
+    /** The filename of the image content. */
     filename: string;
-    /** What the archive weighs. */
-    bytes: number;
-    /** Chapter records written. */
-    chapters: number;
-    /** Of those, how many had text to pack. The rest are discovered chapters nobody has scraped. */
-    bodies: number;
-    /** What the package carries per language — all three, zeroes included. */
-    translations: LibraryTranslationCoverageDto[];
+    /** The size of the image content in bytes. */
+    filesize: number;
+    /** The dimensions of the image content. */
+    dimensions: string;
 }
 
-export interface LibraryPackageRefDto {
-    /** The download URL of an uploaded package. It has to be an object in this bucket. */
-    packageUrl: string;
+export interface VideoContentDto {
+    /** The URL of the video content. */
+    contentUrl: string | null;
+    /** The filename of the video content. */
+    filename: string;
+    /** The size of the video content in bytes. */
+    filesize: number;
+    /** The dimensions of the video content. */
+    dimensions: string;
+    /** The duration of the video content in seconds. */
+    duration: number;
 }
 
-export type PackageCheckState = "pass" | "warn" | "fail";
-
-export interface LibraryPackageCheckDto {
-    state: PackageCheckState;
-    label: string;
-    detail: string;
-}
-
-export interface LibraryPackageReportDto {
-    /** Whether an import may proceed: no check failed. A warning does not stop one. */
-    valid: boolean;
-    checks: LibraryPackageCheckDto[];
-    /** Chapter records in the package. */
-    chapters: number;
-    /** Chapter numbers the target does not hold yet. */
-    adding: number;
-    /** Chapter numbers it already holds. What the conflict policy decides about. */
-    existing: number;
-    /** Entries the format does not know, left alone. */
-    skipped: string[];
-    /** One row per language the package carries. A language it does not is absent, not zero. */
-    translations: LibraryTranslationCoverageDto[];
-}
-
-/** What to do with a chapter number this item already has. */
-export type ImportConflict = "skip" | "overwrite" | "newItem";
-
-export interface StartLibraryImportDto {
-    /** The download URL of an uploaded package. It has to be an object in this bucket. */
-    packageUrl: string;
-    /** What to do with a chapter number this item already has. */
-    onConflict: ImportConflict;
-}
-
-export interface LibraryImportDto {
-    /** Where the chapters are going. The route's id, unless the policy made a new item. */
-    itemId: string;
-    /** Bodies to write — chapters plus translations. What the progress bar divides by. */
-    total: number;
+export interface LibraryContentDto {
+    /** The unique identifier of the library content. */
+    id: string;
+    /** The chapter number, and what the list is ordered by. */
+    idx: number;
+    /** The item's own type. Set from the parent, never sent. */
+    type: LibraryContentDtoType;
+    /** A life cycle. `pending` and `completed` follow from `contentUrl`; the other three are discovery's and the job runner's. */
+    status: LibraryContentDtoStatus;
+    /** Where the piece came from. Null for a row added by hand. */
+    sourceUrl: string | null;
+    /** The text content of the library item. */
+    textContent?: TextContent | null;
+    /** The audio content of the library item. */
+    audioContent?: AudioContent | null;
+    /** The image content of the library item. */
+    imageContent?: ImageContent | null;
+    /** The video content of the library item. */
+    videoContent?: VideoContent | null;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface LibraryContentPageDto {
     /** Chapters by their number, assets by their name. */
-    items: NovelChapterDto[];
+    items: LibraryContentDto[];
     /** What matches the filter, not what this page holds. */
     total: number;
+    /** The current page number. */
     page: number;
+    /** The number of items per page. */
     pageSize: number;
 }
 
 export interface CreateLibraryContentDto {
     /** A chapter only. Defaults to the next number up. */
-    index?: number;
-    /** A chapter only, and required of one. */
-    title?: string;
-    /** A chapter only. */
-    language?: string;
-    /** A chapter only. Counted by whoever wrote the text — see the known limits. */
-    words?: number;
-    /** An image or video asset only, and required of one. */
-    filename?: string;
-    /** An image or video asset only. Bytes, as the uploader reports them. */
-    filesize?: number;
+    idx: number;
+    /** The type of the content. */
+    type: CreateLibraryContentDtoType;
+    /** The status of the content. */
+    status: CreateLibraryContentDtoStatus;
     /** Where the piece came from. Left out for a row added by hand. */
-    sourceUrl?: string | null;
-    /** Where the browser put the bytes. Left out for a placeholder row. */
-    contentUrl?: string | null;
+    sourceUrl?: any;
+    /** The text content of the library item, shape depends on the `type`. */
+    textContent?: TextContentDto;
+    /** The audio content of the library item, shape depends on the `type`. */
+    audioContent?: AudioContentDto;
+    /** The image content of the library item, shape depends on the `type`. */
+    imageContent?: ImageContentDto;
+    /** The video content of the library item, shape depends on the `type`. */
+    videoContent?: VideoContentDto;
 }
 
 export interface UpdateLibraryContentDto {
     /** A chapter only. Defaults to the next number up. */
-    index?: number;
-    /** A chapter only, and required of one. */
-    title?: string;
-    /** A chapter only. */
-    language?: string;
-    /** A chapter only. Counted by whoever wrote the text — see the known limits. */
-    words?: number;
-    /** An image or video asset only, and required of one. */
-    filename?: string;
-    /** An image or video asset only. Bytes, as the uploader reports them. */
-    filesize?: number;
+    idx: number;
+    /** The type of the content. */
+    type: UpdateLibraryContentDtoType;
+    /** The status of the content. */
+    status: UpdateLibraryContentDtoStatus;
     /** Where the piece came from. Left out for a row added by hand. */
-    sourceUrl?: string | null;
-    /** Where the browser put the bytes. Left out for a placeholder row. */
-    contentUrl?: string | null;
+    sourceUrl?: any;
+    /** The text content of the library item, shape depends on the `type`. */
+    textContent?: TextContentDto;
+    /** The audio content of the library item, shape depends on the `type`. */
+    audioContent?: AudioContentDto;
+    /** The image content of the library item, shape depends on the `type`. */
+    imageContent?: ImageContentDto;
+    /** The video content of the library item, shape depends on the `type`. */
+    videoContent?: VideoContentDto;
 }
 
-export interface ValidateDto {
+export interface PreviewRequestDto {
     /** One of the registered crawlers. A name that is not registered is a 404. */
     crawler: string;
     /** The book's URL on the source site. A URL on another site is a 400. */
     sourceUrl: string;
+    /** Skip the cached answer and read the source again. */
+    refresh?: boolean;
 }
+
+/** The crawler's kind, which decides the shape of `content`. */
+export type LibraryItemType = "novel" | "image" | "video";
+
+/** The work's own status, mapped from the source's word for it. */
+export type NovelStatus = "ongoing" | "complete" | "hiatus";
 
 export interface NovelPreviewMetadataDto {
     /** The canonical book URL, so two spellings of one book normalise to one. */
@@ -1767,6 +1444,8 @@ export interface NovelPreviewMetadataDto {
     /** The source category, where it has one. */
     genres: string[];
     description: string;
+    /** How many chapters the source has, or how many it says it has. */
+    chapters: number;
     /** The newest chapter, as the source names it. */
     latest: string;
     latestUrl: string;
@@ -1776,17 +1455,8 @@ export interface NovelPreviewMetadataDto {
     coverUrl: string | null;
 }
 
-export interface PreviewChapterDto {
-    /** Reading order, from 1. */
-    index: number;
-    title: string;
-    url: string;
-}
-
 export interface NovelPreviewDto {
     metadata: NovelPreviewMetadataDto;
-    /** Every chapter, in reading order. The preview draws a count from it; the job runner will draw content. */
-    chapters: PreviewChapterDto[];
     /** The cover as a data URI — the bytes and their type in one string. Null where the book has no cover, or fetching it failed. */
     coverBinary: string | null;
 }
@@ -1794,7 +1464,7 @@ export interface NovelPreviewDto {
 export interface PreviewDto {
     /** The crawler's kind, which decides the shape of `content`. */
     type: LibraryItemType;
-    content: NovelPreviewDto;
+    novelContent: NovelPreviewDto;
 }
 
 export interface DiscoverDto {
@@ -1802,54 +1472,51 @@ export interface DiscoverDto {
     libraryId: string;
 }
 
-export interface CreateScrapingJobDto {
-    /** The crawler item to scrape. A manual item is a 400. */
-    libraryId: string;
-    /** `all`, `missing`, or an index expression — `1,3,5,7`, `23-34`, `[23:34]`. Anything else is a 400. */
-    range: string;
-    /** Whether a chapter that already holds text is fetched again. */
-    refetch?: boolean;
-    /** When to publish the work. Null queues it now. */
-    startAt?: string | null;
-    /** How many times a failed chapter is tried again. The dialog offers 3, 1 and 0. */
-    retry?: number;
-}
-
-export type ScrapingJobStatus = "scheduled" | "queued" | "running" | "paused" | "stopped" | "completed" | "failed";
-
 export interface ScrapingTaskDto {
     /** The library content row this task is for — and this task's own id. */
     id: string;
+    /** The library content row this task is for. */
     contentId: string;
     /** Denormalised so a task reads on its own. */
     libraryId: string;
     /** The chapter number — what the list is ordered by. */
     index: number;
+    /** The URL where the content can be fetched from. */
     sourceUrl: string;
-    status: ScrapingJobStatus;
+    /** The task status. */
+    status: ScrapingTaskDtoStatus;
     /** The job's, copied down: it is what the message carries. */
     refetch: boolean;
     /** The job's, copied down, for the same reason. */
     retry: number;
     /** When a consumer picked this task up. */
     startAt: string | null;
+    /** When the task was completed. */
     completedAt: string | null;
     /** The last failure, in one line. */
     error: string | null;
+    /** When the task was created. */
+    createdAt: string;
+    /** When the task was last updated. */
+    updatedAt: string;
 }
 
 export interface ScrapingJobDto {
+    /** The unique identifier of the scraping job. */
     id: string;
+    /** The library this scraping job belongs to. */
     libraryId: string;
     /** The item's type, as it was. What the listing's library filter narrows on. */
-    libraryType: LibraryItemType;
+    libraryType: ScrapingJobDtoLibraryType;
     /** As the item was called when the job was described. */
     libraryTitle: string;
     /** The item's `sourceName`, carried so a republish needs no read of it. */
     crawler: string;
-    status: ScrapingJobStatus;
+    /** The task status. */
+    status: ScrapingJobDtoStatus;
     /** The expression as it was sent. Drawn verbatim in the panel. */
     range: string;
+    /** Whether a chapter that already holds text is fetched again. */
     refetch: boolean;
     /** How many times a failed task is tried again. */
     retry: number;
@@ -1861,34 +1528,141 @@ export interface ScrapingJobDto {
     completedAt: string | null;
     /** Tasks in the job. What the progress bar divides by. */
     total: number;
+    /** How many tasks have been completed. */
     completed: number;
+    /** How many tasks have failed. */
     failed: number;
     /** Candidates dropped as already complete. */
     skipped: number;
+    /** When the task was created. */
     createdAt: string;
+    /** When the task was last updated. */
     updatedAt: string;
     /** One per piece of content in range, by its number. */
     tasks: ScrapingTaskDto[];
 }
-
-export type ScrapingJobState = "active" | "scheduled" | "history";
 
 export interface ScrapingJobPageDto {
     /** Newest first, each with the tasks it described. */
     items: ScrapingJobDto[];
     /** What matches the filter, not what this page holds. */
     total: number;
+    /** The current page number. */
     page: number;
+    /** The number of items per page. */
     pageSize: number;
 }
 
-/** Where to take the job. A status it cannot reach from where it stands is a 400. */
-export type RequestedScrapingJobStatus = "queued" | "paused" | "stopped";
+export interface CreateScrapingJobDto {
+    /** The crawler item to scrape. A manual item is a 400. */
+    libraryId: string;
+    /** `all`, `missing`, or an index expression — `1,3,5,7`, `23-34`, `[23:34]`. Anything else is a 400. */
+    range: string;
+    /** Whether a chapter that already holds text is fetched again. */
+    refetch?: boolean;
+    /** When to publish the work. Null queues it now. */
+    startAt?: any;
+    /** How many times a failed chapter is tried again. The dialog offers 3, 1 and 0. */
+    retry?: number;
+}
 
 export interface UpdateScrapingJobStatusDto {
     /** Where to take the job. A status it cannot reach from where it stands is a 400. */
-    status: RequestedScrapingJobStatus;
+    status: UpdateScrapingJobStatusDtoStatus;
 }
+
+export type Type = "novel" | "image" | "video";
+
+export type Status = "draft" | "scraping" | "ready" | "failed";
+
+export type SourceMode = "manual" | "crawler";
+
+export type Status2 = "discovered" | "pending" | "inprogress" | "completed" | "failed";
+
+export type Language = "vi" | "en" | "zh";
+
+export type Type2 = "original" | "translation" | "audio" | "image" | "video";
+
+export type State = "active" | "scheduled" | "history";
+
+export type LibraryType = "novel" | "image" | "video";
+
+export type NovelMetadataDtoStatus = "ongoing" | "complete" | "hiatus";
+
+export type LibraryItemDtoType = "novel" | "image" | "video";
+
+export type LibraryItemDtoStatus = "draft" | "scraping" | "ready" | "failed";
+
+export interface NovelMetadata extends NovelMetadataDto {
+
+    [key: string]: any;
+}
+
+export interface ImageMetadata extends ImageSetMetadataDto {
+
+    [key: string]: any;
+}
+
+export interface VideoMetadata extends VideoSetMetadataDto {
+
+    [key: string]: any;
+}
+
+export type CreateLibraryItemDtoType = "novel" | "image" | "video";
+
+export type CreateLibraryItemDtoStatus = "draft" | "scraping" | "ready" | "failed";
+
+export type CreateLibraryItemDtoSourceMode = "manual" | "crawler";
+
+export type UpdateLibraryItemDtoType = "novel" | "image" | "video";
+
+export type UpdateLibraryItemDtoStatus = "draft" | "scraping" | "ready" | "failed";
+
+export type UpdateLibraryItemDtoSourceMode = "manual" | "crawler";
+
+export type TextContentDtoLanguage = "vi" | "en" | "zh";
+
+export type AudioContentDtoLanguage = "vi" | "en" | "zh";
+
+export type LibraryContentDtoType = "original" | "translation" | "audio" | "image" | "video";
+
+export type LibraryContentDtoStatus = "discovered" | "pending" | "inprogress" | "completed" | "failed";
+
+export interface TextContent extends TextContentDto {
+
+    [key: string]: any;
+}
+
+export interface AudioContent extends AudioContentDto {
+
+    [key: string]: any;
+}
+
+export interface ImageContent extends ImageContentDto {
+
+    [key: string]: any;
+}
+
+export interface VideoContent extends VideoContentDto {
+
+    [key: string]: any;
+}
+
+export type CreateLibraryContentDtoType = "original" | "translation" | "audio" | "image" | "video";
+
+export type CreateLibraryContentDtoStatus = "discovered" | "pending" | "inprogress" | "completed" | "failed";
+
+export type UpdateLibraryContentDtoType = "original" | "translation" | "audio" | "image" | "video";
+
+export type UpdateLibraryContentDtoStatus = "discovered" | "pending" | "inprogress" | "completed" | "failed";
+
+export type ScrapingTaskDtoStatus = "scheduled" | "queued" | "running" | "paused" | "stopped" | "completed" | "failed";
+
+export type ScrapingJobDtoLibraryType = "novel" | "image" | "video";
+
+export type ScrapingJobDtoStatus = "scheduled" | "queued" | "running" | "paused" | "stopped" | "completed" | "failed";
+
+export type UpdateScrapingJobStatusDtoStatus = "queued" | "paused" | "stopped";
 
 export class ApiException extends Error {
     override message: string;

@@ -1,19 +1,53 @@
 import type { BadgeProps } from '@nuxt/ui'
 import type { LibraryContent, LibraryContentPage, LibraryContentStatus, ScrapeScope, ScrapeStart, TranslationLanguage } from '~/types/library-content'
 import type { LibraryItemType } from '~/types/library'
-import type { LibraryContentPageDto, NovelChapterDto } from './api.clients'
+import type { LibraryContentDto, LibraryContentPageDto } from './api.clients'
 
 /**
- * How a piece of content reads on screen. Safe because `LibraryContent` is a
- * discriminated union: a chapter's word count and an asset's size are only
- * reachable on the types that carry one.
+ * How a piece of content reads on screen. The wire row carries one of four content
+ * blocks and a status spelled `inprogress`; this narrows it to the flat shape
+ * everything below reads, keyed on the block that is actually there rather than
+ * `type`, which names the row's own kind (original, translation, …) and not the
+ * item's.
  */
+export function asLibraryContent(dto: LibraryContentDto): LibraryContent {
+  const base = {
+    id: dto.id,
+    sourceUrl: dto.sourceUrl,
+    status: asContentStatus(dto.status),
+    createdAt: dto.createdAt,
+    updatedAt: dto.updatedAt,
+    translated: dto.type === 'translation',
+    sourceTitle: null
+  }
 
-/** A generated row, read as the union everything below narrows on — see `asLibraryItem`. */
-export const asLibraryContent = (content: NovelChapterDto): LibraryContent => content as unknown as LibraryContent
+  if (dto.textContent) {
+    return { ...base, type: 'novel', index: dto.idx, title: dto.textContent.title, language: dto.textContent.language, words: dto.textContent.words, contentUrl: dto.textContent.contentUrl }
+  }
+
+  if (dto.imageContent) {
+    return { ...base, type: 'image', filename: dto.imageContent.filename, filesize: dto.imageContent.filesize, contentUrl: dto.imageContent.contentUrl }
+  }
+
+  if (dto.videoContent) {
+    return { ...base, type: 'video', filename: dto.videoContent.filename, filesize: dto.videoContent.filesize, contentUrl: dto.videoContent.contentUrl }
+  }
+
+  throw new Error(`Content ${dto.id} carries no block this screen knows how to draw.`)
+}
+
+/** `inprogress` on the wire is `scraping` in the domain — the one state with two names. */
+function asContentStatus(status: LibraryContentDto['status']): LibraryContentStatus {
+  return status === 'inprogress' ? 'scraping' : status
+}
 
 /** The same, for a page of them. */
-export const asLibraryContentPage = (page: LibraryContentPageDto): LibraryContentPage => page as unknown as LibraryContentPage
+export const asLibraryContentPage = (page: LibraryContentPageDto): LibraryContentPage => ({
+  items: page.items.map(asLibraryContent),
+  total: page.total,
+  page: page.page,
+  pageSize: page.pageSize
+})
 
 /** One badge per state, labelled with the state's own name. The `Record` makes a missing one a compile error. */
 const CONTENT_STATUS_TAGS: Record<LibraryContentStatus, { label: string, color: BadgeProps['color'], variant: BadgeProps['variant'] }> = {

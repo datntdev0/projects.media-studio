@@ -58,7 +58,7 @@ async function fetchPage(next: number) {
   loadingMore.value = true
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, language.value ?? undefined, undefined, undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, undefined, next, PAGE_SIZE))
 
     if (mine !== ticket) {
       return

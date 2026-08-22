@@ -87,7 +87,7 @@ async function fetchPage(next: number) {
   contentError.value = null
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
 
     if (mine !== ticket) {
       return
@@ -135,7 +135,7 @@ async function reloadLoaded(): Promise<void> {
 
   try {
     const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
-      libraryClient.listContents(itemId.value, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
+      libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
 
     if (mine !== ticket) {
       return
@@ -322,10 +322,10 @@ async function onDiscover() {
   discovering.value = true
 
   try {
-    const read = asLibraryItem(await scrapingClient.discover({ libraryId: itemId.value }))
-    const added = Math.max(read.metadata.discoveredCount - before, 0)
-
+    await scrapingClient.discover({ libraryId: itemId.value })
     await refreshAll()
+
+    const added = Math.max((novel.value?.metadata.discoveredCount ?? before) - before, 0)
 
     toast.add({ title: added ? `Found ${added} new ${contentUnit('novel', added)}` : 'No new chapters', icon: 'i-lucide-check', color: 'primary' })
   } catch (cause) {

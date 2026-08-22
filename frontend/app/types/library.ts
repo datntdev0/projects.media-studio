@@ -116,20 +116,22 @@ export interface LibraryItemMetadataInput {
 export interface CreateLibraryItem {
   type: LibraryItemType
   title: string
+  status: WritableLibraryItemStatus
   coverUrl?: string | null
   sourceMode: LibrarySourceMode
   sourceName?: string
   sourceUrl?: string | null
-  metadata?: LibraryItemMetadataInput
+  /** Only the slot matching `type` is ever sent — the other two are left out rather than sent empty. */
+  novelMetadata?: LibraryItemMetadataInput
+  imageMetadata?: LibraryItemMetadataInput
+  videoMetadata?: LibraryItemMetadataInput
 }
 
 /**
  * The `PUT` body — the item's whole writable representation, which is why an
  * omitted field is a cleared field rather than an untouched one.
  */
-export interface ReplaceLibraryItem extends CreateLibraryItem {
-  status?: WritableLibraryItemStatus
-}
+export type ReplaceLibraryItem = CreateLibraryItem
 
 export interface ListLibraryItemsQuery {
   type?: LibraryItemType
@@ -197,6 +199,8 @@ export interface CrawlerPreviewMetadata {
   language: string
   genres: string[]
   description: string
+  /** How many chapters the source has, or how many it says it has. */
+  chapters: number
   /** The newest chapter, as the source names it. */
   latest: string
   latestUrl: string
@@ -206,18 +210,9 @@ export interface CrawlerPreviewMetadata {
   coverUrl: string | null
 }
 
-/** One chapter, as the source lists it. */
-export interface CrawlerPreviewChapter {
-  index: number
-  title: string
-  url: string
-}
-
 /** What a novel source holds. */
 export interface NovelCrawlerPreview {
   metadata: CrawlerPreviewMetadata
-  /** Every chapter. The wizard draws a count from it; the job runner will draw content. */
-  chapters: CrawlerPreviewChapter[]
   /** The cover as a data URI — the bytes and their type in one string. */
   coverBinary: string | null
 }
@@ -226,10 +221,10 @@ export interface NovelCrawlerPreview {
  * What a crawler reports back about a URL, before anything is created.
  *
  * An envelope, as the API sends it: `type` says what kind of source was read, and
- * a crawler that reads image sets will add a `content` shape rather than reshape
- * this one.
+ * a crawler that reads image sets will add a `novelContent` shape rather than
+ * reshape this one.
  */
 export interface CrawlerPreview {
   type: LibraryItemType
-  content: NovelCrawlerPreview
+  novelContent: NovelCrawlerPreview
 }

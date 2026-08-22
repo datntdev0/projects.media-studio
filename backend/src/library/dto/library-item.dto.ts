@@ -1,51 +1,68 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode, NovelStatus } from '../entities/library-item.entity';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_SEARCH } from './library-content.constants';
 
-/** The base metadata all library items share. */
+/**
+ * The base metadata all library items share.
+ *
+ * A response always fills every field, so they stay required in the wire type —
+ * but as input the manager already defaults each one when it is left out, so
+ * validation only checks the shape of what is actually sent.
+ */
 export class LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Pieces the source is known to have.', example: 640 })
+  @IsOptional() @IsInt() @Min(0)
   discoveredCount!: number;
 
   @ApiProperty({ description: 'How many of them are stored here.', example: 412 })
+  @IsOptional() @IsInt() @Min(0)
   downloadedCount!: number;
 
   @ApiProperty({ description: 'When the source was last read for that inventory.', example: null })
+  @IsOptional() @IsISO8601()
   discoveredAt!: string | null;
 }
 
 /** A novel: the counts, and what the source says about the work. */
 export class NovelMetadataDto extends LibraryItemMetadataBaseDto {
   @ApiProperty({ description: "The work's own status, as its source publishes it.", enum: NovelStatus })
+  @IsOptional() @IsEnum(NovelStatus)
   status!: NovelStatus;
 
   @ApiProperty({ description: "The author's name.", example: 'Nguyen Van A' })
+  @IsOptional() @IsString()
   author!: string;
 
   @ApiProperty({ description: "The language the work is written in.", example: 'en' })
+  @IsOptional() @IsString()
   language!: string;
 
   @ApiProperty({ description: 'The genres the work belongs to.', example: ['fantasy', 'adventure'] })
+  @IsOptional() @IsArray() @IsString({ each: true })
   genres!: string[];
 
   @ApiProperty({ description: 'A brief summary of the work.', example: 'A cartographer maps a coast that keeps moving.' })
+  @IsOptional() @IsString()
   description!: string;
 }
 
 /** An image set. */
 export class ImageSetMetadataDto extends LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Bytes held.', example: 882900275 })
+  @IsOptional() @IsInt() @Min(0)
   downloadedSize!: number;
 }
 
 /** A video set: bytes, and how long they run. */
 export class VideoSetMetadataDto extends LibraryItemMetadataBaseDto {
   @ApiProperty({ description: 'Bytes held.', example: 3328599654 })
+  @IsOptional() @IsInt() @Min(0)
   downloadedSize!: number;
 
   @ApiProperty({ description: 'Seconds held.', example: 7412 })
+  @IsOptional() @IsInt() @Min(0)
   downloadedDuration!: number;
 }
 

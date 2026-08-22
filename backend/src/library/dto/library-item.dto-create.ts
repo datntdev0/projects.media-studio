@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, IsUrl, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { LibraryItemStatus, LibraryItemType, LibrarySourceMode } from '../entities/library-item.entity';
 import { MAX_SOURCE_NAME, MAX_TITLE, MAX_URL } from './library-item.constants';
@@ -34,14 +35,14 @@ export class CreateLibraryItemDto {
   coverUrl?: string | null;
 
   @ApiPropertyOptional({ description: 'The novel metadata of the library item, shape depends on the `type`.' })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => NovelMetadataDto)
   novelMetadata?: NovelMetadataDto | null;
 
   @ApiPropertyOptional({ description: 'The image metadata of the library item, shape depends on the `type`.' })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => ImageSetMetadataDto)
   imageMetadata?: ImageSetMetadataDto | null;
 
   @ApiPropertyOptional({ description: 'The video metadata of the library item, shape depends on the `type`.' })
-  @IsOptional() @ValidateNested()
+  @IsOptional() @ValidateNested() @Type(() => VideoSetMetadataDto)
   videoMetadata?: VideoSetMetadataDto | null;
 }

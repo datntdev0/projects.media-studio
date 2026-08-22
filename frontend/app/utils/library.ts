@@ -11,15 +11,20 @@ import type { LibraryItemDto, LibraryItemPageDto } from './api.clients'
 /**
  * A generated item, read as the union everything below narrows on.
  *
- * `metadata` is `oneOf` three shapes in the document, and NSwag flattens a `oneOf`
- * to its first branch — so every generated item describes itself as a novel. The
- * bytes off the wire are already right; only the generator's reading of them was
- * narrow, and this is the one place the two are reconciled.
+ * The wire sends three separate, mutually exclusive slots — `novelMetadata`,
+ * `imageMetadata`, `videoMetadata` — one of which is set, matching `type`. Everything
+ * below reads a single `metadata`, so this is the one place the two are reconciled.
  */
-export const asLibraryItem = (item: LibraryItemDto): LibraryItemDetail => item as unknown as LibraryItemDetail
+export function asLibraryItem(item: LibraryItemDto): LibraryItemDetail {
+  const { novelMetadata, imageMetadata, videoMetadata, ...rest } = item
+
+  return { ...rest, metadata: novelMetadata ?? imageMetadata ?? videoMetadata } as unknown as LibraryItemDetail
+}
 
 /** The same, for a page of them. */
-export const asLibraryItemPage = (page: LibraryItemPageDto): LibraryItemPage => page as unknown as LibraryItemPage
+export function asLibraryItemPage(page: LibraryItemPageDto): LibraryItemPage {
+  return { ...page, items: page.items.map(asLibraryItem) } as unknown as LibraryItemPage
+}
 
 /**
  * An item reading as **Scraping** while a job is running over it.
