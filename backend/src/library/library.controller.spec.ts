@@ -4,7 +4,7 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
+import { DocumentSnapshot, FieldPath, Firestore } from 'firebase-admin/firestore';
 import { FirebaseAdminService } from '../core/firebase/firebase-admin.service';
 import { QueryListLibraryContentsDto } from './dto/library-content.dto';
 import { CreateLibraryContentDto } from './dto/library-content.dto-create';
@@ -25,7 +25,7 @@ const NOW = '2026-08-11T09:12:04.113Z';
 /** One item's `contents` subcollection, keyed by content id. */
 type ContentRows = Map<string, Record<string, unknown>>;
 
-/** One Firestore collection, held in memory — just enough of `where`/`orderBy`/`get`/`doc` for the repository above it. */
+/** One Firestore collection, held in memory — just enough of `where`/`orderBy`/`limit`/`startAfter`/`get`/`doc` for the repository above it. */
 class FakeCollection {
   private autoId = 0;
 
@@ -33,7 +33,9 @@ class FakeCollection {
     private readonly rows: Map<string, Record<string, unknown>>,
     private readonly contentRows: Map<string, ContentRows> = new Map(),
     private readonly filters: [string, unknown][] = [],
-    private readonly order?: string,
+    private readonly orders: [string | FieldPath, 'asc' | 'desc'][] = [],
+    private readonly limitCount?: number,
+    private readonly startAfterValues?: unknown[],
   ) {}
 
   static seeded(items: LibraryItem[], contents: Record<string, LibraryContent[]> = {}): FakeCollection {
@@ -54,20 +56,47 @@ class FakeCollection {
   }
 
   where(field: string, _op: '==', value: unknown): FakeCollection {
-    return new FakeCollection(this.rows, this.contentRows, [...this.filters, [field, value]], this.order);
+    return new FakeCollection(this.rows, this.contentRows, [...this.filters, [field, value]], this.orders, this.limitCount, this.startAfterValues);
   }
 
-  orderBy(field: string): FakeCollection {
-    return new FakeCollection(this.rows, this.contentRows, this.filters, field);
+  orderBy(field: string | FieldPath, direction: 'asc' | 'desc' = 'asc'): FakeCollection {
+    return new FakeCollection(this.rows, this.contentRows, this.filters, [...this.orders, [field, direction]], this.limitCount, this.startAfterValues);
+  }
+
+  limit(count: number): FakeCollection {
+    return new FakeCollection(this.rows, this.contentRows, this.filters, this.orders, count, this.startAfterValues);
+  }
+
+  startAfter(...values: unknown[]): FakeCollection {
+    return new FakeCollection(this.rows, this.contentRows, this.filters, this.orders, this.limitCount, values);
   }
 
   get(): Promise<{ docs: DocumentSnapshot[] }> {
     let entries = Array.from(this.rows.entries()).filter(([, data]) => this.filters.every(([field, value]) => data[field] === value));
 
-    if (this.order) {
-      const field = this.order;
+    if (this.orders.length) {
+      entries = [...entries].sort((a, b) => {
+        for (const [field, direction] of this.orders) {
+          const cmp = compareValues(fieldValue(a, field), fieldValue(b, field));
 
-      entries = [...entries].sort(([, a], [, b]) => Number(a[field]) - Number(b[field]));
+          if (cmp !== 0) {
+            return direction === 'desc' ? -cmp : cmp;
+          }
+        }
+
+        return 0;
+      });
+    }
+
+    if (this.startAfterValues) {
+      const key = this.startAfterValues.map(comparable);
+      const index = entries.findIndex((entry) => this.orders.every(([field], i) => comparable(fieldValue(entry, field)) === key[i]));
+
+      entries = index === -1 ? [] : entries.slice(index + 1);
+    }
+
+    if (this.limitCount !== undefined) {
+      entries = entries.slice(0, this.limitCount);
     }
 
     return Promise.resolve({ docs: entries.map(([id, data]) => snapshot(id, data)) });
@@ -76,6 +105,33 @@ class FakeCollection {
   doc(id?: string): FakeDoc {
     return new FakeDoc(id ?? `auto-${++this.autoId}`, this.rows, this.contentRows);
   }
+}
+
+/** A row's value for a field, or its own id where the field is the document id. */
+function fieldValue([id, data]: [string, Record<string, unknown>], field: string | FieldPath): unknown {
+  return field instanceof FieldPath ? id : data[field];
+}
+
+/** A `Timestamp` and an ISO date string compare as the instant they name; everything else compares as itself. */
+function comparable(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return (value.toMillis as () => number)();
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return Date.parse(value);
+  }
+
+  return value;
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  const left = comparable(a);
+  const right = comparable(b);
+
+  if (left === right) return 0;
+
+  return left! < right! ? -1 : 1;
 }
 
 /** One document within `FakeCollection`, the operations `LibraryRepository` calls — including its `contents` subcollection. */
@@ -104,6 +160,14 @@ class FakeDoc {
     return Promise.resolve();
   }
 
+  /** What `firestore.recursiveDelete` calls: the document, and every row filed under it. */
+  recursiveDelete(): Promise<void> {
+    this.rows.delete(this.id);
+    this.contentRows.delete(this.id);
+
+    return Promise.resolve();
+  }
+
   /** This item's `contents` subcollection — the only one `LibraryRepository` opens. */
   collection(): FakeCollection {
     let byId = this.contentRows.get(this.id);
@@ -124,7 +188,7 @@ function snapshot(id: string, data?: Record<string, unknown>): DocumentSnapshot 
 /** The real managers over the real repository, over a Firestore that lives only in memory. */
 function controllerOver(items: LibraryItem[] = [], contents: Record<string, LibraryContent[]> = {}, packageManager?: LibraryPackageManager): LibraryController {
   const collection = FakeCollection.seeded(items, contents);
-  const firestore = { collection: () => collection } as unknown as Firestore;
+  const firestore = { collection: () => collection, recursiveDelete: (ref: FakeDoc) => ref.recursiveDelete() } as unknown as Firestore;
   const firebase = { firestore } as unknown as FirebaseAdminService;
 
   const repository = new LibraryRepository(firebase);
@@ -205,11 +269,11 @@ function asset(over: Partial<LibraryContent> = {}): LibraryContent {
 }
 
 function query(over: Partial<QueryListLibraryItemsDto> = {}): QueryListLibraryItemsDto {
-  return { page: 1, pageSize: 20, ...over };
+  return { pageSize: 20, ...over };
 }
 
 function contentQuery(over: Partial<QueryListLibraryContentsDto> = {}): QueryListLibraryContentsDto {
-  return { page: 1, pageSize: 50, ...over };
+  return { pageSize: 50, ...over };
 }
 
 describe('LibraryController.list', () => {
@@ -237,11 +301,18 @@ describe('LibraryController.list', () => {
     expect(page.items.map((item) => item.id)).toEqual(['c']);
   });
 
-  it('counts what matches, not what the page holds', async () => {
-    const page = await controllerOver(rows).list(query({ pageSize: 2 }));
+  it('answers with a cursor while more remain, and none once the last page is reached', async () => {
+    const controller = controllerOver(rows);
+    const first = await controller.list(query({ pageSize: 2 }));
 
-    expect(page).toMatchObject({ total: 3, page: 1, pageSize: 2 });
-    expect(page.items).toHaveLength(2);
+    expect(first.items.map((item) => item.id)).toEqual(['b', 'c']);
+    expect(first.pageSize).toBe(2);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await controller.list(query({ pageSize: 2, cursor: first.nextCursor! }));
+
+    expect(second.items.map((item) => item.id)).toEqual(['a']);
+    expect(second.nextCursor).toBeNull();
   });
 });
 
@@ -339,11 +410,18 @@ describe('LibraryController.listContents', () => {
     expect(page.items.map((row) => row.id)).toEqual(['b']);
   });
 
-  it('counts what matches, not what the page holds', async () => {
-    const page = await controllerOver([novel()], { 'novel-1': rows }).listContents('novel-1', contentQuery({ pageSize: 2 }));
+  it('answers with a cursor while more remain, and none once the last page is reached', async () => {
+    const controller = controllerOver([novel()], { 'novel-1': rows });
+    const first = await controller.listContents('novel-1', contentQuery({ pageSize: 2 }));
 
-    expect(page).toMatchObject({ total: 3, page: 1, pageSize: 2 });
-    expect(page.items).toHaveLength(2);
+    expect(first.items.map((row) => row.id)).toEqual(['a', 'b']);
+    expect(first.pageSize).toBe(2);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await controller.listContents('novel-1', contentQuery({ pageSize: 2, cursor: first.nextCursor! }));
+
+    expect(second.items.map((row) => row.id)).toEqual(['c']);
+    expect(second.nextCursor).toBeNull();
   });
 
   it('narrows by language', async () => {

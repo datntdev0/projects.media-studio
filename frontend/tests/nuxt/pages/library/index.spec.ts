@@ -20,7 +20,7 @@ import type { RunningJob } from '~/types/scraping-status'
  * own reasons to change which control raises them.
  */
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 25
 
 const { list, remove, discard, toast } = vi.hoisted(() => ({
   list: vi.fn(),
@@ -73,7 +73,7 @@ function novel(overrides: Partial<NovelItem> = {}): NovelItem {
   }
 }
 
-const answered = (items: NovelItem[], total = items.length) => list.mockResolvedValue({ items, total, page: 1, pageSize: PAGE_SIZE } satisfies LibraryItemPage)
+const answered = (items: NovelItem[], more = false) => list.mockResolvedValue({ items, nextCursor: more ? 'next' : null, pageSize: PAGE_SIZE } satisfies LibraryItemPage)
 
 /**
  * The page, with its first fetch landed — the listing is lazy, so the mount does not
@@ -130,7 +130,7 @@ describe('the library page', () => {
     it('the whole catalogue where nothing is narrowed', async () => {
       await render()
 
-      expect(asked()).toEqual([undefined, undefined, undefined, undefined, 1, PAGE_SIZE])
+      expect(asked()).toEqual([undefined, undefined, undefined, undefined, undefined, PAGE_SIZE])
     })
 
     it('one type once the tab is picked', async () => {
@@ -168,26 +168,26 @@ describe('the library page', () => {
     })
 
     it('the first page again once the filter has narrowed', async () => {
-      answered([novel()], 60)
+      answered([novel()], true)
 
       await render()
-      await click('3')
+      await click('Load more')
 
-      expect(asked()?.[4]).toBe(3)
+      expect(asked()?.[4]).toBe('next')
 
       await narrow('type', 'image')
 
-      expect(asked()?.[4]).toBe(1)
+      expect(asked()?.[4]).toBeUndefined()
     })
   })
 
   describe('draws', () => {
-    it('what matches, counted', async () => {
-      answered([novel()], 45)
+    it('how many have loaded, with a marker while more remain', async () => {
+      answered([novel()], true)
 
       await render()
 
-      expect(page!.text()).toContain('45 items')
+      expect(page!.text()).toContain('1+ items')
       expect(page!.findComponent(AppLibraryTable).exists()).toBe(true)
     })
 
@@ -224,7 +224,7 @@ describe('the library page', () => {
 
       await click('Clear the filter')
 
-      expect(asked()).toEqual([undefined, undefined, undefined, undefined, 1, PAGE_SIZE])
+      expect(asked()).toEqual([undefined, undefined, undefined, undefined, undefined, PAGE_SIZE])
     })
 
     it('a refused fetch as something to try again', async () => {
@@ -240,20 +240,20 @@ describe('the library page', () => {
       expect(page!.findComponent(AppLibraryTable).exists()).toBe(true)
     })
 
-    it('no pager for a single page of matches', async () => {
-      answered([novel()], PAGE_SIZE)
+    it('no load-more button once every match has landed', async () => {
+      answered([novel()], false)
 
       await render()
 
-      expect(page!.find('nav').exists()).toBe(false)
+      expect(page!.findAll('button').some(button => button.text() === 'Load more')).toBe(false)
     })
 
-    it('a pager for more matches than a page holds', async () => {
-      answered([novel()], PAGE_SIZE + 1)
+    it('a load-more button while more matches remain', async () => {
+      answered([novel()], true)
 
       await render()
 
-      expect(page!.find('nav').exists()).toBe(true)
+      expect(page!.findAll('button').some(button => button.text() === 'Load more')).toBe(true)
     })
   })
 

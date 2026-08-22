@@ -4,7 +4,7 @@
 jest.mock('firebase-admin/auth', () => ({}));
 
 import { BadRequestException, NotFoundException, NotImplementedException } from '@nestjs/common';
-import { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
+import { DocumentSnapshot, FieldPath, Firestore } from 'firebase-admin/firestore';
 import { AppConfigService } from '../core/config/app-config.service';
 import { CacheProvider, CacheType } from '../core/providers/cache.provider';
 import { ContentFileProvider } from '../core/providers/content-file.provider';
@@ -64,7 +64,9 @@ class FakeCollection {
     private readonly rows: Map<string, Row>,
     private readonly subcollectionsByDoc: Map<string, DocSubcollections> = new Map(),
     private readonly filters: [string, string, unknown][] = [],
-    private readonly order?: string,
+    private readonly orders: [string | FieldPath, 'asc' | 'desc'][] = [],
+    private readonly limitCount?: number,
+    private readonly startAfterValues?: unknown[],
   ) {}
 
   static seeded(rows: Row[], subcollectionName?: string, subRows: Record<string, Row[]> = {}): FakeCollection {
@@ -87,16 +89,19 @@ class FakeCollection {
   }
 
   where(field: string, op: '==' | 'in' | '<=', value: unknown): FakeCollection {
-    return new FakeCollection(this.rows, this.subcollectionsByDoc, [...this.filters, [field, op, value]], this.order);
+    return new FakeCollection(this.rows, this.subcollectionsByDoc, [...this.filters, [field, op, value]], this.orders, this.limitCount, this.startAfterValues);
   }
 
-  orderBy(field: string): FakeCollection {
-    return new FakeCollection(this.rows, this.subcollectionsByDoc, this.filters, field);
+  orderBy(field: string | FieldPath, direction: 'asc' | 'desc' = 'asc'): FakeCollection {
+    return new FakeCollection(this.rows, this.subcollectionsByDoc, this.filters, [...this.orders, [field, direction]], this.limitCount, this.startAfterValues);
   }
 
-  /** Test data never approaches a real batch size, so a limit is never actually reached. */
-  limit(): FakeCollection {
-    return this;
+  limit(count: number): FakeCollection {
+    return new FakeCollection(this.rows, this.subcollectionsByDoc, this.filters, this.orders, count, this.startAfterValues);
+  }
+
+  startAfter(...values: unknown[]): FakeCollection {
+    return new FakeCollection(this.rows, this.subcollectionsByDoc, this.filters, this.orders, this.limitCount, values);
   }
 
   get(): Promise<{ docs: DocumentSnapshot[], empty: boolean }> {
@@ -124,14 +129,56 @@ class FakeCollection {
   private matching(): [string, Row][] {
     let entries = Array.from(this.rows.entries()).filter(([, data]) => this.filters.every(([field, op, value]) => matchesFilter(data[field], op, value)));
 
-    if (this.order) {
-      const field = this.order;
+    if (this.orders.length) {
+      entries = [...entries].sort((a, b) => {
+        for (const [field, direction] of this.orders) {
+          const cmp = compareValues(fieldValue(a, field), fieldValue(b, field));
 
-      entries = [...entries].sort(([, a], [, b]) => Number(a[field]) - Number(b[field]));
+          if (cmp !== 0) {
+            return direction === 'desc' ? -cmp : cmp;
+          }
+        }
+
+        return 0;
+      });
     }
 
-    return entries;
+    if (this.startAfterValues) {
+      const key = this.startAfterValues.map(comparable);
+      const index = entries.findIndex((entry) => this.orders.every(([field], i) => comparable(fieldValue(entry, field)) === key[i]));
+
+      entries = index === -1 ? [] : entries.slice(index + 1);
+    }
+
+    return this.limitCount === undefined ? entries : entries.slice(0, this.limitCount);
   }
+}
+
+/** A row's value for a field, or its own id where the field is the document id. */
+function fieldValue([id, data]: [string, Row], field: string | FieldPath): unknown {
+  return field instanceof FieldPath ? id : data[field];
+}
+
+/** A `Timestamp` and an ISO date string compare as the instant they name; everything else compares as itself. */
+function comparable(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return (value.toMillis as () => number)();
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return Date.parse(value);
+  }
+
+  return value;
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  const left = comparable(a);
+  const right = comparable(b);
+
+  if (left === right) return 0;
+
+  return left! < right! ? -1 : 1;
 }
 
 /** One document within `FakeCollection` — the operations the two repositories call, including opening a subcollection. */
@@ -505,7 +552,7 @@ describe('ScrapingController.discover', () => {
 
     await controller.discover({ libraryId: 'novel-1' });
 
-    const page = await libraryContentManager.list('novel-1', { page: 1, pageSize: 50 });
+    const page = await libraryContentManager.list('novel-1', { pageSize: 50 });
     expect(page.items.map((row) => row.sourceUrl)).toEqual(SCRAPED_CHAPTERS.map((found) => found.url));
   });
 

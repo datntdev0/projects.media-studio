@@ -51,25 +51,24 @@ export class LibraryContentManager {
   constructor(private readonly repository: LibraryRepository) {}
 
   /**
-   * One page of an item's content.
+   * One page of an item's content, in reading order.
    *
-   * Firestore orders it and narrows by `type` and `status`; the language match,
-   * the search and the slice happen here, over what comes back — the same
-   * bargain `LibraryItemManager.list` strikes for the item listing.
+   * Firestore narrows, orders and pages it; the language match and the free-text
+   * search — neither of which a Firestore index can do — are the two things
+   * still applied here, over the page that came back. The same bargain
+   * `LibraryItemManager.list` strikes for the item listing, `nextCursor` included.
    */
   async list(itemId: string, query: QueryListLibraryContentsDto): Promise<LibraryContentPageDto> {
     const item = await this.requireItem(itemId);
 
     checkLanguageAllowed(item.type, query.language);
 
-    const matching = await this.repository.searchLibraryContents(itemId, { type: query.type, status: query.status });
-    const found = matching.filter((content) => matchesLanguage(content, query.language) && matchesSearch(content, query.search));
-    const from = (query.page - 1) * query.pageSize;
+    const { items, nextCursor } = await this.repository.searchLibraryContents(itemId, { type: query.type, status: query.status }, query.pageSize, query.cursor);
+    const found = items.filter((content) => matchesLanguage(content, query.language) && matchesSearch(content, query.search));
 
     return {
-      items: found.slice(from, from + query.pageSize).map(toDto),
-      total: found.length,
-      page: query.page,
+      items: found.map(toDto),
+      nextCursor,
       pageSize: query.pageSize,
     };
   }
@@ -129,7 +128,7 @@ export class LibraryContentManager {
       throw new NotImplementedException(`A ${item.type} set has no chapters to scrape`);
     }
 
-    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Original });
+    const stored = await this.repository.getLibraryContents(itemId, { type: LibraryContentType.Original });
 
     return stored.filter((content): content is TextContent => content.type === LibraryContentType.Original);
   }
@@ -145,7 +144,7 @@ export class LibraryContentManager {
       throw new NotImplementedException(`A ${item.type} set has no translations to pack`);
     }
 
-    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Translation });
+    const stored = await this.repository.getLibraryContents(itemId, { type: LibraryContentType.Translation });
 
     return stored.filter((content): content is TextContent => content.type === LibraryContentType.Translation);
   }
@@ -164,7 +163,7 @@ export class LibraryContentManager {
       throw new NotImplementedException(`Discovering the content of a ${item.type} set is not described yet`);
     }
 
-    const stored = await this.repository.searchLibraryContents(itemId, { type: LibraryContentType.Original });
+    const stored = await this.repository.getLibraryContents(itemId, { type: LibraryContentType.Original });
     const known = new Set(stored.map((content) => content.sourceUrl).filter(Boolean));
     const fresh = found.filter((content) => !known.has(content.sourceUrl));
 
@@ -217,14 +216,14 @@ export class LibraryContentManager {
    * What the item holds, after its content changed.
    *
    * Read back as a full scan rather than tracked as deltas: a count that is
-   * recomputed cannot drift, and `list` already pays this same cost for a page.
+   * recomputed cannot drift.
    */
   private async recount(item: LibraryItem): Promise<void> {
-    const contents = await this.repository.searchLibraryContents(item.id, {});
+    const contents = await this.repository.getLibraryContents(item.id, {});
     const completed = contents.filter((content) => content.status === LibraryContentStatus.Completed);
     const bytes = completed.reduce((sum, content) => sum + ('filesize' in content ? content.filesize : 0), 0);
 
-    await this.repository.updateCounters(item.id, {
+    await this.repository.updateCounters(item.id, item.type, {
       discoveredCount: contents.length,
       downloadedCount: completed.length,
       // A novel's metadata has no size field, so it is left out rather than added.

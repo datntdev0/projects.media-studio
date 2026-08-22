@@ -8,7 +8,7 @@ export const MAX_URL = 2048;
 
 export const MAX_SEARCH = 200;
 
-export const DEFAULT_PAGE_SIZE = 20;
+export const DEFAULT_PAGE_SIZE = 25;
 
 export const MAX_PAGE_SIZE = 100;
 

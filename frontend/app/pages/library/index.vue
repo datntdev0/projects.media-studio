@@ -8,7 +8,7 @@ import type { LibraryFilters, LibraryItem, LibraryView, ListLibraryItemsQuery } 
  *
  * A row or a card opens the item at `/library/:id`.
  */
-const PAGE_SIZE = 20
+const PAGE_SIZE = 25
 
 /** Long enough that typing a title does not fetch once per letter. */
 const SEARCH_DEBOUNCE = 300
@@ -21,8 +21,7 @@ const filters = reactive<LibraryFilters>({
   type: 'all',
   status: 'all',
   sourceMode: 'all',
-  search: '',
-  page: 1
+  search: ''
 })
 
 const view = ref<LibraryView>('table')
@@ -34,79 +33,152 @@ const query = computed<ListLibraryItemsQuery>(() => ({
   type: filters.type === 'all' ? undefined : filters.type,
   status: filters.status === 'all' ? undefined : filters.status,
   sourceMode: filters.sourceMode === 'all' ? undefined : filters.sourceMode,
-  search: search.value.trim() || undefined,
-  page: filters.page,
-  pageSize: PAGE_SIZE
+  search: search.value.trim() || undefined
 }))
 
-// Registered before the fetch below, so a narrowed filter and its reset page reach
-// Firestore as one request rather than as a request for a page that is now gone.
-watch(() => [filters.type, filters.status, filters.sourceMode, search.value], () => {
-  filters.page = 1
-})
+/** The rows loaded so far. Pages are appended, so this grows as the reader scrolls. */
+const rows = ref<LibraryItem[]>([])
 
-const { data: page, status: listStatus, error: listError, refresh } = useAsyncData(
-  'library',
-  () => {
-    const { type, status, sourceMode, search: term, page: number, pageSize } = query.value
+/** The cursor each loaded page was fetched with — `cursors[0]` is always the first page's, `undefined`. */
+const cursors = ref<(string | undefined)[]>([undefined])
 
-    return libraryClient.list(type, status, sourceMode, term, number, pageSize).then(asLibraryItemPage)
-  },
-  { lazy: true, watch: [query] }
-)
+/** What the last page answered with. Null once the reader has reached the end. */
+const nextCursor = ref<string | null>(null)
+
+/** How many pages have landed. The next request always reads `cursors` at this index. */
+const loaded = ref(0)
+
+const loading = ref(false)
+
+const loadingMore = ref(false)
+
+const listError = ref<Error | null>(null)
+
+/** Whether the server holds rows nobody has asked for yet. */
+const more = computed(() => nextCursor.value !== null)
+
+/**
+ * One page. The first replaces what is drawn and the rest append, so a narrowed
+ * filter never lays its matches under the old one's.
+ *
+ * `ticket` is bumped per request: the answer to a search two letters ago must not
+ * land after the answer to this one.
+ */
+let ticket = 0
+
+async function fetchPage(at: number) {
+  const mine = ++ticket
+  const pending = at === 0 ? loading : loadingMore
+
+  pending.value = true
+  listError.value = null
+
+  try {
+    const { type, status, sourceMode, search: term } = query.value
+    const answer = await libraryClient.list(type, status, sourceMode, term, cursors.value[at], PAGE_SIZE).then(asLibraryItemPage)
+
+    if (mine !== ticket) {
+      return
+    }
+
+    rows.value = at === 0 ? answer.items : [...rows.value, ...answer.items]
+    cursors.value[at + 1] = answer.nextCursor ?? undefined
+    nextCursor.value = answer.nextCursor
+    loaded.value = at + 1
+  } catch (cause) {
+    if (mine === ticket) {
+      listError.value = cause as Error
+    }
+  } finally {
+    pending.value = false
+  }
+}
+
+/** Back to the first page — what a narrowed filter and a saved or deleted item both mean. */
+function refresh(): Promise<void> {
+  loaded.value = 0
+  cursors.value = [undefined]
+
+  return fetchPage(0)
+}
+
+/** The next page, when the reader reaches the end of the last one. */
+function loadMore() {
+  if (loading.value || loadingMore.value || !more.value) {
+    return
+  }
+
+  return fetchPage(loaded.value)
+}
+
+watch(query, () => refresh(), { immediate: true })
 
 const { forLibrary, settled, reconcile } = useScrapingJobs()
 
 /**
- * The fetched page, each row scraping where a job is running over it.
+ * The fetched rows, each one scraping where a job is running over it.
  * `AppLibraryTable` and `AppLibraryGrid` read the merged rows and are unchanged.
  *
  * The counters are the fetch's: a job over chapters 1–20 knows nothing about the rest,
  * and this listing draws what the *item* holds.
  */
-const items = computed(() => (page.value?.items ?? []).map(item => withLiveStatus(item, !!forLibrary(item.id))))
+const items = computed(() => rows.value.map(item => withLiveStatus(item, !!forLibrary(item.id))))
 
 /**
- * A job that has just settled, refetched once.
+ * The rows already on screen, fetched again in place.
  *
- * Membership of the page is deliberately not recomputed as statuses move: an item
- * filtered to `Ready` that starts scraping keeps its place until this fires. Re-running
- * the query on every tick would fight the pager and the debounced search, and a job
- * settles once.
+ * What a settled job wants, and what `refresh()` is wrong for: that one resets to the
+ * first page, so a reader who had scrolled through hundreds of items would be thrown
+ * back to the first twenty-five by a job finishing in the background. The loaded pages
+ * are fetched together, each with the cursor it was originally loaded under, and
+ * swapped in a single assignment, so nothing blanks and nothing moves.
+ */
+async function reloadLoaded(): Promise<void> {
+  const pages = loaded.value
+
+  if (pages < 1) {
+    return
+  }
+
+  const mine = ++ticket
+  const { type, status, sourceMode, search: term } = query.value
+
+  try {
+    const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
+      libraryClient.list(type, status, sourceMode, term, cursors.value[at], PAGE_SIZE).then(asLibraryItemPage)))
+
+    if (mine !== ticket) {
+      return
+    }
+
+    rows.value = answers.flatMap(answer => answer.items)
+    nextCursor.value = answers[answers.length - 1]?.nextCursor ?? null
+  } catch {
+    // Keep what is drawn.
+  }
+}
+
+/**
+ * A job that has just settled, reloaded in place.
+ *
+ * Membership of the loaded rows is deliberately not recomputed as statuses move: an
+ * item filtered to `Ready` that starts scraping keeps its place until this fires.
  */
 watch(settled, async (isSettled) => {
   if (!isSettled) {
     return
   }
 
-  await refresh()
+  await reloadLoaded()
 
   // Only now: until the fetched rows are in hand, the live values are the truer ones.
   reconcile()
 })
 
-/** What matches the filter, which is what both counts on this screen mean. */
-const total = computed(() => page.value?.total ?? 0)
-
-const totalLabel = computed(() => `${total.value} ${total.value === 1 ? 'item' : 'items'}`)
-
-// Deleting the last row of a page leaves that page empty while the catalogue is
-// not. Step back to the last page that has something on it rather than draw the
-// empty state over items that exist.
-watch(page, (loaded) => {
-  if (!loaded || loaded.items.length || filters.page === 1) {
-    return
-  }
-
-  filters.page = Math.max(1, Math.ceil(loaded.total / PAGE_SIZE))
-})
-
-const loading = computed(() => listStatus.value === 'pending')
-
 /**
  * Skeleton rows only where there is nothing to draw yet.
  *
- * A refetch with rows already on screen keeps them: a job settling in the background
+ * A reload with rows already on screen keeps them: a job settling in the background
  * would otherwise blank the table every time, and the rows it replaces them with are
  * the same rows.
  */
@@ -143,7 +215,7 @@ function onRemove(item: LibraryItem) {
 }
 
 function clearFilters() {
-  Object.assign(filters, { type: 'all', status: 'all', sourceMode: 'all', search: '', page: 1 })
+  Object.assign(filters, { type: 'all', status: 'all', sourceMode: 'all', search: '' })
 }
 
 async function onSaved() {
@@ -181,7 +253,7 @@ async function onDeleted() {
 <template>
   <AppPage title="Library" flush>
     <template #trailing>
-      <UBadge :label="totalLabel" color="neutral" variant="outline" />
+      <UBadge :label="`${items.length}${more ? '+' : ''} ${items.length === 1 && !more ? 'item' : 'items'}`" color="neutral" variant="outline" />
     </template>
 
     <template #actions>
@@ -211,7 +283,7 @@ async function onDeleted() {
           v-model:search="filters.search"
           v-model:view="view"
           :visible="items.length"
-          :total="total"
+          :more="more"
         />
       </div>
 
@@ -247,12 +319,14 @@ async function onDeleted() {
             @remove="onRemove"
           />
 
-          <UPagination
-            v-if="total > PAGE_SIZE"
-            v-model:page="filters.page"
-            :total="total"
-            :items-per-page="PAGE_SIZE"
-            class="justify-center"
+          <UButton
+            v-if="more"
+            label="Load more"
+            color="neutral"
+            variant="outline"
+            :loading="loadingMore"
+            class="self-center"
+            @click="loadMore"
           />
         </template>
 

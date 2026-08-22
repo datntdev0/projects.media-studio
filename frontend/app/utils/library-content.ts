@@ -44,8 +44,7 @@ function asContentStatus(status: LibraryContentDto['status']): LibraryContentSta
 /** The same, for a page of them. */
 export const asLibraryContentPage = (page: LibraryContentPageDto): LibraryContentPage => ({
   items: page.items.map(asLibraryContent),
-  total: page.total,
-  page: page.page,
+  nextCursor: page.nextCursor,
   pageSize: page.pageSize
 })
 

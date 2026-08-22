@@ -11,7 +11,7 @@ import type { ScrapingJobDto } from '~/utils/api.clients'
  * The item's counters are the server's — they are refetched after every content
  * change rather than adjusted here.
  */
-const PAGE_SIZE = 200
+const PAGE_SIZE = 25
 
 /** Long enough that typing a title does not fetch once per letter. */
 const SEARCH_DEBOUNCE = 300
@@ -55,10 +55,13 @@ const { data: item, status: itemStatus, error: itemError, refresh: refreshItem }
 /** The rows loaded so far. Pages are appended, so this grows as the reader scrolls. */
 const rows = ref<LibraryContent[]>([])
 
-/** What matches, as the server counts it — not what is drawn. */
-const total = ref(0)
+/** The cursor each loaded page was fetched with — `cursors[0]` is always the first page's, `undefined`. */
+const cursors = ref<(string | undefined)[]>([undefined])
 
-/** How many pages have landed. The next request is always one past it. */
+/** What the last page answered with. Null once the reader has reached the end. */
+const nextCursor = ref<string | null>(null)
+
+/** How many pages have landed. The next request always reads `cursors` at this index. */
 const loaded = ref(0)
 
 const loading = ref(false)
@@ -68,7 +71,7 @@ const loadingMore = ref(false)
 const contentError = ref<Error | null>(null)
 
 /** Whether the server holds rows nobody has asked for yet. */
-const more = computed(() => rows.value.length < total.value)
+const more = computed(() => nextCursor.value !== null)
 
 /**
  * One page. The first replaces what is drawn and the rest append, so a new search
@@ -79,23 +82,24 @@ const more = computed(() => rows.value.length < total.value)
  */
 let ticket = 0
 
-async function fetchPage(next: number) {
+async function fetchPage(at: number) {
   const mine = ++ticket
-  const pending = next === 1 ? loading : loadingMore
+  const pending = at === 0 ? loading : loadingMore
 
   pending.value = true
   contentError.value = null
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, cursors.value[at], PAGE_SIZE))
 
     if (mine !== ticket) {
       return
     }
 
-    rows.value = next === 1 ? answer.items : [...rows.value, ...answer.items]
-    total.value = answer.total
-    loaded.value = next
+    rows.value = at === 0 ? answer.items : [...rows.value, ...answer.items]
+    cursors.value[at + 1] = answer.nextCursor ?? undefined
+    nextCursor.value = answer.nextCursor
+    loaded.value = at + 1
   } catch (cause) {
     if (mine === ticket) {
       contentError.value = cause as Error
@@ -108,8 +112,9 @@ async function fetchPage(next: number) {
 /** Back to the first page — what a new item, a new search and a content change all mean. */
 function refreshContents(): Promise<void> {
   loaded.value = 0
+  cursors.value = [undefined]
 
-  return fetchPage(1)
+  return fetchPage(0)
 }
 
 /**
@@ -118,8 +123,9 @@ function refreshContents(): Promise<void> {
  * What a settling job wants, and what `refreshContents()` is wrong for: that one resets
  * to page one, so a reader who had scrolled through a thousand rows would be thrown back
  * to the first two hundred by a job finishing in the background. The loaded pages are
- * fetched together and swapped in a single assignment, so nothing blanks and nothing
- * moves — and `loading` is deliberately left alone, since the rows are already drawn.
+ * fetched together, each with the cursor it was originally loaded under, and swapped in
+ * a single assignment, so nothing blanks and nothing moves — and `loading` is deliberately
+ * left alone, since the rows are already drawn.
  *
  * Quiet about its own failure: the rows on screen are a job's worth of live updates and
  * are right in every column but `words`. An error banner over them would be worse.
@@ -135,14 +141,14 @@ async function reloadLoaded(): Promise<void> {
 
   try {
     const answers = await Promise.all(Array.from({ length: pages }, (_, at) =>
-      libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, at + 1, PAGE_SIZE).then(asLibraryContentPage)))
+      libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, debouncedSearch.value.trim() || undefined, cursors.value[at], PAGE_SIZE).then(asLibraryContentPage)))
 
     if (mine !== ticket) {
       return
     }
 
     rows.value = answers.flatMap(answer => answer.items)
-    total.value = answers[answers.length - 1]?.total ?? total.value
+    nextCursor.value = answers[answers.length - 1]?.nextCursor ?? null
   } catch {
     // Keep what is drawn.
   }
@@ -154,7 +160,7 @@ function loadMore() {
     return
   }
 
-  return fetchPage(loaded.value + 1)
+  return fetchPage(loaded.value)
 }
 
 // Changing language is a new list rather than a filter over the loaded one, so it
@@ -559,7 +565,7 @@ async function onUpload(picked: FileList | null) {
       <AppResizable storage-key="novel-panel" label="Resize the novel panel" :default-width="20">
         <AppLibraryNovelPanel
           :item="novel"
-          :chapters="total"
+          :chapters="rows.length"
           :discovering="discovering"
           :exporting="exporting"
           @edit="formOpen = true"
@@ -578,7 +584,7 @@ async function onUpload(picked: FileList | null) {
           </h4>
 
           <UBadge
-            :label="String(total)"
+            :label="more ? `${rows.length}+` : String(rows.length)"
             color="neutral"
             variant="outline"
             size="sm"
@@ -692,7 +698,7 @@ async function onUpload(picked: FileList | null) {
     <div v-else-if="set" class="flex flex-col flex-1 min-h-0 overflow-hidden">
       <AppLibraryGalleryPanel
         :item="set"
-        :assets="total"
+        :assets="rows.length"
         :uploading="uploading"
         @edit="formOpen = true"
         @remove="deleteItemOpen = true"

@@ -63,11 +63,10 @@ export interface VideoAsset extends LibraryContentBase {
  */
 export type LibraryContent = NovelChapter | ImageAsset | VideoAsset
 
-/** One page of an item's content, and enough to draw the counts around it. */
+/** One page of an item's content. */
 export interface LibraryContentPage {
   items: LibraryContent[]
-  total: number
-  page: number
+  nextCursor: string | null
   pageSize: number
 }
 
@@ -90,7 +89,7 @@ export interface CreateLibraryContent {
 export interface ListLibraryContentsQuery {
   status?: LibraryContentStatus
   search?: string
-  page?: number
+  cursor?: string
   pageSize?: number
   /** Left out means the source, which is what every content route did before translations. */
   language?: TranslationLanguage

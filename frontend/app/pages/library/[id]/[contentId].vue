@@ -12,7 +12,7 @@ import type { LibraryContent, NovelChapter, TranslationLanguage } from '~/types/
 const FALLBACK_ERROR = 'Could not save the chapter. Try again.'
 
 /** One page of the navigator. The rest arrives as it is scrolled. */
-const PAGE_SIZE = 200
+const PAGE_SIZE = 25
 
 const route = useRoute()
 
@@ -40,34 +40,31 @@ const novel = computed(() => item.value?.type === 'novel' ? item.value : null)
 // there narrowed it to, and the navigator has to be the whole novel.
 const rows = ref<LibraryContent[]>([])
 
-const total = ref(0)
-
-/** How many pages have landed. The next request is always one past it. */
-const loaded = ref(0)
+/** What the last page answered with. Null once the navigator has reached the end. */
+const nextCursor = ref<string | null>(null)
 
 const loadingMore = ref(false)
 
 /** Whether the novel runs past what has been fetched. */
-const more = computed(() => rows.value.length < total.value)
+const more = computed(() => nextCursor.value !== null)
 
 /** Bumped per request, so a page answered late cannot land under another novel's. */
 let ticket = 0
 
-async function fetchPage(next: number) {
+async function fetchPage(cursor: string | undefined, replace: boolean) {
   const mine = ++ticket
 
   loadingMore.value = true
 
   try {
-    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, undefined, next, PAGE_SIZE))
+    const answer = asLibraryContentPage(await libraryClient.listContents(itemId.value, undefined, language.value ?? undefined, undefined, undefined, cursor, PAGE_SIZE))
 
     if (mine !== ticket) {
       return
     }
 
-    rows.value = next === 1 ? answer.items : [...rows.value, ...answer.items]
-    total.value = answer.total
-    loaded.value = next
+    rows.value = replace ? answer.items : [...rows.value, ...answer.items]
+    nextCursor.value = answer.nextCursor
   } catch {
     // The navigator is a convenience. A failure leaves it short rather than
     // taking over a screen that is showing the chapter perfectly well.
@@ -82,15 +79,11 @@ function loadMore() {
     return
   }
 
-  return fetchPage(loaded.value + 1)
+  return fetchPage(nextCursor.value ?? undefined, false)
 }
 
 // The navigator reads in the same language as the chapter beside it.
-watch([itemId, language], () => {
-  loaded.value = 0
-
-  return fetchPage(1)
-}, { immediate: true })
+watch([itemId, language], () => fetchPage(undefined, true), { immediate: true })
 
 /** Every link out of this screen keeps the language, so moving about never silently drops it. */
 const linkTo = (path: string) => ({ path, query: language.value ? { lang: language.value } : {} })
@@ -112,14 +105,26 @@ interface ChapterView {
 
 /**
  * The translation row for one chapter, in one language — its own document, not a
- * language-scoped read of the source's. Only the first 200 rows in the language are
- * searched, the same cap every other list on this screen pages by.
+ * language-scoped read of the source's. Pages through the language until the chapter
+ * turns up or the language runs out, rather than assuming it fits in one page.
  */
 async function findTranslation(id: string, index: number, lang: TranslationLanguage): Promise<NovelChapter | null> {
-  const page = await libraryClient.listContents(id, undefined, lang, 'translation', undefined, 1, PAGE_SIZE)
-  const match = page.items.find(row => row.idx === index)
+  let cursor: string | undefined
 
-  return match ? (asLibraryContent(match) as NovelChapter) : null
+  for (;;) {
+    const page = await libraryClient.listContents(id, undefined, lang, 'translation', undefined, cursor, PAGE_SIZE)
+    const match = page.items.find(row => row.idx === index)
+
+    if (match) {
+      return asLibraryContent(match) as NovelChapter
+    }
+
+    if (!page.nextCursor) {
+      return null
+    }
+
+    cursor = page.nextCursor
+  }
 }
 
 // Keyed on the language as well as the row: switching language is a different

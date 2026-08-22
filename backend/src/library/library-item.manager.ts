@@ -34,22 +34,20 @@ export class LibraryItemManager {
   constructor(private readonly repository: LibraryRepository) {}
 
   /**
-   * One page of the listing.
+   * One page of the listing, newest change first.
    *
-   * Firestore narrows by the three enums it is indexed on; the search, the
-   * ordering and the slice happen here, over what comes back. That is what keeps
-   * the collection free of composite indexes — and what makes the repository's
-   * scan limit the honest ceiling on the catalogue's size.
+   * Firestore narrows, orders and pages it; the free-text search — which no
+   * Firestore index can do — is the one thing still applied here, over the page
+   * that came back. A search term can thin a page out, sometimes to nothing, with
+   * `nextCursor` still set: the caller keeps asking for more until it is null.
    */
   async list(query: QueryListLibraryItemsDto): Promise<LibraryItemPageDto> {
-    const matching = await this.repository.searchLibraries({ type: query.type, status: query.status, sourceMode: query.sourceMode });
-    const found = matching.filter((item) => matchesSearch(item, query.search)).sort(byRecentChange);
-    const from = (query.page - 1) * query.pageSize;
+    const { items, nextCursor } = await this.repository.searchLibraries({ type: query.type, status: query.status, sourceMode: query.sourceMode }, query.pageSize, query.cursor);
+    const found = items.filter((item) => matchesSearch(item, query.search));
 
     return {
-      items: found.slice(from, from + query.pageSize).map(toDto),
-      total: found.length,
-      page: query.page,
+      items: found.map(toDto),
+      nextCursor,
       pageSize: query.pageSize,
     };
   }
@@ -263,9 +261,4 @@ function matchesSearch(item: LibraryItem, search?: string): boolean {
   const author = item.type === LibraryItemType.Novel ? item.novelMetadata!.author : '';
 
   return [item.title, item.sourceName, author].some((field) => field.toLowerCase().includes(needle));
-}
-
-/** ISO strings, so lexicographic order is chronological order. */
-function byRecentChange(one: LibraryItem, other: LibraryItem): number {
-  return other.updatedAt.localeCompare(one.updatedAt);
 }

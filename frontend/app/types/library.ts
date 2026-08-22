@@ -91,11 +91,10 @@ export type LibraryItem = NovelItem | ImageSetItem | VideoSetItem
  */
 export type LibraryItemDetail = LibraryItem & { createdAt: string, translations: TranslationCoverage[] | null }
 
-/** One page of the listing, and enough to draw the counts and the pager around it. */
+/** One page of the listing. */
 export interface LibraryItemPage {
   items: LibraryItem[]
-  total: number
-  page: number
+  nextCursor: string | null
   pageSize: number
 }
 
@@ -138,7 +137,7 @@ export interface ListLibraryItemsQuery {
   status?: LibraryItemStatus
   sourceMode?: LibrarySourceMode
   search?: string
-  page?: number
+  cursor?: string
   pageSize?: number
 }
 
@@ -152,7 +151,6 @@ export interface LibraryFilters {
   status: LibraryItemStatus | 'all'
   sourceMode: LibrarySourceMode | 'all'
   search: string
-  page: number
 }
 
 /** Which of the two views the listing is drawn in. */

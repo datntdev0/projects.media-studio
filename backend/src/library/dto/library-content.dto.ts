@@ -122,13 +122,10 @@ export class LibraryContentPageDto {
   @ApiProperty({ type: [LibraryContentDto], description: 'Chapters by their number, assets by their name.' })
   items!: LibraryContentDto[];
 
-  @ApiProperty({ description: 'What matches the filter, not what this page holds.', example: 640 })
-  total!: number;
+  @ApiProperty({ description: 'Pass this back as `cursor` for the next page. Null once there is nothing more to fetch.', example: null, nullable: true })
+  nextCursor!: string | null;
 
-  @ApiProperty({ description: 'The current page number.', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'The number of items per page.', example: 50 })
+  @ApiProperty({ description: 'The number of items per page.', example: 25 })
   pageSize!: number;
 }
 
@@ -150,9 +147,9 @@ export class QueryListLibraryContentsDto {
   @IsOptional() @IsString() @MaxLength(MAX_SEARCH)
   search?: string;
 
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
-  page: number = 1;
+  @ApiPropertyOptional({ description: 'The `nextCursor` a previous page answered with. Absent for the first page.' })
+  @IsOptional() @IsString()
+  cursor?: string;
 
   @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE })
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MAX_PAGE_SIZE)

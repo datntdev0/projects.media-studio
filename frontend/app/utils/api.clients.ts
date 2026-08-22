@@ -217,10 +217,10 @@ export class LibraryClient {
      * @param status (optional) All four, including the two only the job runner sets — a filter reads data it does not write.
      * @param sourceMode (optional) The source mode of the library item.
      * @param search (optional) Case-insensitive, matched against the title, the source name and a novel's author.
-     * @param page (optional) 
+     * @param cursor (optional) The `nextCursor` a previous page answered with. Absent for the first page.
      * @param pageSize (optional) 
      */
-    list(type?: Type | undefined, status?: Status | undefined, sourceMode?: SourceMode | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryItemPageDto> {
+    list(type?: Type | undefined, status?: Status | undefined, sourceMode?: SourceMode | undefined, search?: string | undefined, cursor?: string | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryItemPageDto> {
         let url_ = this.baseUrl + "/api/v1/library?";
         if (type === null)
             throw new globalThis.Error("The parameter 'type' cannot be null.");
@@ -238,10 +238,10 @@ export class LibraryClient {
             throw new globalThis.Error("The parameter 'search' cannot be null.");
         else if (search !== undefined)
             url_ += "search=" + encodeURIComponent("" + search) + "&";
-        if (page === null)
-            throw new globalThis.Error("The parameter 'page' cannot be null.");
-        else if (page !== undefined)
-            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        if (cursor === null)
+            throw new globalThis.Error("The parameter 'cursor' cannot be null.");
+        else if (cursor !== undefined)
+            url_ += "cursor=" + encodeURIComponent("" + cursor) + "&";
         if (pageSize === null)
             throw new globalThis.Error("The parameter 'pageSize' cannot be null.");
         else if (pageSize !== undefined)
@@ -525,10 +525,10 @@ export class LibraryClient {
      * @param language (optional) The language of a chapter. Null for an asset.
      * @param type (optional) The type of content.
      * @param search (optional) Case-insensitive, matched against a chapter's title or an asset's filename.
-     * @param page (optional) 
+     * @param cursor (optional) The `nextCursor` a previous page answered with. Absent for the first page.
      * @param pageSize (optional) 
      */
-    listContents(id: string, status?: Status2 | undefined, language?: Language | undefined, type?: Type2 | undefined, search?: string | undefined, page?: number | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
+    listContents(id: string, status?: Status2 | undefined, language?: Language | undefined, type?: Type2 | undefined, search?: string | undefined, cursor?: string | undefined, pageSize?: number | undefined, signal?: AbortSignal): Promise<LibraryContentPageDto> {
         let url_ = this.baseUrl + "/api/v1/library/{id}/contents?";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
@@ -549,10 +549,10 @@ export class LibraryClient {
             throw new globalThis.Error("The parameter 'search' cannot be null.");
         else if (search !== undefined)
             url_ += "search=" + encodeURIComponent("" + search) + "&";
-        if (page === null)
-            throw new globalThis.Error("The parameter 'page' cannot be null.");
-        else if (page !== undefined)
-            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        if (cursor === null)
+            throw new globalThis.Error("The parameter 'cursor' cannot be null.");
+        else if (cursor !== undefined)
+            url_ += "cursor=" + encodeURIComponent("" + cursor) + "&";
         if (pageSize === null)
             throw new globalThis.Error("The parameter 'pageSize' cannot be null.");
         else if (pageSize !== undefined)
@@ -1296,10 +1296,8 @@ export interface LibraryItemDto {
 export interface LibraryItemPageDto {
     /** This page, ordered by `updatedAt` descending. */
     items: LibraryItemDto[];
-    /** What matches the filter, not what this page holds. */
-    total: number;
-    /** The current page number. */
-    page: number;
+    /** Pass this back as `cursor` for the next page. Null once there is nothing more to fetch. */
+    nextCursor: string | null;
     /** The number of items per page. */
     pageSize: number;
 }
@@ -1435,10 +1433,8 @@ export interface LibraryContentDto {
 export interface LibraryContentPageDto {
     /** Chapters by their number, assets by their name. */
     items: LibraryContentDto[];
-    /** What matches the filter, not what this page holds. */
-    total: number;
-    /** The current page number. */
-    page: number;
+    /** Pass this back as `cursor` for the next page. Null once there is nothing more to fetch. */
+    nextCursor: string | null;
     /** The number of items per page. */
     pageSize: number;
 }

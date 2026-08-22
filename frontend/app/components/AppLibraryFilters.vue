@@ -17,9 +17,10 @@ const search = defineModel<string>('search', { required: true })
 const view = defineModel<LibraryView>('view', { required: true })
 
 defineProps<{
-  /** How many are on this page, of how many match the filter. */
+  /** How many rows are loaded so far. */
   visible: number
-  total: number
+  /** Whether the server holds rows nobody has asked for yet. */
+  more: boolean
 }>()
 </script>
 
@@ -68,7 +69,7 @@ defineProps<{
 
     <div class="flex items-center gap-3 ms-auto">
       <span class="text-label text-muted whitespace-nowrap">
-        {{ visible }} of {{ total }}
+        {{ visible }}{{ more ? '+' : '' }} {{ visible === 1 && !more ? 'item' : 'items' }}
       </span>
 
       <!-- A segmented pair, framed as one object rather than two loose buttons. -->
