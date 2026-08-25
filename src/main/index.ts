@@ -1,8 +1,11 @@
 import { app } from 'electron';
 import started from 'electron-squirrel-startup';
+import './helpers/logger';
 import { closeContainer, createContainer } from './container';
-import { runMigrations } from './db/migrate';
-import { registerIpcHandlers } from './ipc';
+import { runMigrations } from './database/migrate';
+import { registerIpcHandlers } from './_ipc';
+import { registerQueueHandlers } from './queue';
+import { startScheduledJobs } from './scheduler';
 import { createMainWindow } from './windows/main-window';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -20,6 +23,8 @@ app.whenReady().then(() => {
   container.manager.appInfo.init();
 
   registerIpcHandlers(container);
+  registerQueueHandlers(container);
+  startScheduledJobs(container);
 
   createMainWindow();
 });

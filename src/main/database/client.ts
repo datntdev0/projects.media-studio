@@ -1,22 +1,11 @@
-import { app } from 'electron';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getAppBaseDir } from '../helpers/paths';
 
 export type Db = DatabaseSync;
 
 let db: Db | undefined;
-
-/**
- * Portable-style storage: a `data/` folder next to wherever the app is
- * actually running from (the executable's directory once packaged, the
- * project root in dev) rather than the OS-specific per-user profile
- * directory (`app.getPath('userData')`).
- */
-function getDataDir(): string {
-  const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath();
-  return path.join(baseDir, 'data');
-}
 
 /**
  * Opens (or returns the already-open) app-wide SQLite connection — no
@@ -28,7 +17,7 @@ export function getDb(): Db {
     return db;
   }
 
-  const dataDir = getDataDir();
+  const dataDir = path.join(getAppBaseDir(), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
 
   db = new DatabaseSync(path.join(dataDir, 'media-studio.db'));

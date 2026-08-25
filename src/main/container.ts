@@ -1,5 +1,7 @@
-import { closeDb, getDb, type Db } from './db/client';
+import type { Job } from 'node-schedule';
+import { closeDb, getDb, type Db } from './database/client';
 import { createAppInfoManager, type AppInfoManager } from './managers/app-info.manager';
+import { createMessageBus, type MessageBus } from './queue/message-bus';
 
 export interface Managers {
   appInfo: AppInfoManager;
@@ -13,7 +15,9 @@ export interface Managers {
  */
 export interface Container {
   db: Db;
+  bus: MessageBus;
   manager: Managers;
+  scheduledJobs: Job[];
 }
 
 let container: Container | undefined;
@@ -25,11 +29,14 @@ export function createContainer(): Container {
     appInfo: createAppInfoManager(db),
   };
 
-  container = { db, manager };
+  const bus = createMessageBus();
+
+  container = { db, manager, bus, scheduledJobs: [] };
   return container;
 }
 
 export function closeContainer(): void {
+  container?.scheduledJobs.forEach((job) => job.cancel());
   closeDb();
   container = undefined;
 }

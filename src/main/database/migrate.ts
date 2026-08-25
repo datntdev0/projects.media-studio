@@ -20,7 +20,7 @@ function getMigrationsDir(): string {
   // straight off disk here.
   return app.isPackaged
     ? path.join(process.resourcesPath, 'migrations')
-    : path.join(app.getAppPath(), 'src/main/db/migrations');
+    : path.join(app.getAppPath(), 'src/main/database/migrations');
 }
 
 function compareVersions(a: string, b: string): number {
@@ -68,7 +68,7 @@ function getAppliedVersions(db: Db): Set<string> {
 }
 
 /**
- * Flyway-style migration runner. SQL files live under `db/migrations/` named
+ * Flyway-style migration runner. SQL files live under `database/migrations/` named
  * `V<major>.<minor>.<patch>__<description>.sql`.
  *
  * `V0.0.0__database_history.sql` bootstraps the `_database_history` ledger

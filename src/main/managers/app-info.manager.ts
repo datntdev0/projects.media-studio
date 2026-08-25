@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import { randomUUID } from 'node:crypto';
-import type { Db } from '../db/client';
-import { getAppInfo, upsertAppInfo } from '../db/repositories/app-info.repo';
+import type { Db } from '../database/client';
+import { getAppInfo, upsertAppInfo } from '../database/repositories/app-info.repo';
 import type { AppInfo } from '../../shared/app-info';
 
 export interface AppInfoManager {
