@@ -1,0 +1,159 @@
+/* App shell — sidebar nav, header and content slot, built on the Industry
+   design-system tokens (tokens.css). See mockup/_layout.dc.html for source. */
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+a { color: var(--color-accent-700); }
+a:hover { color: var(--color-accent-900); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-text) 20%, transparent); }
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+/* — sidebar — */
+.sidebar {
+  width: 260px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  transition: width 0.15s ease, margin-left 0.15s ease;
+}
+.app-shell.sidebar-collapsed .sidebar {
+  width: 0;
+  margin-left: -1px; /* fold the border away with it */
+  overflow: hidden;
+}
+
+.navitem {
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 14px;
+  text-decoration: none;
+}
+.navitem:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.navitem svg { flex: none; }
+.navitem.is-active {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.sidebar-brand {
+  padding: 10.2px;
+  border-bottom: 1px solid var(--color-divider);
+  flex: none;
+}
+.sidebar-brand-mark {
+  width: 22px; height: 22px; flex: none;
+  /* A fixed dark chip in both themes — color-accent-900 stays dark, so its
+     text must come from a ramp step (theme-agnostic), not --color-bg. */
+  background: var(--color-accent-900); color: var(--color-accent-100);
+  display: grid; place-items: center;
+  font-family: var(--font-heading); font-size: 12px;
+}
+
+.sidebar-nav {
+  padding: 10.2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.sidebar-search {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin-bottom: 6px;
+}
+.sidebar-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-footer {
+  padding: 10.2px;
+  border-top: 1px solid var(--color-divider);
+  flex: none;
+}
+.theme-toggle {
+  width: 100%;
+}
+.theme-toggle-opt {
+  flex: 1;
+  justify-content: center;
+}
+
+/* — header / main panel — */
+.main-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  height: 56px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 13.6px;
+  padding: 0 20.4px;
+  border-bottom: 1px solid var(--color-divider);
+}
+.topbar h4 { margin: 0; font-size: 20px; }
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10.2px;
+}
+
+.page-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20.4px;
+}
+.page-slot {
+  height: 100%;
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  text-align: center;
+  padding: 34px;
+}
+.page-slot-hint {
+  font-size: 13px;
+  max-width: 380px;
+  text-wrap: pretty;
+}

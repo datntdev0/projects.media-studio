@@ -1,0 +1,26 @@
+/* Dark theme — the "Industry" design system (tokens.css) only ships light
+   values, so this app-owned layer redefines the page-level role tokens for
+   `data-theme="dark"` (set explicitly by the sidebar's theme toggle, see
+   useTheme.ts — this app has no OS-preference-driven dark mode). The tonal
+   ramps (--color-neutral-*, --color-accent-*) are left as-is: they're
+   theme-agnostic brand colors, so tags/badges keep the same look in both
+   themes. Component rules that derive from var(--color-text) (hover tints,
+   corner marks, ::selection, etc.) already adapt automatically. */
+
+:root[data-theme="dark"] {
+  --color-bg: #17181a;
+  --color-surface: #212325;
+  --color-text: #e7e8ea;
+  --color-accent: #749dc4;
+  --color-accent-2: #9ebbd8;
+  --color-divider: color-mix(in srgb, #e7e8ea 16%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.65);
+}
+
+/* Body copy in the accent (e.g. links) needs a light ramp step on a dark
+   ground — the light theme's deep-step guidance inverts here. */
+:root[data-theme="dark"] a { color: var(--color-accent-400); }
+:root[data-theme="dark"] a:hover { color: var(--color-accent-200); }
