@@ -13,5 +13,13 @@ export default defineConfig({
       fileName: () => 'main.js',
       formats: ['cjs'],
     },
+    rollupOptions: {
+      // `node:sqlite` is a Node built-in, but it's recent enough that it's
+      // missing from this Node's `node:module` builtinModules list, which
+      // is what Forge's Vite plugin uses to auto-externalize `node:*`
+      // imports — without this, Rollup would try to bundle it as a real
+      // package and fail to resolve it.
+      external: ['node:sqlite'],
+    },
   },
 });

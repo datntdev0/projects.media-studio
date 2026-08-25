@@ -11,6 +11,11 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // Migration SQL is read straight off disk at runtime (see
+    // src/main/db/migrate.ts), so it can't be bundled into main.js — ship
+    // it next to the app instead. Packager copies this using the
+    // directory's basename, i.e. into resources/migrations/.
+    extraResource: ['src/main/db/migrations'],
   },
   rebuildConfig: {},
   makers: [

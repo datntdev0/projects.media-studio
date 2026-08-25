@@ -94,3 +94,7 @@ typings/
 
 # Electron-Forge
 out/
+
+# App's local SQLite data (see src/main/db/client.ts) — stored next to
+# wherever the app runs from, so it lands here in dev
+/data/
