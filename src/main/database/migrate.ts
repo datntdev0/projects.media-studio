@@ -14,6 +14,11 @@ interface MigrationFile {
 const MIGRATION_FILE_PATTERN = /^V(\d+\.\d+\.\d+)__(.+)\.sql$/;
 const BOOTSTRAP_VERSION = '0.0.0';
 
+// Marks the boundary between statements in a migration file, so a file can
+// hold more than one CREATE/ALTER without relying on node:sqlite to split
+// them itself.
+const STATEMENT_SEPARATOR = '<---split-statement--->';
+
 function getMigrationsDir(): string {
   // Plain SQL files aren't bundled into main.js by Vite — they're shipped
   // as a packaged extraResource instead (see forge.config.ts) and read
@@ -53,7 +58,12 @@ function recordMigration(db: Db, migration: MigrationFile): void {
 function runAndRecord(db: Db, migration: MigrationFile): void {
   db.exec('BEGIN');
   try {
-    db.exec(migration.sql);
+    for (const statement of migration.sql.split(STATEMENT_SEPARATOR)) {
+      const trimmed = statement.trim();
+      if (trimmed) {
+        db.exec(trimmed);
+      }
+    }
     recordMigration(db, migration);
     db.exec('COMMIT');
   } catch (error) {

@@ -10,8 +10,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "typecheck": "tsc -b",
-    "lint": "echo \"No linting configured\""
+    "typecheck": "tsc -b"
   },
   "keywords": [],
   "author": {

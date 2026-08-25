@@ -1,4 +1,4 @@
-import { BellIcon, PanelIcon, PlusIcon } from '../icons';
+import { BellIcon, PanelIcon } from '../icons';
 
 interface TopBarProps {
   title: string;
@@ -26,10 +26,6 @@ export function TopBar({ title, onToggleSidebar }: TopBarProps) {
           aria-label="Notifications"
         >
           <BellIcon />
-        </button>
-        <button className="btn btn-primary" type="button" style={{ gap: 6 }}>
-          <PlusIcon width={15} height={15} />
-          New
         </button>
       </div>
     </header>

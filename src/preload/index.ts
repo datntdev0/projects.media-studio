@@ -3,9 +3,19 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { APP_INFO_IPC_CHANNELS, type AppInfoApi } from '../shared/app-info';
+import { APP_LIBRARY_IPC_CHANNELS, type AppLibraryApi } from '../shared/app-library';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
 };
 
+const appLibraryApi: AppLibraryApi = {
+  list: (filter) => ipcRenderer.invoke(APP_LIBRARY_IPC_CHANNELS.list, filter),
+  get: (id) => ipcRenderer.invoke(APP_LIBRARY_IPC_CHANNELS.get, id),
+  create: (input) => ipcRenderer.invoke(APP_LIBRARY_IPC_CHANNELS.create, input),
+  update: (id, input) => ipcRenderer.invoke(APP_LIBRARY_IPC_CHANNELS.update, id, input),
+  remove: (id) => ipcRenderer.invoke(APP_LIBRARY_IPC_CHANNELS.remove, id),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
+contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);

@@ -157,3 +157,71 @@ a:hover { color: var(--color-accent-900); }
   max-width: 380px;
   text-wrap: pretty;
 }
+
+/* — library screen — */
+.wireframe {
+  background-image:
+    linear-gradient(135deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--color-text) 18%, transparent) 50%, transparent calc(50% + 0.5px)),
+    linear-gradient(45deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--color-text) 18%, transparent) 50%, transparent calc(50% + 0.5px));
+}
+.progress-track {
+  margin-top: 5px;
+  height: 3px;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+.progress-fill {
+  height: 3px;
+  background: var(--color-accent);
+}
+.row-menu {
+  position: absolute;
+  right: 6.8px;
+  top: 32px;
+  width: 150px;
+  background: var(--color-bg);
+  box-shadow: var(--shadow-md);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 30;
+  text-align: left;
+}
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  color: inherit;
+  font-family: var(--font-body);
+}
+.row-menu-item.is-danger { color: #8a2f2f; border-top: 1px solid var(--color-divider); }
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20.4px;
+}
+.library-card {
+  display: flex;
+  align-items: stretch;
+}
+.library-card-cover {
+  width: 110px;
+  flex: none;
+  aspect-ratio: 3 / 4;
+  border-right: 1px solid var(--color-divider);
+  position: relative;
+}
+.library-card-body {
+  flex: 1;
+  min-width: 0;
+  padding: 13.6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

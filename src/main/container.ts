@@ -1,10 +1,12 @@
 import type { Job } from 'node-schedule';
 import { closeDb, getDb, type Db } from './database/client';
 import { createAppInfoManager, type AppInfoManager } from './managers/app-info.manager';
+import { createAppLibraryManager, type AppLibraryManager } from './managers/app-library.manager';
 import { createMessageBus, type MessageBus } from './queue/message-bus';
 
 export interface Managers {
   appInfo: AppInfoManager;
+  appLibrary: AppLibraryManager;
 }
 
 /**
@@ -27,6 +29,7 @@ export function createContainer(): Container {
 
   const manager: Managers = {
     appInfo: createAppInfoManager(db),
+    appLibrary: createAppLibraryManager(db),
   };
 
   const bus = createMessageBus();

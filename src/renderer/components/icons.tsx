@@ -102,3 +102,68 @@ export const SunIcon = icon(
 );
 
 export const MoonIcon = icon(<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />);
+
+export const EditIcon = icon(<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />);
+
+export const TrashIcon = icon(
+  <>
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+  </>,
+);
+
+export const TableViewIcon = icon(
+  <>
+    <path d="M3 5h18" />
+    <path d="M3 12h18" />
+    <path d="M3 19h18" />
+  </>,
+);
+
+export const GridViewIcon = icon(
+  <>
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+  </>,
+);
+
+export const MoreVerticalIcon = icon(
+  <>
+    <circle cx="12" cy="5" r="1" />
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="12" cy="19" r="1" />
+  </>,
+);
+
+export const BookIcon = icon(
+  <>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </>,
+);
+
+export const ImageSetIcon = icon(
+  <>
+    <rect width="18" height="18" x="3" y="3" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-4.6-4.6a2 2 0 0 0-3 0L3 21" />
+  </>,
+);
+
+export const VideoSetIcon = icon(
+  <>
+    <path d="m16 13 5.2 3.1a1 1 0 0 0 1.5-.9V8.8a1 1 0 0 0-1.5-.9L16 11z" />
+    <rect x="2" y="6" width="14" height="12" />
+  </>,
+);
+
+export const GlobeIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M2 12h20" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </>,
+);
