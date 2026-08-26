@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DiscoverResult } from '../../../shared/app-scraping';
 import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
-import { countWords, type ChapterRow } from './chapter';
+import type { ChapterRow } from './chapter';
+
+// This app has no realtime push, so while a scraping job is running (per the caller's
+// `poll` flag) the chapter list is re-read on a timer to pick up its progress.
+const POLL_MS = 2000;
 
 export interface UseLibraryContentsResult {
   contents: AppLibraryContent[];
@@ -13,26 +17,33 @@ export interface UseLibraryContentsResult {
   discoverChapters(): Promise<DiscoverResult>;
 }
 
-export function useLibraryContents(libraryId: string): UseLibraryContentsResult {
+export function useLibraryContents(libraryId: string, poll = false): UseLibraryContentsResult {
   const [contents, setContents] = useState<AppLibraryContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
 
+  const load = useCallback(
+    (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      return window.appLibraryContentApi
+        .list(libraryId)
+        .then((list) => setContents(list))
+        .finally(() => {
+          if (showLoading) setLoading(false);
+        });
+    },
+    [libraryId],
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    window.appLibraryContentApi
-      .list(libraryId)
-      .then((list) => {
-        if (!cancelled) setContents(list);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [libraryId, reloadToken]);
+    load(true);
+  }, [load, reloadToken]);
+
+  useEffect(() => {
+    if (!poll) return;
+    const timer = setInterval(() => load(false), POLL_MS);
+    return () => clearInterval(timer);
+  }, [poll, load]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -44,7 +55,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
         type: AppLibraryContentType.Original,
         status: AppLibraryContentStatus.Pending,
         sourceUrl: null,
-        textContent: { contentUrl: null, body: '', language: sourceLanguage, title, words: 0 },
+        textContent: { contentUrl: null, body: '', language: sourceLanguage, title },
         audioContent: null,
         imageContent: null,
         videoContent: null,
@@ -69,7 +80,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
           type: AppLibraryContentType.Original,
           status,
           sourceUrl: original?.sourceUrl ?? null,
-          textContent: { contentUrl: null, body, language: lang, title, words: countWords(body) },
+          textContent: { contentUrl: null, body, language: lang, title },
           audioContent: null,
           imageContent: null,
           videoContent: null,
@@ -94,7 +105,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
           type: AppLibraryContentType.Translation,
           status: translationStatus,
           sourceUrl: null,
-          textContent: { contentUrl: null, body, language: lang, title, words: countWords(body) },
+          textContent: { contentUrl: null, body, language: lang, title },
           audioContent: null,
           imageContent: null,
           videoContent: null,

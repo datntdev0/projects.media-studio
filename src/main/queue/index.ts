@@ -1,6 +1,8 @@
 import type { Container } from '../container';
 import { registerAppPingHandler } from './handlers/app-ping.handler';
+import { registerScrapingJobHandler } from './handlers/scraping-job.handler';
 
-export function registerQueueHandlers({ bus }: Container): void {
-  registerAppPingHandler(bus);
+export function registerQueueHandlers(container: Container): void {
+  registerAppPingHandler(container.bus);
+  registerScrapingJobHandler(container);
 }

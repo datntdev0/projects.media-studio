@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { DownloadIcon, RefreshIcon, ScrapingsIcon, UploadIcon } from '../../components/icons';
-import { LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
+import { AppLibraryStatus, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
 import { ContentLanguage } from '../../../shared/app-library-content';
+import type { CreateScrapingJobInput } from '../../../shared/app-scraping';
 import { STATUS_TAG_CLASS, formatDate } from './libraryFormat';
 import { DetailHeader } from './DetailHeader';
 import { ChapterTable } from './ChapterTable';
@@ -27,7 +28,7 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
   const novel = item.novelMetadata;
   const sourceLang = resolveSourceLang(novel?.language ?? '');
 
-  const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id);
+  const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id, item.status === AppLibraryStatus.Scraping);
   const [lang, setLang] = useState<ChapterLang>(sourceLang ?? ContentLanguage.English);
   const [activeChapterId, setActiveChapterId] = useState<string | undefined>(undefined);
   const [scrapeOpen, setScrapeOpen] = useState(false);
@@ -59,6 +60,11 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
 
   const handleSaveChapter = async (chapter: ChapterRow, title: string, body: string) => {
     await saveChapter(chapter, lang, title, body);
+    onContentChange();
+  };
+
+  const handleCreateScrapingJob = async (input: CreateScrapingJobInput) => {
+    await window.appScrapingApi.createJob(input);
     onContentChange();
   };
 
@@ -119,7 +125,7 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
             <dd style={{ margin: 0, wordBreak: 'break-all' }}>{item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a> : '—'}</dd>
           </dl>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6.8, marginTop: 20.4 }}>
-            <button type="button" className="btn btn-primary btn-block" onClick={() => setScrapeOpen(true)} style={{ marginTop: 0, gap: 6 }}>
+            <button type="button" className="btn btn-primary btn-block" onClick={() => setScrapeOpen(true)} disabled={!isCrawler} style={{ marginTop: 0, gap: 6 }}>
               <ScrapingsIcon width={15} height={15} />
               Scrape content…
             </button>
@@ -178,7 +184,7 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
         </div>
       </div>
 
-      {scrapeOpen && <ScrapeDialog chapters={chapters} onClose={() => setScrapeOpen(false)} />}
+      {scrapeOpen && <ScrapeDialog libraryId={item.id} chapters={chapters} onClose={() => setScrapeOpen(false)} onSubmit={handleCreateScrapingJob} />}
       {addChapterOpen && <ChapterFormDialog nextNo={nextNo} onClose={() => setAddChapterOpen(false)} onAdd={handleAddChapter} />}
     </div>
   );

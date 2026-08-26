@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import type {
-  AppLibrary,
-  CreateAppLibraryInput,
-  ListAppLibrariesFilter,
-  UpdateAppLibraryInput,
+import {
+  AppLibraryStatus,
+  type AppLibrary,
+  type CreateAppLibraryInput,
+  type ListAppLibrariesFilter,
+  type UpdateAppLibraryInput,
 } from '../../../shared/app-library';
+
+// This app has no realtime push, so a library actively being scraped is polled — a
+// background job (see the scraping queue handler) moves its status/counters without
+// the renderer ever calling in.
+const POLL_MS = 2000;
 
 export interface AppLibrariesState {
   items: AppLibrary[];
@@ -29,26 +35,32 @@ export function useAppLibraries(): AppLibrariesState {
   const [filter, setFilter] = useState<ListAppLibrariesFilter>({});
   const [reloadToken, setReloadToken] = useState(0);
 
+  const load = useCallback(
+    (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      return window.appLibraryApi
+        .list(filter)
+        .then((list) => {
+          setItems(list);
+          setError(undefined);
+        })
+        .catch((err) => setError(errorMessage(err)))
+        .finally(() => {
+          if (showLoading) setLoading(false);
+        });
+    },
+    [filter],
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    load(true);
+  }, [load, reloadToken]);
 
-    window.appLibraryApi
-      .list(filter)
-      .then((list) => {
-        if (!cancelled) setItems(list);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [filter, reloadToken]);
+  useEffect(() => {
+    if (!items.some((item) => item.status === AppLibraryStatus.Scraping)) return;
+    const timer = setInterval(() => load(false), POLL_MS);
+    return () => clearInterval(timer);
+  }, [items, load]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 

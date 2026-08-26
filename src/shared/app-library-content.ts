@@ -40,7 +40,6 @@ export interface TextContentBlock {
   body: string;
   language: ContentLanguage;
   title: string;
-  words: number;
 }
 
 export interface AudioContentBlock {

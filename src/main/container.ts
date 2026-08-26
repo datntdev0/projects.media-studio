@@ -31,14 +31,14 @@ let container: Container | undefined;
 export function createContainer(): Container {
   const db = getDb();
 
+  const bus = createMessageBus();
+
   const manager: Managers = {
     appInfo: createAppInfoManager(db),
     appLibrary: createAppLibraryManager(db),
-    appScraping: createAppScrapingManager(db),
+    appScraping: createAppScrapingManager(db, bus),
     appLibraryContent: createAppLibraryContentManager(db),
   };
-
-  const bus = createMessageBus();
 
   container = { db, manager, bus, scheduledJobs: [] };
   return container;

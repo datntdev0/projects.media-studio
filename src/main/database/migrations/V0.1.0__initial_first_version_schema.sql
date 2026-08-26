@@ -64,3 +64,38 @@ CREATE TABLE app_library_contents (
 );
 
 CREATE INDEX app_library_contents_library_id ON app_library_contents (library_id);
+
+<---split-statement--->
+
+-- One row per scraping job — a range of a crawler-sourced novel's chapters,
+-- booked or in flight. `tasks` holds one entry per chapter the job covers,
+-- as JSON, mirroring how `app_library_contents.content` holds its own
+-- type-specific block: a job is small enough (a novel's chapter count) that
+-- a subcollection-style split buys nothing a local, single-user app needs.
+CREATE TABLE scraping_jobs (
+  id TEXT PRIMARY KEY,
+  library_id TEXT NOT NULL,
+  library_type TEXT NOT NULL,
+  library_title TEXT NOT NULL,
+  crawler TEXT NOT NULL,
+  status TEXT NOT NULL,
+  range TEXT NOT NULL,
+  refetch INTEGER NOT NULL,
+  retry INTEGER NOT NULL,
+  start_at INTEGER,
+  queued_at INTEGER,
+  completed_at INTEGER,
+  total INTEGER NOT NULL,
+  completed INTEGER NOT NULL,
+  failed INTEGER NOT NULL,
+  skipped INTEGER NOT NULL,
+  tasks TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX scraping_jobs_library_id ON scraping_jobs (library_id);
+
+<---split-statement--->
+
+CREATE INDEX scraping_jobs_status ON scraping_jobs (status);

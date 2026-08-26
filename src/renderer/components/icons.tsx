@@ -217,3 +217,19 @@ export const PlayCircleIcon = icon(
     <path d="m10 8 6 4-6 4z" />
   </>,
 );
+
+export const PlayIcon = icon(<path d="M6 3 20 12 6 21Z" />);
+
+export const PauseIcon = icon(
+  <>
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </>,
+);
+
+export const CloseIcon = icon(
+  <>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </>,
+);

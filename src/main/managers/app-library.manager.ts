@@ -37,6 +37,23 @@ export function stripStamps(item: AppLibrary): AppLibraryDraft {
   return draft;
 }
 
+/**
+ * What an item's status should read when nothing is actively scraping it — `Ready`
+ * once anything has been downloaded, `Draft` otherwise. `Scraping` and `Failed` are
+ * set directly by job code (see `setLibraryStatus`) for the states this can't derive.
+ */
+export function deriveIdleLibraryStatus(item: AppLibrary): AppLibraryStatus {
+  const metadata = item.novelMetadata ?? item.imageMetadata ?? item.videoMetadata;
+  return metadata && metadata.downloadedCount > 0 ? AppLibraryStatus.Ready : AppLibraryStatus.Draft;
+}
+
+/** Sets an item's status directly — for scraping/job code only, same reasoning as `AppLibraryContentStatus`'s restricted values. */
+export function setLibraryStatus(db: Db, id: string, status: AppLibraryStatus): void {
+  const item = getAppLibrary(db, id);
+  if (!item || item.status === status) return;
+  updateAppLibrary(db, id, { ...stripStamps(item), status });
+}
+
 /** Builds the type-specific metadata block a freshly created item starts with. */
 function initialMetadata(input: CreateAppLibraryInput): Pick<AppLibraryDraft, 'novelMetadata' | 'imageMetadata' | 'videoMetadata'> {
   switch (input.type) {

@@ -24,6 +24,10 @@ const appScrapingApi: AppScrapingApi = {
   getCrawlers: (libraryType) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.getCrawlers, libraryType),
   preview: (crawler, sourceUrl) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.preview, crawler, sourceUrl),
   discover: (libraryId) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.discover, libraryId),
+  listJobs: (filter) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.listJobs, filter),
+  createJob: (input) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.createJob, input),
+  removeJob: (id) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.removeJob, id),
+  updateJobStatus: (id, status) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.updateJobStatus, id, status),
 };
 
 const appLibraryContentApi: AppLibraryContentApi = {

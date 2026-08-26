@@ -81,10 +81,7 @@ export function buildChapterRows(contents: AppLibraryContent[], lang: ChapterLan
     });
 }
 
-export function countWords(body: string): number {
-  const trimmed = body.trim();
-  return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
-}
+export { countWords } from '../../../shared/text';
 
 export function bodyFor(chapter: ChapterRow, lang: ChapterLang): string {
   if (lang === chapter.sourceLanguage) return chapter.sourceBody;

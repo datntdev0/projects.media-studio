@@ -136,8 +136,11 @@ def parse_content(page) -> dict:
     split chapter drops the heading each of its pages repeats.
     """
     heading = page.css("h1")
-    title = heading[0].get_all_text(strip=True) if heading else ""
-    repeated = heading_key(title)
+    raw_title = heading[0].get_all_text(strip=True) if heading else ""
+    repeated = heading_key(raw_title)
+    # The split-chapter marker (`(1/2)`) belongs to the page, not the chapter — drop it
+    # from what is returned as `title`, same as `repeated` already reads it without.
+    title = _PART_MARKER.sub("", raw_title).strip()
 
     lines = []
     for node in page.css("div.content > p"):
