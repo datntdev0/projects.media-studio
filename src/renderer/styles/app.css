@@ -225,3 +225,5 @@ a:hover { color: var(--color-accent-900); }
   flex-direction: column;
   gap: 4px;
 }
+.chapter-nav-item:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.chapter-nav-item[data-active='true'] { background: color-mix(in srgb, var(--color-accent) 14%, transparent); }

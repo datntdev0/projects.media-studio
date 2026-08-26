@@ -35,12 +35,13 @@ function errorMessage(error: unknown): string {
 }
 
 /** Maps what the crawler read for a novel onto the details a library item stores. */
-function novelDetailsFromPreview(preview: ScrapingPreview): NovelDetails {
+function novelDetailsFromPreview(preview: ScrapingPreview, crawlers: CrawlerDescriptor[]): NovelDetails {
   const status = NOVEL_STATUS_ALIASES[(preview.novel.status ?? '').trim().toLowerCase()] ?? NovelStatus.Ongoing;
+  const crawler = crawlers.find((candidate) => candidate.name === preview.crawler);
   return {
     status,
     author: preview.novel.author ?? '',
-    language: '',
+    language: crawler?.defaultLanguage ?? '',
     genres: preview.novel.category ? [preview.novel.category] : [],
     description: preview.novel.description ?? '',
   };
@@ -149,7 +150,7 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
           sourceName: crawlerName,
           sourceUrl: sourceUrl.trim(),
           coverUrl: coverUrl.trim() || null,
-          novel: isNovel ? novelDetailsFromPreview(preview) : undefined,
+          novel: isNovel ? novelDetailsFromPreview(preview, crawlers) : undefined,
         });
       } else {
         await onCreate({

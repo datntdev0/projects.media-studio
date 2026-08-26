@@ -10,6 +10,7 @@ export interface CrawlerDescriptor {
   name: string;
   baseUrl: string;
   libraryType: AppLibraryType;
+  defaultLanguage: string;
 }
 
 export interface ScrapingPreviewNovel {
@@ -25,7 +26,7 @@ export interface ScrapingPreviewNovel {
   description: string | null;
 }
 
-/** What a source URL resolved to, as read by `preview` — from the worker, or from cache. */
+/** What a source URL resolved to, as read by `preview` from the worker. */
 export interface ScrapingPreview {
   crawler: string;
   sourceUrl: string;

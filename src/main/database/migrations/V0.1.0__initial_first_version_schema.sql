@@ -43,3 +43,24 @@ CREATE TABLE system_cache (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (cache_type, cache_key)
 );
+
+<---split-statement--->
+
+-- One row per content item belonging to a library item — a novel's chapter
+-- (original or translation), or an image/video set's file. Type-specific
+-- fields live in `content` as JSON, mirroring how `app_libraries.metadata`
+-- holds its own type-specific block. A translation is its own row sharing
+-- `idx` with the original it translates, not a field on the original.
+CREATE TABLE app_library_contents (
+  id TEXT PRIMARY KEY,
+  library_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_url TEXT,
+  content TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX app_library_contents_library_id ON app_library_contents (library_id);

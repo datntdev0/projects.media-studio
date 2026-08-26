@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../database/client';
-import { getSystemCacheItem, setSystemCacheItem } from '../database/repositories/system-cache.repo';
+import { setSystemCacheItem } from '../database/repositories/system-cache.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, writeCoverFile } from '../helpers/cover-storage';
 import { AppLibraryType } from '../../shared/app-library';
 import type { CrawlerDescriptor, ScrapingPreview } from '../../shared/app-scraping';
@@ -11,7 +11,9 @@ export interface AppScrapingManager {
 }
 
 /** The crawlers the worker service knows how to run, and which library type each one feeds. */
-const CRAWLERS: CrawlerDescriptor[] = [{ name: 'novel543', baseUrl: 'https://www.novel543.com', libraryType: AppLibraryType.Novel }];
+const CRAWLERS: CrawlerDescriptor[] = [
+  { name: 'novel543', baseUrl: 'https://www.novel543.com', libraryType: AppLibraryType.Novel, defaultLanguage: 'zh' },
+];
 
 const CACHE_TYPE = 'scraping-preview';
 const PREVIEW_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -106,13 +108,8 @@ export function createAppScrapingManager(db: Db): AppScrapingManager {
         throw new Error(`Unknown crawler '${crawler}'. Available: ${known}`);
       }
 
-      const cacheKey = `${crawler}:${sourceUrl}`;
-      const cached = getSystemCacheItem(db, CACHE_TYPE, cacheKey);
-      if (cached) {
-        return JSON.parse(cached.cacheDataJson) as ScrapingPreview;
-      }
-
       const preview = await fetchPreviewFromWorker(crawler, sourceUrl);
+      const cacheKey = `${crawler}:${sourceUrl}`;
       setSystemCacheItem(db, { cacheType: CACHE_TYPE, cacheKey, cacheDataJson: JSON.stringify(preview), ttl: PREVIEW_TTL_MS });
       return preview;
     },

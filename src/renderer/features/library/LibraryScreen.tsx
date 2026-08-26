@@ -3,47 +3,10 @@ import { EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableVi
 import { AppLibraryStatus, AppLibraryType, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
 import { useAppLibraries } from './useAppLibraries';
 import { LibraryFormDialog } from './LibraryFormDialog';
+import { LibraryDetailScreen } from './LibraryDetailScreen';
+import { STATUS_TAG_CLASS, SOURCE_MODE_LABEL, TYPE_LABEL, contentLabelOf, formatDate, progressPctOf, summaryOf } from './libraryFormat';
 
 type ViewMode = 'table' | 'grid';
-
-const TYPE_LABEL: Record<AppLibraryType, string> = {
-  [AppLibraryType.Novel]: 'Novel',
-  [AppLibraryType.Image]: 'Images',
-  [AppLibraryType.Video]: 'Videos',
-};
-
-const SOURCE_MODE_LABEL: Record<LibrarySourceMode, string> = {
-  [LibrarySourceMode.Manual]: 'Manual',
-  [LibrarySourceMode.Crawler]: 'Crawler',
-};
-
-const STATUS_TAG_CLASS: Record<AppLibraryStatus, string> = {
-  [AppLibraryStatus.Draft]: 'tag-neutral',
-  [AppLibraryStatus.Scraping]: 'tag-accent',
-  [AppLibraryStatus.Ready]: 'tag-primary',
-  [AppLibraryStatus.Failed]: 'tag-outline',
-};
-
-function summaryOf(item: AppLibrary): string {
-  if (item.novelMetadata) return item.novelMetadata.author;
-  return item.sourceName;
-}
-
-function metadataOf(item: AppLibrary) {
-  return item.novelMetadata ?? item.imageMetadata ?? item.videoMetadata;
-}
-
-function contentLabelOf(item: AppLibrary): string {
-  const metadata = metadataOf(item);
-  if (!metadata) return '—';
-  return `${metadata.downloadedCount} / ${metadata.discoveredCount}`;
-}
-
-function progressPctOf(item: AppLibrary): number {
-  const metadata = metadataOf(item);
-  if (!metadata || metadata.discoveredCount === 0) return 0;
-  return Math.round((metadata.downloadedCount / metadata.discoveredCount) * 100);
-}
 
 function matchesQuery(item: AppLibrary, query: string): boolean {
   const needle = query.trim().toLowerCase();
@@ -52,12 +15,13 @@ function matchesQuery(item: AppLibrary, query: string): boolean {
 }
 
 export function LibraryScreen() {
-  const { items, loading, error, filter, setFilter, create, update, remove } = useAppLibraries();
+  const { items, loading, error, filter, setFilter, create, update, remove, refresh } = useAppLibraries();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>('table');
   const [dialogItem, setDialogItem] = useState<AppLibrary | 'new' | undefined>(undefined);
   const [removing, setRemoving] = useState<string | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [activeId, setActiveId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!menuFor) return;
@@ -67,12 +31,14 @@ export function LibraryScreen() {
   }, [menuFor]);
 
   const visibleItems = useMemo(() => items.filter((item) => matchesQuery(item, query)), [items, query]);
+  const activeItem = activeId === undefined ? undefined : items.find((item) => item.id === activeId);
 
   const handleDelete = async (item: AppLibrary) => {
     if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
     setRemoving(item.id);
     try {
       await remove(item.id);
+      setActiveId(undefined);
     } finally {
       setRemoving(undefined);
     }
@@ -100,6 +66,23 @@ export function LibraryScreen() {
         </button>
       </div>
     );
+
+  if (activeItem) {
+    return (
+      <>
+        <LibraryDetailScreen
+          item={activeItem}
+          onBack={() => setActiveId(undefined)}
+          onEdit={() => setDialogItem(activeItem)}
+          onDelete={() => handleDelete(activeItem)}
+          onContentChange={refresh}
+        />
+        {dialogItem !== undefined && (
+          <LibraryFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
+        )}
+      </>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20.4, height: '100%' }}>
@@ -225,7 +208,7 @@ export function LibraryScreen() {
           </thead>
           <tbody>
             {visibleItems.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => setActiveId(item.id)}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 34, height: 46, flex: 'none', border: '1px solid var(--color-divider)', overflow: 'hidden' }}>
@@ -260,9 +243,9 @@ export function LibraryScreen() {
                   </div>
                 </td>
                 <td className="text-muted" style={{ fontSize: 12 }}>
-                  {new Date(item.updatedAt).toLocaleDateString()}
+                  {formatDate(item.updatedAt)}
                 </td>
-                <td style={{ textAlign: 'right', position: 'relative' }}>
+                <td style={{ textAlign: 'right', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 28, height: 28 }} onClick={(e) => toggleMenu(item.id, e)} aria-label="Actions">
                     <MoreVerticalIcon width={15} height={15} />
                   </button>
@@ -275,7 +258,7 @@ export function LibraryScreen() {
       ) : (
         <div className="library-grid">
           {visibleItems.map((item) => (
-            <div className="blueprint library-card" key={item.id}>
+            <div className="blueprint library-card" key={item.id} style={{ cursor: 'pointer' }} onClick={() => setActiveId(item.id)}>
               <i className="corner tl" />
               <i className="corner tr" />
               <i className="corner bl" />
@@ -291,7 +274,7 @@ export function LibraryScreen() {
               <div className="library-card-body">
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16, lineHeight: 1.2 }}>{item.title}</div>
-                  <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                     <button className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 24, height: 24 }} onClick={(e) => toggleMenu(item.id, e)} aria-label="Actions">
                       <MoreVerticalIcon width={14} height={14} />
                     </button>
@@ -306,7 +289,7 @@ export function LibraryScreen() {
                 </div>
                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, color: 'color-mix(in srgb, var(--color-text) 55%, transparent)' }}>
                   <span>{contentLabelOf(item)}</span>
-                  <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                  <span>{formatDate(item.updatedAt)}</span>
                 </div>
                 <div className="progress-track">
                   <div className="progress-fill" style={{ width: `${progressPctOf(item)}%` }} />

@@ -9,6 +9,7 @@ import {
   updateAppLibrary,
 } from '../database/repositories/app-library.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from '../helpers/cover-storage';
+import { deleteAppLibraryContentsByLibraryId } from '../database/repositories/app-library-content.repo';
 import {
   AppLibraryStatus,
   AppLibraryType,
@@ -31,7 +32,7 @@ export interface AppLibraryManager {
 
 const EMPTY_COUNTERS: AppLibraryMetadataBase = { discoveredCount: 0, downloadedCount: 0, discoveredAt: null };
 
-function stripStamps(item: AppLibrary): AppLibraryDraft {
+export function stripStamps(item: AppLibrary): AppLibraryDraft {
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = item;
   return draft;
 }
@@ -96,6 +97,7 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
 
     remove: (id) => {
       deleteCoverFile(need(id).coverUrl);
+      deleteAppLibraryContentsByLibraryId(db, id);
       deleteAppLibrary(db, id);
     },
 

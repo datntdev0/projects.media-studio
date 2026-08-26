@@ -169,3 +169,51 @@ export const GlobeIcon = icon(
     <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   </>,
 );
+
+export const ArrowLeftIcon = icon(
+  <>
+    <path d="m12 19-7-7 7-7" />
+    <path d="M19 12H5" />
+  </>,
+);
+
+export const UploadIcon = icon(
+  <>
+    <path d="M12 3v12" />
+    <path d="m17 8-5-5-5 5" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  </>,
+);
+
+export const DownloadIcon = icon(
+  <>
+    <path d="M12 15V3" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  </>,
+);
+
+export const RefreshIcon = icon(
+  <>
+    <path d="M21 12a9 9 0 1 1-3-6.7" />
+    <path d="M21 3v6h-6" />
+  </>,
+);
+
+export const TranslateIcon = icon(
+  <>
+    <path d="m5 8 6 6" />
+    <path d="m4 14 6-6 2-3" />
+    <path d="M2 5h12" />
+    <path d="M7 2h1" />
+    <path d="m22 22-5-10-5 10" />
+    <path d="M14 18h6" />
+  </>,
+);
+
+export const PlayCircleIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m10 8 6 4-6 4z" />
+  </>,
+);
