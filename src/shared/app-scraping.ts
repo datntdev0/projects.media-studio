@@ -36,12 +36,24 @@ export interface ScrapingPreview {
   latestChapterUrl: string | null;
 }
 
+/** What checking a library item's source for new chapter links found — no content is downloaded. */
+export interface DiscoverResult {
+  crawler: string;
+  sourceUrl: string;
+  totalChapters: number;
+  newChapters: number;
+  latestChapterTitle: string | null;
+}
+
 export const APP_SCRAPING_IPC_CHANNELS = {
   getCrawlers: 'app-scraping:get-crawlers',
   preview: 'app-scraping:preview',
+  discover: 'app-scraping:discover',
 } as const;
 
 export interface AppScrapingApi {
   getCrawlers(libraryType?: AppLibraryType): Promise<CrawlerDescriptor[]>;
   preview(crawler: string, sourceUrl: string): Promise<ScrapingPreview>;
+  /** Checks a crawler-sourced novel's source for chapter links not yet on file, and records them as `Discovered` content rows. */
+  discover(libraryId: string): Promise<DiscoverResult>;
 }

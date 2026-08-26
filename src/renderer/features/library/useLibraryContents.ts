@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { DiscoverResult } from '../../../shared/app-scraping';
 import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
 import { countWords, type ChapterRow } from './chapter';
 
@@ -9,6 +10,7 @@ export interface UseLibraryContentsResult {
   saveChapter(chapter: ChapterRow, lang: ContentLanguage, title: string, body: string): Promise<void>;
   removeChapter(chapter: ChapterRow): Promise<void>;
   removeChapters(chapters: ChapterRow[]): Promise<void>;
+  discoverChapters(): Promise<DiscoverResult>;
 }
 
 export function useLibraryContents(libraryId: string): UseLibraryContentsResult {
@@ -127,5 +129,11 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
     [libraryId, contents, refresh],
   );
 
-  return { contents, loading, addChapter, saveChapter, removeChapter, removeChapters };
+  const discoverChapters = useCallback(async () => {
+    const result = await window.appScrapingApi.discover(libraryId);
+    if (result.newChapters > 0) refresh();
+    return result;
+  }, [libraryId, refresh]);
+
+  return { contents, loading, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters };
 }

@@ -23,6 +23,7 @@ const appLibraryApi: AppLibraryApi = {
 const appScrapingApi: AppScrapingApi = {
   getCrawlers: (libraryType) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.getCrawlers, libraryType),
   preview: (crawler, sourceUrl) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.preview, crawler, sourceUrl),
+  discover: (libraryId) => ipcRenderer.invoke(APP_SCRAPING_IPC_CHANNELS.discover, libraryId),
 };
 
 const appLibraryContentApi: AppLibraryContentApi = {

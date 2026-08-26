@@ -2,12 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../database/client';
 import { setSystemCacheItem } from '../database/repositories/system-cache.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, writeCoverFile } from '../helpers/cover-storage';
-import { AppLibraryType } from '../../shared/app-library';
-import type { CrawlerDescriptor, ScrapingPreview } from '../../shared/app-scraping';
+import { getAppLibrary } from '../database/repositories/app-library.repo';
+import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
+import { recount } from './app-library-content.manager';
+import { AppLibraryType, LibrarySourceMode } from '../../shared/app-library';
+import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage } from '../../shared/app-library-content';
+import type { CrawlerDescriptor, DiscoverResult, ScrapingPreview } from '../../shared/app-scraping';
 
 export interface AppScrapingManager {
   getCrawlers(libraryType?: AppLibraryType): CrawlerDescriptor[];
   preview(crawler: string, sourceUrl: string): Promise<ScrapingPreview>;
+  discover(libraryId: string): Promise<DiscoverResult>;
 }
 
 /** The crawlers the worker service knows how to run, and which library type each one feeds. */
@@ -40,6 +45,12 @@ interface WorkerChapter {
 
 function workerBaseUrl(): string {
   return process.env.SCRAPER_BASE_URL ?? 'http://127.0.0.1:8000';
+}
+
+/** Matches a novel's stored language onto one of the three languages content rows carry; falls back to the crawler's default. */
+function resolveLanguage(language: string | undefined, fallback: string): ContentLanguage {
+  const key = (language || fallback).trim().toLowerCase();
+  return (Object.values(ContentLanguage) as string[]).includes(key) ? (key as ContentLanguage) : ContentLanguage.English;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -112,6 +123,61 @@ export function createAppScrapingManager(db: Db): AppScrapingManager {
       const cacheKey = `${crawler}:${sourceUrl}`;
       setSystemCacheItem(db, { cacheType: CACHE_TYPE, cacheKey, cacheDataJson: JSON.stringify(preview), ttl: PREVIEW_TTL_MS });
       return preview;
+    },
+
+    discover: async (libraryId) => {
+      const item = getAppLibrary(db, libraryId);
+      if (!item) {
+        throw new Error(`Library item ${libraryId} not found`);
+      }
+      if (item.type !== AppLibraryType.Novel) {
+        throw new Error('Only novel items can discover chapters.');
+      }
+      if (item.sourceMode !== LibrarySourceMode.Crawler || !item.sourceUrl) {
+        throw new Error('This item has no crawler source to discover chapters from.');
+      }
+
+      const crawler = item.sourceName;
+      const descriptor = CRAWLERS.find((candidate) => candidate.name === crawler);
+      if (!descriptor) {
+        const known = CRAWLERS.map((candidate) => candidate.name).join(', ');
+        throw new Error(`Unknown crawler '${crawler}'. Available: ${known}`);
+      }
+
+      const query = `sourceUrl=${encodeURIComponent(item.sourceUrl)}`;
+      const chapters = await fetchJson<WorkerChapter[]>(`${workerBaseUrl()}/novels/${crawler}/chapters?${query}`);
+
+      const existing = listAppLibraryContents(db, libraryId, { type: AppLibraryContentType.Original });
+      const knownUrls = new Set(existing.map((content) => content.sourceUrl).filter((url): url is string => url != null));
+      const freshChapters = chapters.filter((chapter) => !knownUrls.has(chapter.url));
+
+      const language = resolveLanguage(item.novelMetadata?.language, descriptor.defaultLanguage);
+      let nextIdx = existing.length === 0 ? 1 : Math.max(...existing.map((content) => content.idx)) + 1;
+
+      for (const chapter of freshChapters) {
+        createAppLibraryContent(db, libraryId, {
+          idx: nextIdx++,
+          type: AppLibraryContentType.Original,
+          status: AppLibraryContentStatus.Discovered,
+          sourceUrl: chapter.url,
+          textContent: { contentUrl: null, body: '', language, title: chapter.title, words: 0 },
+          audioContent: null,
+          imageContent: null,
+          videoContent: null,
+        });
+      }
+
+      if (freshChapters.length > 0) {
+        recount(db, libraryId);
+      }
+
+      return {
+        crawler,
+        sourceUrl: item.sourceUrl,
+        totalChapters: chapters.length,
+        newChapters: freshChapters.length,
+        latestChapterTitle: chapters.at(-1)?.title ?? null,
+      };
     },
   };
 }

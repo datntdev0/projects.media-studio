@@ -63,7 +63,7 @@ function validate(libraryType: AppLibraryType, input: CreateAppLibraryContentInp
  * recount rather than an incremental delta, so the counters can never drift out of sync. Called after
  * every content mutation (not just discovery) so the library list's progress bar stays accurate.
  */
-function recount(db: Db, libraryId: string): void {
+export function recount(db: Db, libraryId: string): void {
   const item = getAppLibrary(db, libraryId);
   if (!item) return;
 

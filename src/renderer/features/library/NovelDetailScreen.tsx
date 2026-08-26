@@ -19,15 +19,22 @@ interface NovelDetailScreenProps {
   onContentChange(): void;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentChange }: NovelDetailScreenProps) {
   const novel = item.novelMetadata;
   const sourceLang = resolveSourceLang(novel?.language ?? '');
 
-  const { contents, addChapter, saveChapter, removeChapter, removeChapters } = useLibraryContents(item.id);
+  const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id);
   const [lang, setLang] = useState<ChapterLang>(sourceLang ?? ContentLanguage.English);
   const [activeChapterId, setActiveChapterId] = useState<string | undefined>(undefined);
   const [scrapeOpen, setScrapeOpen] = useState(false);
   const [addChapterOpen, setAddChapterOpen] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverMessage, setDiscoverMessage] = useState<string | undefined>(undefined);
+  const [discoverError, setDiscoverError] = useState<string | undefined>(undefined);
 
   const isCrawler = item.sourceMode === LibrarySourceMode.Crawler;
   const chapters = buildChapterRows(contents, lang);
@@ -53,6 +60,21 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
   const handleSaveChapter = async (chapter: ChapterRow, title: string, body: string) => {
     await saveChapter(chapter, lang, title, body);
     onContentChange();
+  };
+
+  const handleDiscover = async () => {
+    setDiscovering(true);
+    setDiscoverError(undefined);
+    setDiscoverMessage(undefined);
+    try {
+      const result = await discoverChapters();
+      setDiscoverMessage(result.newChapters > 0 ? `Found ${result.newChapters} new chapter${result.newChapters === 1 ? '' : 's'}.` : 'No new chapters found.');
+      if (result.newChapters > 0) onContentChange();
+    } catch (err) {
+      setDiscoverError(errorMessage(err));
+    } finally {
+      setDiscovering(false);
+    }
   };
 
   return (
@@ -101,11 +123,17 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
               <ScrapingsIcon width={15} height={15} />
               Scrape content…
             </button>
-            <button type="button" className="btn btn-secondary btn-block" onClick={() => {}} style={{ marginTop: 0, gap: 6 }}>
+            <button type="button" className="btn btn-secondary btn-block" onClick={handleDiscover} disabled={!isCrawler || discovering} style={{ marginTop: 0, gap: 6 }}>
               <RefreshIcon width={15} height={15} />
-              Discover new chapters
+              {discovering ? 'Checking source…' : 'Discover new chapters'}
             </button>
-            <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.4, margin: '-2px 0 4px' }}>Discovery only checks the source for new chapter links — it does not download content.</div>
+            {discoverError ? (
+              <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.4, margin: '-2px 0 4px', color: '#8a2f2f' }}>{discoverError}</div>
+            ) : discoverMessage ? (
+              <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.4, margin: '-2px 0 4px' }}>{discoverMessage}</div>
+            ) : (
+              <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.4, margin: '-2px 0 4px' }}>Discovery only checks the source for new chapter links — it does not download content.</div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6.8 }}>
               <button type="button" className="btn btn-secondary" onClick={() => {}} style={{ marginTop: 0, gap: 6, justifyContent: 'center', fontSize: 13 }}>
                 <DownloadIcon width={15} height={15} />
