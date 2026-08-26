@@ -5,8 +5,8 @@ export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 960,
-    minHeight: 600,
+    minWidth: 1400,
+    minHeight: 900,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -17,8 +17,6 @@ export function createMainWindow(): BrowserWindow {
   } else {
     window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
-
-  window.webContents.openDevTools();
 
   return window;
 }

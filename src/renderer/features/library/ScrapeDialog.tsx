@@ -74,10 +74,6 @@ export function ScrapeDialog({ libraryId, chapters, onClose, onSubmit }: ScrapeD
             <label>What to extract</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label className="blueprint" style={{ padding: '10.2px 13.6px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start', background: tint(scope === 'missing') }}>
-                <i className="corner tl" />
-                <i className="corner tr" />
-                <i className="corner bl" />
-                <i className="corner br" />
                 <input type="radio" name="scope" style={{ position: 'absolute', opacity: 0 }} checked={scope === 'missing'} onChange={() => setScope('missing')} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14 }}>Everything not yet extracted</div>
@@ -86,19 +82,11 @@ export function ScrapeDialog({ libraryId, chapters, onClose, onSubmit }: ScrapeD
                 <span className="tag tag-accent">Recommended</span>
               </label>
               <label className="blueprint" style={{ padding: '10.2px 13.6px', cursor: 'pointer', display: 'block', background: tint(scope === 'all') }}>
-                <i className="corner tl" />
-                <i className="corner tr" />
-                <i className="corner bl" />
-                <i className="corner br" />
                 <input type="radio" name="scope" style={{ position: 'absolute', opacity: 0 }} checked={scope === 'all'} onChange={() => setScope('all')} />
                 <div style={{ fontSize: 14 }}>Everything — including already extracted</div>
                 <div className="text-muted" style={{ fontSize: 12 }}>{chapters.length} chapters</div>
               </label>
               <label className="blueprint" style={{ padding: '10.2px 13.6px', cursor: 'pointer', display: 'block', background: tint(scope === 'range') }}>
-                <i className="corner tl" />
-                <i className="corner tr" />
-                <i className="corner bl" />
-                <i className="corner br" />
                 <input type="radio" name="scope" style={{ position: 'absolute', opacity: 0 }} checked={scope === 'range'} onChange={() => setScope('range')} />
                 <div style={{ fontSize: 14 }}>A specific range</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>

@@ -13,7 +13,7 @@ export function ThemeToggle({ theme, onChange }: ThemeToggleProps) {
   return (
     <div className="sidebar-footer">
       <div className="seg theme-toggle">
-        <label className="seg-opt theme-toggle-opt">
+        <label className="seg-opt theme-toggle-opt" title="Light">
           <input
             type="radio"
             name="theme"
@@ -21,9 +21,9 @@ export function ThemeToggle({ theme, onChange }: ThemeToggleProps) {
             onChange={() => onChange('light')}
           />
           <SunIcon width={14} height={14} />
-          <span>Light</span>
+          <span className="theme-toggle-label">Light</span>
         </label>
-        <label className="seg-opt theme-toggle-opt">
+        <label className="seg-opt theme-toggle-opt" title="Dark">
           <input
             type="radio"
             name="theme"
@@ -31,7 +31,7 @@ export function ThemeToggle({ theme, onChange }: ThemeToggleProps) {
             onChange={() => onChange('dark')}
           />
           <MoonIcon width={14} height={14} />
-          <span>Dark</span>
+          <span className="theme-toggle-label">Dark</span>
         </label>
       </div>
     </div>

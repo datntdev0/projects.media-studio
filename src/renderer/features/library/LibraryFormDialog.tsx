@@ -228,10 +228,6 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
                       className="blueprint"
                       style={{ padding: 13.6, cursor: isEdit ? 'default' : 'pointer', display: 'block', background: type === optType ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
                     >
-                      <i className="corner tl" />
-                      <i className="corner tr" />
-                      <i className="corner bl" />
-                      <i className="corner br" />
                       <input type="radio" name="ctype" style={{ position: 'absolute', opacity: 0 }} checked={type === optType} disabled={isEdit} onChange={() => setType(optType)} />
                       <Icon width={18} height={18} />
                       <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16, marginTop: 6 }}>{optTitle}</div>
@@ -250,10 +246,6 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
                       className="blueprint"
                       style={{ padding: 13.6, cursor: isEdit ? 'default' : 'pointer', display: 'block', background: sourceMode === mode ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
                     >
-                      <i className="corner tl" />
-                      <i className="corner tr" />
-                      <i className="corner bl" />
-                      <i className="corner br" />
                       <input type="radio" name="cmode" style={{ position: 'absolute', opacity: 0 }} checked={sourceMode === mode} disabled={isEdit} onChange={() => setSourceMode(mode)} />
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Icon width={17} height={17} />
@@ -290,10 +282,6 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
                           background: crawlerName === crawler.name ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
                         }}
                       >
-                        <i className="corner tl" />
-                        <i className="corner tr" />
-                        <i className="corner bl" />
-                        <i className="corner br" />
                         <input
                           type="radio"
                           name="crawler"

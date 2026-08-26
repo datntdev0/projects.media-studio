@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DownloadIcon, RefreshIcon, ScrapingsIcon, UploadIcon } from '../../components/icons';
+import { useResizablePanel } from '../../components/useResizablePanel';
 import { AppLibraryStatus, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
 import { ContentLanguage } from '../../../shared/app-library-content';
 import type { CreateScrapingJobInput } from '../../../shared/app-scraping';
@@ -29,6 +30,7 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
   const sourceLang = resolveSourceLang(novel?.language ?? '');
 
   const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id, item.status === AppLibraryStatus.Scraping);
+  const detailPanel = useResizablePanel({ defaultWidth: 280, minWidth: 280, maxWidth: 640 });
   const [lang, setLang] = useState<ChapterLang>(sourceLang ?? ContentLanguage.English);
   const [activeChapterId, setActiveChapterId] = useState<string | undefined>(undefined);
   const [scrapeOpen, setScrapeOpen] = useState(false);
@@ -93,13 +95,9 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {!activeChapter && (
-        <div style={{ width: 320, flex: 'none', borderRight: '1px solid var(--color-divider)', paddingRight: 20.4, overflow: 'auto' }}>
+        <div style={{ width: detailPanel.width, flex: 'none', paddingRight: 20.4, overflow: 'auto' }}>
           <div className={`blueprint${item.coverUrl ? '' : ' wireframe'}`} style={{ aspectRatio: '3/4', marginBottom: 20.4, position: 'relative', overflow: 'hidden' }}>
-            <i className="corner tl" />
-            <i className="corner tr" />
-            <i className="corner bl" />
-            <i className="corner br" />
-            {item.coverUrl && <img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+            {item.coverUrl &&<img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
           </div>
           <h3 style={{ margin: '0 0 2px' }}>{item.title}</h3>
           <div className="text-muted" style={{ fontSize: 13, marginBottom: 10.2 }}>{novel?.author || 'No author recorded'}</div>
@@ -155,6 +153,13 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
             <button type="button" className="btn btn-ghost btn-block" onClick={onDelete} style={{ marginTop: 0, color: '#8a2f2f', justifyContent: 'center' }}>Delete item</button>
           </div>
         </div>
+        )}
+
+        {!activeChapter && (
+          <div
+            className={`panel-divider${detailPanel.isDragging ? ' is-dragging' : ''}`}
+            onMouseDown={detailPanel.onDividerMouseDown}
+          />
         )}
 
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', paddingLeft: activeChapter ? 0 : 20.4 }}>

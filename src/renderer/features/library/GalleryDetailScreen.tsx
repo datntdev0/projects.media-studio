@@ -21,11 +21,7 @@ export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryD
 
       <div style={{ flex: 'none', paddingBottom: 20.4, borderBottom: '1px solid var(--color-divider)', display: 'flex', gap: 27.2, alignItems: 'flex-start' }}>
         <div className={`blueprint${item.coverUrl ? '' : ' wireframe'}`} style={{ width: 96, flex: 'none', aspectRatio: '3/4', position: 'relative', overflow: 'hidden' }}>
-          <i className="corner tl" />
-          <i className="corner tr" />
-          <i className="corner bl" />
-          <i className="corner br" />
-          {item.coverUrl && <img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+          {item.coverUrl &&<img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: '0 0 4px' }}>{item.title}</h3>
@@ -70,10 +66,6 @@ export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryD
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 27.2 }}>
           <div className="blueprint" style={{ display: 'grid', placeItems: 'center', aspectRatio: '1', borderStyle: 'dashed', cursor: 'pointer', textAlign: 'center', padding: 13.6 }}>
-            <i className="corner tl" />
-            <i className="corner tr" />
-            <i className="corner bl" />
-            <i className="corner br" />
             <div>
               <UploadIcon width={22} height={22} style={{ margin: '0 auto 6px', opacity: 0.6 }} />
               <div style={{ fontSize: 13 }}>Drop files or browse</div>

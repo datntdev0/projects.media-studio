@@ -52,10 +52,6 @@ export function LibraryScreen() {
   const renderMenu = (item: AppLibrary) =>
     menuFor === item.id && (
       <div className="blueprint row-menu">
-        <i className="corner tl" />
-        <i className="corner tr" />
-        <i className="corner bl" />
-        <i className="corner br" />
         <button type="button" className="row-menu-item" onClick={() => setDialogItem(item)}>
           <EditIcon width={14} height={14} />
           Edit
@@ -187,10 +183,6 @@ export function LibraryScreen() {
         <div className="text-muted">Loading…</div>
       ) : visibleItems.length === 0 ? (
         <div className="blueprint" style={{ padding: 34, textAlign: 'center' }}>
-          <i className="corner tl" />
-          <i className="corner tr" />
-          <i className="corner bl" />
-          <i className="corner br" />
           <div className="text-muted">{items.length === 0 ? 'No library items yet — add one to get started.' : 'No items match these filters.'}</div>
         </div>
       ) : view === 'table' ? (
@@ -259,10 +251,6 @@ export function LibraryScreen() {
         <div className="library-grid">
           {visibleItems.map((item) => (
             <div className="blueprint library-card" key={item.id} style={{ cursor: 'pointer' }} onClick={() => setActiveId(item.id)}>
-              <i className="corner tl" />
-              <i className="corner tr" />
-              <i className="corner bl" />
-              <i className="corner br" />
               <div className={item.coverUrl ? 'library-card-cover' : 'wireframe library-card-cover'}>
                 {item.coverUrl && (
                   <img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />

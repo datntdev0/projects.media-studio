@@ -34,12 +34,17 @@ a:hover { color: var(--color-accent-900); }
   flex-direction: column;
   border-right: 1px solid var(--color-divider);
   background: color-mix(in srgb, var(--color-surface) 60%, transparent);
-  transition: width 0.15s ease, margin-left 0.15s ease;
+  transition: width 0.15s ease;
 }
 .app-shell.sidebar-collapsed .sidebar {
-  width: 0;
-  margin-left: -1px; /* fold the border away with it */
-  overflow: hidden;
+  width: 56px;
+}
+.app-shell.sidebar-collapsed .navitem {
+  justify-content: center;
+  padding: 7px 0;
+}
+.app-shell.sidebar-collapsed .navitem-label {
+  display: none;
 }
 
 .navitem {
@@ -109,6 +114,45 @@ a:hover { color: var(--color-accent-900); }
 .theme-toggle-opt {
   flex: 1;
   justify-content: center;
+}
+.app-shell.sidebar-collapsed .sidebar-footer {
+  padding: 10.2px 4px;
+}
+.app-shell.sidebar-collapsed .theme-toggle {
+  flex-direction: column;
+}
+.app-shell.sidebar-collapsed .theme-toggle-opt {
+  padding: 7px 0;
+}
+.app-shell.sidebar-collapsed .theme-toggle-opt + .theme-toggle-opt {
+  border-left: none;
+  border-top: 1px solid var(--color-divider);
+}
+.app-shell.sidebar-collapsed .theme-toggle-label {
+  display: none;
+}
+
+.panel-divider {
+  flex: none;
+  width: 9px;
+  margin: 0 -4px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 1;
+}
+.panel-divider::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-divider);
+}
+.panel-divider:hover::after, .panel-divider.is-dragging::after {
+  background: var(--color-accent);
+  width: 2px;
+  left: 3.5px;
 }
 
 /* — header / main panel — */

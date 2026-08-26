@@ -2,7 +2,7 @@ import { createLogger } from '../../helpers/logger';
 import type { Db } from '../../database/client';
 import type { Container } from '../../container';
 import { QUEUE_NAMES } from '../queue-names';
-import { getScrapingJob, updateScrapingJob } from '../../database/repositories/scraping-job.repo';
+import { getScrapingJob, updateScrapingJob } from '../../database/repositories/app-scraping-job.repo';
 import { getAppLibraryContent, updateAppLibraryContent } from '../../database/repositories/app-library-content.repo';
 import { getAppLibrary } from '../../database/repositories/app-library.repo';
 import { recount } from '../../managers/app-library-content.manager';

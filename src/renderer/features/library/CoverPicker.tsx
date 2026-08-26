@@ -32,11 +32,7 @@ export function CoverPicker({ value, onChange, alt }: CoverPickerProps) {
     <div className="field">
       <label>Cover</label>
       <div className={`blueprint${value ? '' : ' wireframe'}`} style={{ width: 150, aspectRatio: '3/4', position: 'relative', overflow: 'hidden' }}>
-        <i className="corner tl" />
-        <i className="corner tr" />
-        <i className="corner bl" />
-        <i className="corner br" />
-        {value && <img src={value} alt={alt} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+        {value &&<img src={value} alt={alt} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       </div>
       <input
         ref={inputRef}

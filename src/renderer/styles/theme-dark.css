@@ -5,7 +5,7 @@
    ramps (--color-neutral-*, --color-accent-*) are left as-is: they're
    theme-agnostic brand colors, so tags/badges keep the same look in both
    themes. Component rules that derive from var(--color-text) (hover tints,
-   corner marks, ::selection, etc.) already adapt automatically. */
+   ::selection, etc.) already adapt automatically. */
 
 :root[data-theme="dark"] {
   --color-bg: #17181a;

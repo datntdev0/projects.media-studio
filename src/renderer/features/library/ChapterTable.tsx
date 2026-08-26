@@ -79,10 +79,6 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {chapters.length === 0 ? (
           <div className="blueprint" style={{ margin: 20.4, padding: 34, textAlign: 'center' }}>
-            <i className="corner tl" />
-            <i className="corner tr" />
-            <i className="corner bl" />
-            <i className="corner br" />
             <div className="text-muted">No chapters recorded yet — scraping content or adding one manually gets it started.</div>
           </div>
         ) : (

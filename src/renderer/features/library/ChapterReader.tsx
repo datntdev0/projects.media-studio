@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TranslateIcon } from '../../components/icons';
+import { useResizablePanel } from '../../components/useResizablePanel';
 import { bodyFor, CHAPTER_LANG_NAME, CHAPTER_LANGS, countWords, hasTranslation, type ChapterLang, type ChapterRow } from './chapter';
 
 interface ChapterReaderProps {
@@ -14,6 +15,7 @@ interface ChapterReaderProps {
 
 export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, onLangChange, onSave }: ChapterReaderProps) {
   const chapter = chapters.find((c) => c.id === activeId) ?? chapters[0];
+  const listPanel = useResizablePanel({ defaultWidth: 250, minWidth: 250, maxWidth: 480 });
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(chapter.title);
   const [draftBody, setDraftBody] = useState(bodyFor(chapter, lang));
@@ -38,7 +40,7 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-      <div style={{ width: 260, flex: 'none', borderRight: '1px solid var(--color-divider)', overflow: 'auto' }}>
+      <div style={{ width: listPanel.width, flex: 'none', overflow: 'auto' }}>
         {chapters.map((c) => (
           <div
             key={c.id}
@@ -52,6 +54,11 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
           </div>
         ))}
       </div>
+
+      <div
+        className={`panel-divider${listPanel.isDragging ? ' is-dragging' : ''}`}
+        onMouseDown={listPanel.onDividerMouseDown}
+      />
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ minHeight: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 10.2, padding: '8px 20.4px', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
@@ -97,10 +104,6 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
           <div style={{ width: '100%', maxWidth: 720 }}>
             {missingTranslation && (
               <div className="blueprint" style={{ padding: 13.6, marginBottom: 20.4 }}>
-                <i className="corner tl" />
-                <i className="corner tr" />
-                <i className="corner bl" />
-                <i className="corner br" />
                 <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}>No {CHAPTER_LANG_NAME[lang]} translation for this chapter yet</div>
                 <div className="text-muted" style={{ fontSize: 12 }}>Showing the source. Switch to Edit and save to write one.</div>
               </div>

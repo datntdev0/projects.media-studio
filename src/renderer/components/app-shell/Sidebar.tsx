@@ -18,10 +18,10 @@ export function Sidebar({ page, onNavigate, theme, onThemeChange }: SidebarProps
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <button className="navitem" type="button">
+        <button className="navitem" type="button" title="Media Studio">
           <span className="sidebar-brand-mark">MS</span>
-          <span>Media Studio</span>
-          {appInfo && <span className="tag tag-primary">v{appInfo.appVersion}</span>}
+          <span className="navitem-label">Media Studio</span>
+          {appInfo && <span className="tag tag-primary navitem-label">v{appInfo.appVersion}</span>}
         </button>
       </div>
 
@@ -33,9 +33,10 @@ export function Sidebar({ page, onNavigate, theme, onThemeChange }: SidebarProps
               type="button"
               className={`navitem${page === key ? ' is-active' : ''}`}
               onClick={() => onNavigate(key)}
+              title={label}
             >
               <Icon />
-              <span>{label}</span>
+              <span className="navitem-label">{label}</span>
             </button>
           ))}
         </nav>

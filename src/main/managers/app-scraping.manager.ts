@@ -6,7 +6,7 @@ import { setSystemCacheItem } from '../database/repositories/system-cache.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, writeCoverFile } from '../helpers/cover-storage';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
-import { createScrapingJob, deleteScrapingJob, getScrapingJob, listScrapingJobs, updateScrapingJob } from '../database/repositories/scraping-job.repo';
+import { createScrapingJob, deleteScrapingJob, getScrapingJob, listScrapingJobs, updateScrapingJob } from '../database/repositories/app-scraping-job.repo';
 import { recount } from './app-library-content.manager';
 import { deriveIdleLibraryStatus, setLibraryStatus } from './app-library.manager';
 import { AppLibraryType, LibrarySourceMode } from '../../shared/app-library';

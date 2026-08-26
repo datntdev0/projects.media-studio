@@ -149,7 +149,6 @@ export function ScrapingsScreen() {
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10.2 }}>
           {!loading && jobs.length === 0 && (
             <div className="blueprint" style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', borderStyle: 'dashed', padding: 34 }}>
-              <i className="corner tl" /><i className="corner tr" /><i className="corner bl" /><i className="corner br" />
               <div>
                 <h3 style={{ margin: '6px 0 6px' }}>{empty.title}</h3>
                 <div className="text-muted" style={{ maxWidth: 340, margin: '0 auto' }}>{empty.hint}</div>
@@ -169,7 +168,6 @@ export function ScrapingsScreen() {
                 style={{ padding: '13.6px 20.4px', cursor: 'pointer', background: selected?.id === job.id ? 'color-mix(in srgb, var(--color-accent) 8%, transparent)' : 'transparent' }}
                 onClick={() => setSelectedId(job.id)}
               >
-                <i className="corner tl" /><i className="corner tr" /><i className="corner bl" /><i className="corner br" />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10.2 }}>
                   <span className="tag tag-accent">{TYPE_LABEL[job.libraryType]}</span>
                   <div style={{ minWidth: 0, flex: 1 }}>
