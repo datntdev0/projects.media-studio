@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DownloadIcon, RefreshIcon, ScrapingsIcon, UploadIcon } from '../../components/icons';
 import { useResizablePanel } from '../../components/useResizablePanel';
-import { AppLibraryStatus, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
+import { LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
 import { ContentLanguage } from '../../../shared/app-library-content';
 import type { CreateScrapingJobInput } from '../../../shared/app-scraping';
 import { STATUS_TAG_CLASS, formatDate } from './libraryFormat';
@@ -29,7 +29,7 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
   const novel = item.novelMetadata;
   const sourceLang = resolveSourceLang(novel?.language ?? '');
 
-  const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id, item.status === AppLibraryStatus.Scraping);
+  const { contents, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters } = useLibraryContents(item.id);
   const detailPanel = useResizablePanel({ defaultWidth: 280, minWidth: 280, maxWidth: 640 });
   const [lang, setLang] = useState<ChapterLang>(sourceLang ?? ContentLanguage.English);
   const [activeChapterId, setActiveChapterId] = useState<string | undefined>(undefined);

@@ -105,11 +105,17 @@ function selectByRange(range: string, chapters: AppLibraryContent[]): AppLibrary
   return chapters.filter((chapter) => wanted.has(chapter.idx));
 }
 
+function formatLocal(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 /** When the job runs, or null for now — a time already past is refused here, before the record is written. */
 function startAtFrom(startAt: number | null | undefined): number | null {
   if (!startAt) return null;
   if (startAt <= Date.now()) {
-    throw new Error(`'${new Date(startAt).toISOString()}' is not a time in the future.`);
+    throw new Error(`'${formatLocal(startAt)}' is not a time in the future.`);
   }
   return startAt;
 }

@@ -22,6 +22,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** `datetime-local` inputs take local wall-clock values with no timezone, so build the min from local parts. */
+function localDateTimeMin(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
 const RETRY_BY_ON_FAILURE: Record<OnFailure, number> = { retry3: 3, retry1: 1, none: 0 };
 
 /** Mirrors the mockup's scrape dialog, queuing a real scraping job through the worker. */
@@ -159,7 +166,7 @@ export function ScrapeDialog({ libraryId, chapters, onClose, onSubmit }: ScrapeD
           {startMode === 'scheduled' && (
             <div className="field">
               <label>Starts at</label>
-              <input className="input" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+              <input className="input" type="datetime-local" min={localDateTimeMin()} value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
             </div>
           )}
 

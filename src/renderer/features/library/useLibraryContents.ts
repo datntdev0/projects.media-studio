@@ -3,10 +3,6 @@ import type { DiscoverResult } from '../../../shared/app-scraping';
 import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
 import type { ChapterRow } from './chapter';
 
-// This app has no realtime push, so while a scraping job is running (per the caller's
-// `poll` flag) the chapter list is re-read on a timer to pick up its progress.
-const POLL_MS = 2000;
-
 export interface UseLibraryContentsResult {
   contents: AppLibraryContent[];
   loading: boolean;
@@ -17,7 +13,7 @@ export interface UseLibraryContentsResult {
   discoverChapters(): Promise<DiscoverResult>;
 }
 
-export function useLibraryContents(libraryId: string, poll = false): UseLibraryContentsResult {
+export function useLibraryContents(libraryId: string): UseLibraryContentsResult {
   const [contents, setContents] = useState<AppLibraryContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
@@ -38,12 +34,6 @@ export function useLibraryContents(libraryId: string, poll = false): UseLibraryC
   useEffect(() => {
     load(true);
   }, [load, reloadToken]);
-
-  useEffect(() => {
-    if (!poll) return;
-    const timer = setInterval(() => load(false), POLL_MS);
-    return () => clearInterval(timer);
-  }, [poll, load]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 

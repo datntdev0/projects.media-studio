@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  AppLibraryStatus,
-  type AppLibrary,
-  type CreateAppLibraryInput,
-  type ListAppLibrariesFilter,
-  type UpdateAppLibraryInput,
-} from '../../../shared/app-library';
-
-// This app has no realtime push, so a library actively being scraped is polled — a
-// background job (see the scraping queue handler) moves its status/counters without
-// the renderer ever calling in.
-const POLL_MS = 2000;
+import { type AppLibrary, type CreateAppLibraryInput, type ListAppLibrariesFilter, type UpdateAppLibraryInput } from '../../../shared/app-library';
 
 export interface AppLibrariesState {
   items: AppLibrary[];
@@ -55,12 +44,6 @@ export function useAppLibraries(): AppLibrariesState {
   useEffect(() => {
     load(true);
   }, [load, reloadToken]);
-
-  useEffect(() => {
-    if (!items.some((item) => item.status === AppLibraryStatus.Scraping)) return;
-    const timer = setInterval(() => load(false), POLL_MS);
-    return () => clearInterval(timer);
-  }, [items, load]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
