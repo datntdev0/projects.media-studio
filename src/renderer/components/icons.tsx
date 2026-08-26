@@ -160,6 +160,8 @@ export const VideoSetIcon = icon(
   </>,
 );
 
+export const CheckIcon = icon(<path d="M20 6 9 17l-5-5" />);
+
 export const GlobeIcon = icon(
   <>
     <circle cx="12" cy="12" r="10" />

@@ -27,3 +27,19 @@ CREATE TABLE app_libraries (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+<---split-statement--->
+
+-- Generic cache store keyed by (cache_type, cache_key), e.g. a scraping
+-- preview keyed by crawler + source URL. `expires_at` is computed by the
+-- repo from the caller's TTL at write time; reads treat an expired row as a
+-- miss but leave it in place — nothing sweeps expired rows yet.
+CREATE TABLE system_cache (
+  cache_type TEXT NOT NULL,
+  cache_key TEXT NOT NULL,
+  cache_data_json TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (cache_type, cache_key)
+);

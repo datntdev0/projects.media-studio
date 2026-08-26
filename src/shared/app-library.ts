@@ -104,6 +104,7 @@ export const APP_LIBRARY_IPC_CHANNELS = {
   create: 'app-library:create',
   update: 'app-library:update',
   remove: 'app-library:remove',
+  uploadCover: 'app-library:upload-cover',
 } as const;
 
 export interface AppLibraryApi {
@@ -112,4 +113,6 @@ export interface AppLibraryApi {
   create(input: CreateAppLibraryInput): Promise<AppLibrary>;
   update(id: string, input: UpdateAppLibraryInput): Promise<AppLibrary>;
   remove(id: string): Promise<void>;
+  /** Saves a locally picked cover file and returns the URL a library item's `coverUrl` can be set to. */
+  uploadCover(fileName: string, contentType: string, data: ArrayBuffer): Promise<string>;
 }

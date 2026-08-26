@@ -228,7 +228,13 @@ export function LibraryScreen() {
               <tr key={item.id}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div className="wireframe" style={{ width: 34, height: 46, flex: 'none', border: '1px solid var(--color-divider)' }} />
+                    <div style={{ width: 34, height: 46, flex: 'none', border: '1px solid var(--color-divider)', overflow: 'hidden' }}>
+                      {item.coverUrl ? (
+                        <img src={item.coverUrl} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      ) : (
+                        <div className="wireframe" style={{ width: '100%', height: '100%' }} />
+                      )}
+                    </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}>{item.title}</div>
                       <div className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -274,7 +280,10 @@ export function LibraryScreen() {
               <i className="corner tr" />
               <i className="corner bl" />
               <i className="corner br" />
-              <div className="wireframe library-card-cover">
+              <div className={item.coverUrl ? 'library-card-cover' : 'wireframe library-card-cover'}>
+                {item.coverUrl && (
+                  <img src={item.coverUrl} alt={item.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                )}
                 <span className="tag tag-outline" style={{ position: 'absolute', top: 6, left: 6, background: 'var(--color-bg)' }}>
                   {TYPE_LABEL[item.type]}
                 </span>

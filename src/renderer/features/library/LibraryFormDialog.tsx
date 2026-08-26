@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { BookIcon, EditIcon, GlobeIcon, ImageSetIcon, VideoSetIcon } from '../../components/icons';
-import { AppLibraryType, LibrarySourceMode, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type UpdateAppLibraryInput } from '../../../shared/app-library';
+import { useEffect, useState } from 'react';
+import { BookIcon, CheckIcon, EditIcon, GlobeIcon, ImageSetIcon, VideoSetIcon } from '../../components/icons';
+import { AppLibraryType, LibrarySourceMode, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '../../../shared/app-library';
+import type { CrawlerDescriptor, ScrapingPreview } from '../../../shared/app-scraping';
+import { CoverPicker } from './CoverPicker';
 
 interface LibraryFormDialogProps {
   /** Present in edit mode — the item's type and source mode stay fixed, only its editable fields are shown. */
@@ -21,8 +23,40 @@ const SOURCE_MODE_OPTIONS: { mode: LibrarySourceMode; Icon: typeof BookIcon; tit
   { mode: LibrarySourceMode.Manual, Icon: EditIcon, title: 'Manually', hint: 'Enter the metadata yourself, then add content later.' },
 ];
 
+const NOVEL_STATUS_ALIASES: Record<string, NovelStatus> = {
+  ongoing: NovelStatus.Ongoing,
+  complete: NovelStatus.Complete,
+  completed: NovelStatus.Complete,
+  hiatus: NovelStatus.Hiatus,
+};
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Maps what the crawler read for a novel onto the details a library item stores. */
+function novelDetailsFromPreview(preview: ScrapingPreview): NovelDetails {
+  const status = NOVEL_STATUS_ALIASES[(preview.novel.status ?? '').trim().toLowerCase()] ?? NovelStatus.Ongoing;
+  return {
+    status,
+    author: preview.novel.author ?? '',
+    language: '',
+    genres: preview.novel.category ? [preview.novel.category] : [],
+    description: preview.novel.description ?? '',
+  };
+}
+
+function novelDetailsFromForm(status: NovelStatus, author: string, language: string, genres: string, description: string): NovelDetails {
+  return {
+    status,
+    author: author.trim(),
+    language: language.trim(),
+    genres: genres
+      .split(',')
+      .map((genre) => genre.trim())
+      .filter(Boolean),
+    description: description.trim(),
+  };
 }
 
 export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: LibraryFormDialogProps) {
@@ -32,7 +66,6 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
   const [type, setType] = useState<AppLibraryType>(item?.type ?? AppLibraryType.Novel);
   const [sourceMode, setSourceMode] = useState<LibrarySourceMode>(item?.sourceMode ?? LibrarySourceMode.Crawler);
   const [title, setTitle] = useState(item?.title ?? '');
-  const [sourceName, setSourceName] = useState(item?.sourceName ?? '');
   const [sourceUrl, setSourceUrl] = useState(item?.sourceUrl ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
   const [novelStatus, setNovelStatus] = useState<NovelStatus>(item?.novelMetadata?.status ?? NovelStatus.Ongoing);
@@ -40,6 +73,12 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
   const [novelLanguage, setNovelLanguage] = useState(item?.novelMetadata?.language ?? '');
   const [novelGenres, setNovelGenres] = useState(item?.novelMetadata?.genres.join(', ') ?? '');
   const [novelDescription, setNovelDescription] = useState(item?.novelMetadata?.description ?? '');
+
+  const [crawlers, setCrawlers] = useState<CrawlerDescriptor[]>([]);
+  const [crawlerName, setCrawlerName] = useState(item?.sourceName ?? '');
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | undefined>(undefined);
+  const [preview, setPreview] = useState<ScrapingPreview | undefined>(undefined);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -50,41 +89,77 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
 
   const showShape = isEdit || step === 1;
   const showSource = !isEdit && isCrawler && step === 2;
-  const showDetails = isEdit || (!isCrawler && step === 2) || (isCrawler && step === 3);
+  const showDetails = isEdit || (!isCrawler && step === 2);
+  const showReview = !isEdit && isCrawler && step === 3;
 
-  const sourceValid = sourceName.trim() !== '' && sourceUrl.trim() !== '';
+  useEffect(() => {
+    if (isEdit || !isCrawler) return;
+    let cancelled = false;
+    window.appScrapingApi.getCrawlers(type).then((list) => {
+      if (cancelled) return;
+      setCrawlers(list);
+      setCrawlerName((current) => (list.some((crawler) => crawler.name === current) ? current : list[0]?.name ?? ''));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [type, isCrawler, isEdit]);
+
+  useEffect(() => {
+    if (isEdit || !isCrawler) return;
+    setPreview(undefined);
+    setPreviewError(undefined);
+    setCoverUrl('');
+  }, [crawlerName, sourceUrl, isEdit, isCrawler]);
+
+  const handlePreview = async () => {
+    if (!crawlerName || sourceUrl.trim() === '') return;
+    setPreviewing(true);
+    setPreviewError(undefined);
+    try {
+      const result = await window.appScrapingApi.preview(crawlerName, sourceUrl.trim());
+      setPreview(result);
+      setCoverUrl(result.novel.coverUrl ?? '');
+    } catch (err) {
+      setPreviewError(errorMessage(err));
+      setPreview(undefined);
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const sourceValid = crawlerName !== '' && sourceUrl.trim() !== '' && preview !== undefined;
   const detailsValid = title.trim() !== '' && (!isNovel || (novelAuthor.trim() !== '' && novelLanguage.trim() !== ''));
-  const canAdvance = showDetails ? detailsValid : showSource ? sourceValid : true;
+  const canAdvance = showReview ? true : showDetails ? detailsValid : showSource ? sourceValid : true;
 
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(undefined);
 
-    const novel = isNovel
-      ? {
-          status: novelStatus,
-          author: novelAuthor.trim(),
-          language: novelLanguage.trim(),
-          genres: novelGenres
-            .split(',')
-            .map((genre) => genre.trim())
-            .filter(Boolean),
-          description: novelDescription.trim(),
-        }
-      : undefined;
-
     try {
       if (isEdit) {
+        const novel = isNovel ? novelDetailsFromForm(novelStatus, novelAuthor, novelLanguage, novelGenres, novelDescription) : undefined;
         await onUpdate(item.id, { title: title.trim(), coverUrl: coverUrl.trim() || null, novel });
+      } else if (isCrawler) {
+        if (!preview) throw new Error('Preview the source before creating the item.');
+        await onCreate({
+          title: preview.novel.title || sourceUrl.trim(),
+          type,
+          sourceMode,
+          sourceName: crawlerName,
+          sourceUrl: sourceUrl.trim(),
+          coverUrl: coverUrl.trim() || null,
+          novel: isNovel ? novelDetailsFromPreview(preview) : undefined,
+        });
       } else {
         await onCreate({
           title: title.trim(),
           type,
           sourceMode,
-          sourceName: isCrawler ? sourceName.trim() : 'Manual',
-          sourceUrl: isCrawler ? sourceUrl.trim() || null : null,
+          sourceName: 'Manual',
+          sourceUrl: null,
           coverUrl: coverUrl.trim() || null,
-          novel,
+          novel: isNovel ? novelDetailsFromForm(novelStatus, novelAuthor, novelLanguage, novelGenres, novelDescription) : undefined,
         });
       }
       onClose();
@@ -110,14 +185,24 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
     setStep(step - 1);
   };
 
-  const dialogTitle = isEdit ? 'Edit item' : step === 1 ? 'New library item' : showSource ? 'Choose a crawler and source' : 'Enter the metadata';
+  const dialogTitle = isEdit
+    ? 'Edit item'
+    : step === 1
+      ? 'New library item'
+      : showReview
+        ? 'Review before creating'
+        : isCrawler
+          ? 'Choose a crawler and source'
+          : 'Enter the metadata';
   const dialogHint = isEdit
     ? 'Everything writable about the item. What is left blank is cleared.'
     : step === 1
       ? 'Type and source mode cannot be changed after creation.'
-      : showSource
-        ? 'A crawler runner is not wired up yet — name the source and where it lives. The item still starts as a draft.'
-        : 'You will add content to the item once it exists.';
+      : showReview
+        ? 'This is what the item will be created with.'
+        : isCrawler
+          ? 'The crawler reads the metadata now; the content follows when the job that fetches it exists.'
+          : 'You will add chapters and files after the item is created.';
   const stepLabel = isEdit ? '' : `Step ${step} of ${lastStep}`;
   const backLabel = isEdit || step === 1 ? 'Cancel' : 'Back';
   const nextLabel = isEdit ? 'Save changes' : step >= lastStep ? 'Create item' : 'Continue';
@@ -184,13 +269,88 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
           {showSource && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13.6 }}>
               <div className="field">
-                <label>Source name</label>
-                <input className="input" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="royalroad" autoFocus />
+                <label>Crawler</label>
+                {crawlers.length === 0 ? (
+                  <div className="text-muted" style={{ fontSize: 12 }}>
+                    No crawler is available for this library type yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10.2 }}>
+                    {crawlers.map((crawler) => (
+                      <label
+                        key={crawler.name}
+                        className="blueprint"
+                        style={{
+                          padding: '10.2px 13.6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          background: crawlerName === crawler.name ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+                        }}
+                      >
+                        <i className="corner tl" />
+                        <i className="corner tr" />
+                        <i className="corner bl" />
+                        <i className="corner br" />
+                        <input
+                          type="radio"
+                          name="crawler"
+                          style={{ position: 'absolute', opacity: 0 }}
+                          checked={crawlerName === crawler.name}
+                          onChange={() => setCrawlerName(crawler.name)}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14 }}>{crawler.name}</div>
+                          <div className="text-muted" style={{ fontSize: 11 }}>
+                            {crawler.baseUrl.replace(/^https?:\/\//, '')} · {TYPE_OPTIONS.find((option) => option.type === crawler.libraryType)?.title}
+                          </div>
+                        </div>
+                        <span className="tag tag-accent">Available</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <div className="field">
-                <label>Source URL</label>
-                <input className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." />
+                <label>Resource URL</label>
+                <div style={{ display: 'flex', gap: 6.8 }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1 }}
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    placeholder="https://www.novel543.com/0413553971"
+                    autoFocus
+                  />
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    style={{ flex: 'none' }}
+                    onClick={handlePreview}
+                    disabled={!crawlerName || sourceUrl.trim() === '' || previewing}
+                  >
+                    {previewing ? 'Reading…' : 'Preview'}
+                  </button>
+                </div>
+                <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Reading a source takes a moment — it is fetched through a real browser.
+                </div>
               </div>
+
+              {previewError && (
+                <div className="text-muted" style={{ fontSize: 12, color: '#8a2f2f' }}>
+                  {previewError}
+                </div>
+              )}
+
+              {preview && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-accent-700)' }}>
+                  <CheckIcon width={14} height={14} />
+                  {crawlerName} read it · {preview.chapterCount} chapters detected
+                </div>
+              )}
             </div>
           )}
 
@@ -234,10 +394,38 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
                 )}
               </div>
 
-              <div style={{ width: 190, flex: 'none' }}>
-                <div className="field">
-                  <label>Cover URL</label>
-                  <input className="input" value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} placeholder="https://..." />
+              <div style={{ width: 150, flex: 'none' }}>
+                <CoverPicker value={coverUrl} onChange={setCoverUrl} alt={title || 'Cover'} />
+              </div>
+            </div>
+          )}
+
+          {showReview && preview && (
+            <div style={{ display: 'flex', gap: 20.4 }}>
+              <div style={{ flex: 'none' }}>
+                <CoverPicker value={coverUrl} onChange={setCoverUrl} alt={preview.novel.title} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="card-kicker">Fetched from {crawlerName}</div>
+                <h4 style={{ margin: '2px 0 2px' }}>{preview.novel.title}</h4>
+                <div className="text-muted" style={{ fontSize: 13, marginBottom: 10.2 }}>
+                  {[preview.novel.author, preview.novel.category, preview.novel.status].filter(Boolean).join(' · ')}
+                </div>
+                <dl style={{ margin: 0, fontSize: 13, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 13.6px' }}>
+                  <dt className="text-muted">Found</dt>
+                  <dd style={{ margin: 0 }}>{preview.chapterCount} chapters</dd>
+                  <dt className="text-muted">Latest</dt>
+                  <dd style={{ margin: 0 }}>{preview.latestChapterTitle ?? '—'}</dd>
+                  <dt className="text-muted">Source</dt>
+                  <dd style={{ margin: 0 }}>{sourceUrl.trim()}</dd>
+                </dl>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 13.6 }}>
+                  <span className="text-muted" style={{ fontSize: 12 }}>
+                    The item is created as a draft — the job that pulls this content comes later.
+                  </span>
+                  <button className="btn btn-ghost" type="button" style={{ marginLeft: 'auto', gap: 6, fontSize: 12 }} onClick={handlePreview} disabled={previewing}>
+                    Re-read source
+                  </button>
                 </div>
               </div>
             </div>

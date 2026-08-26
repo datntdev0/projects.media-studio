@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { Db } from '../database/client';
 import {
   createAppLibrary,
@@ -6,6 +8,7 @@ import {
   listAppLibraries,
   updateAppLibrary,
 } from '../database/repositories/app-library.repo';
+import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from '../helpers/cover-storage';
 import {
   AppLibraryStatus,
   AppLibraryType,
@@ -23,6 +26,7 @@ export interface AppLibraryManager {
   create(input: CreateAppLibraryInput): AppLibrary;
   update(id: string, input: UpdateAppLibraryInput): AppLibrary;
   remove(id: string): void;
+  uploadCover(fileName: string, contentType: string, data: Buffer): string;
 }
 
 const EMPTY_COUNTERS: AppLibraryMetadataBase = { discoveredCount: 0, downloadedCount: 0, discoveredAt: null };
@@ -75,7 +79,8 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
       }),
 
     update: (id, input) => {
-      const draft = stripStamps(need(id));
+      const current = need(id);
+      const draft = stripStamps(current);
 
       if (input.title !== undefined) draft.title = input.title;
       if (input.sourceMode !== undefined) draft.sourceMode = input.sourceMode;
@@ -84,9 +89,19 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
       if (input.coverUrl !== undefined) draft.coverUrl = input.coverUrl;
       if (input.novel && draft.novelMetadata) draft.novelMetadata = { ...draft.novelMetadata, ...input.novel };
 
+      if (input.coverUrl !== undefined && input.coverUrl !== current.coverUrl) deleteCoverFile(current.coverUrl);
+
       return updateAppLibrary(db, id, draft);
     },
 
-    remove: (id) => deleteAppLibrary(db, id),
+    remove: (id) => {
+      deleteCoverFile(need(id).coverUrl);
+      deleteAppLibrary(db, id);
+    },
+
+    uploadCover: (fileName, contentType, data) => {
+      const extension = COVER_EXTENSION_BY_CONTENT_TYPE[contentType] || path.extname(fileName).replace('.', '') || 'jpg';
+      return writeCoverFile(`${randomUUID()}.${extension}`, data);
+    },
   };
 }

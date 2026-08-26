@@ -2,6 +2,7 @@ import { app } from 'electron';
 import started from 'electron-squirrel-startup';
 import './helpers/logger';
 import { closeContainer, createContainer } from './container';
+import { registerCoverProtocolHandler } from './helpers/cover-protocol';
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
 import { registerQueueHandlers } from './queue';
@@ -17,6 +18,8 @@ if (started) {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  registerCoverProtocolHandler();
+
   const container = createContainer();
   runMigrations(container.db);
 
