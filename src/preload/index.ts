@@ -55,6 +55,11 @@ const appWorkflowActivityApi: AppWorkflowActivityApi = {
   create: (workflowId, input) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.create, workflowId, input),
   update: (workflowId, id, input) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.update, workflowId, id, input),
   remove: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.remove, workflowId, id),
+  getAnalyzeOutput: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getAnalyzeOutput, workflowId, id),
+  getAnalyzeProgress: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getAnalyzeProgress, workflowId, id),
+  getAnalyzeCharacters: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getAnalyzeCharacters, workflowId, id, offset, limit),
+  getAnalyzeGlossary: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getAnalyzeGlossary, workflowId, id, offset, limit),
+  getAnalyzeTimeline: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getAnalyzeTimeline, workflowId, id, offset, limit),
 };
 
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);

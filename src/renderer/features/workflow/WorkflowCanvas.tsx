@@ -404,6 +404,7 @@ export function WorkflowCanvas({ workflow, activities, loading, add: addActivity
 
       {selected && (
         <WorkflowActivityInspector
+          workflowId={workflow.id}
           activity={selected}
           activities={activities}
           contents={contents}

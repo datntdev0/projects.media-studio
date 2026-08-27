@@ -11,6 +11,7 @@ import type { AppWorkflow } from '../../shared/app-workflow';
 const POSITION_WIDTH = 4;
 
 interface PackagedContent {
+  id: string;
   idx: number;
   type: AppLibraryContentType.Original | AppLibraryContentType.Translation;
   language: string;
@@ -94,6 +95,7 @@ export function exportNovelLibrary(db: Db, workflow: AppWorkflow): void {
     }
 
     records.push({
+      id: content.id,
       idx: content.idx,
       type: content.type as PackagedContent['type'],
       language,

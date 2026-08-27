@@ -8,13 +8,31 @@ import {
   updateAppWorkflowActivity,
   type AppWorkflowActivityDraft,
 } from '../database/repositories/app-workflow-activity.repo';
-import type { CreateAppWorkflowActivityInput, UpdateAppWorkflowActivityInput, AppWorkflowActivity, AppWorkflowActivityConfig } from '../../shared/app-workflow-activity';
+import { readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeOutput, readAnalyzeProgress, readAnalyzeTimeline } from '../helpers/workflow-analyze';
+import {
+  AppWorkflowActivityType,
+  type AnalyzeOutput,
+  type AnalyzeOutputCharacter,
+  type AnalyzeOutputGlossaryEntry,
+  type AnalyzeOutputPage,
+  type AnalyzeOutputTimelineGroup,
+  type AnalyzeProgress,
+  type AppWorkflowActivity,
+  type AppWorkflowActivityConfig,
+  type CreateAppWorkflowActivityInput,
+  type UpdateAppWorkflowActivityInput,
+} from '../../shared/app-workflow-activity';
 
 export interface AppWorkflowActivityManager {
   list(workflowId: string): AppWorkflowActivity[];
   create(workflowId: string, input: CreateAppWorkflowActivityInput): AppWorkflowActivity;
   update(workflowId: string, id: string, input: UpdateAppWorkflowActivityInput): AppWorkflowActivity;
   remove(workflowId: string, id: string): void;
+  getAnalyzeOutput(workflowId: string, id: string): AnalyzeOutput | null;
+  getAnalyzeProgress(workflowId: string, id: string): AnalyzeProgress | null;
+  getAnalyzeCharacters(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputCharacter>;
+  getAnalyzeGlossary(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputGlossaryEntry>;
+  getAnalyzeTimeline(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputTimelineGroup>;
 }
 
 const DEFAULT_RETRY = 3;
@@ -103,6 +121,31 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
           dependencies: activity.dependencies.filter((dependsOnId) => dependsOnId !== id),
         });
       }
+    },
+
+    getAnalyzeOutput: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeOutput(workflowId) : null;
+    },
+
+    getAnalyzeProgress: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeProgress(workflowId, id) : null;
+    },
+
+    getAnalyzeCharacters: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeCharacters(workflowId, offset, limit) : { items: [], total: 0 };
+    },
+
+    getAnalyzeGlossary: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeGlossary(workflowId, offset, limit) : { items: [], total: 0 };
+    },
+
+    getAnalyzeTimeline: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeTimeline(workflowId, offset, limit) : { items: [], total: 0 };
     },
   };
 }

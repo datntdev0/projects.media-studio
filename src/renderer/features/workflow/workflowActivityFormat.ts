@@ -2,6 +2,7 @@ import { AppLibraryType } from '../../../shared/app-library';
 import { ContentLanguage } from '../../../shared/app-library-content';
 import {
   ActivityChapterScope,
+  AnalyzeEngine,
   AppWorkflowActivityType,
   type AnalyzeConfig,
   type AppWorkflowActivity,
@@ -47,6 +48,11 @@ export const ART_STYLES = ['2D Chinese Guofeng', '3D Chinese Traditional', 'Real
 export const VOICES = ['Narrator — Male, Warm', 'Narrator — Female, Bright', 'Narrator — Male, Deep'];
 export const PACES = ['0.85×', '1.0×', '1.2×'];
 
+export const ANALYZE_ENGINE_LABEL: Record<AnalyzeEngine, string> = {
+  [AnalyzeEngine.Codex]: 'Codex CLI',
+  [AnalyzeEngine.Claude]: 'Claude CLI',
+};
+
 export const CHAPTER_SCOPE_LABEL: Record<ActivityChapterScope, string> = {
   [ActivityChapterScope.All]: 'All',
   [ActivityChapterScope.Missing]: 'Missing output',
@@ -61,7 +67,7 @@ function defaultChapters(): ChapterSelection {
 export function defaultConfigFor(type: AppWorkflowActivityType): AppWorkflowActivityConfig {
   switch (type) {
     case AppWorkflowActivityType.Analyze:
-      return { chapters: defaultChapters() };
+      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, resolveConflicts: false };
     case AppWorkflowActivityType.Translate:
       return { chapters: defaultChapters(), language: ContentLanguage.Vietnamese };
     case AppWorkflowActivityType.Profiles:
@@ -99,7 +105,7 @@ export function buildConfigFields(type: AppWorkflowActivityType, config: AppWork
 export function withChapters(activity: AppWorkflowActivity, chapters: ChapterSelection): AppWorkflowActivityConfig {
   switch (activity.type) {
     case AppWorkflowActivityType.Analyze:
-      return { chapters };
+      return { chapters, engine: activity.analyzeConfig!.engine, resolveConflicts: activity.analyzeConfig!.resolveConflicts };
     case AppWorkflowActivityType.Translate:
       return { chapters, language: activity.translateConfig!.language };
     case AppWorkflowActivityType.Storyboard:
@@ -121,6 +127,14 @@ export function withStyle(activity: AppWorkflowActivity, style: string): AppWork
   if (activity.type === AppWorkflowActivityType.Profiles) return { ...activity.profilesConfig!, style };
   if (activity.type === AppWorkflowActivityType.Storyboard) return { ...activity.storyboardConfig!, style };
   return configOf(activity);
+}
+
+export function withEngine(activity: AppWorkflowActivity, engine: AnalyzeEngine): AppWorkflowActivityConfig {
+  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, engine } : configOf(activity);
+}
+
+export function withResolveConflicts(activity: AppWorkflowActivity, resolveConflicts: boolean): AppWorkflowActivityConfig {
+  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, resolveConflicts } : configOf(activity);
 }
 
 export function withVoice(activity: AppWorkflowActivity, voice: string): AppWorkflowActivityConfig {
