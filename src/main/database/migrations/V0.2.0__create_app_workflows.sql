@@ -40,3 +40,30 @@ CREATE TABLE app_workflow_activities (
 );
 
 CREATE INDEX app_workflow_activities_workflow_id ON app_workflow_activities (workflow_id);
+
+<---split-statement--->
+
+-- One row per run overview (`activity_id` null) plus one row per activity
+-- execution within that run (`activity_id` set), grouped by `run_id`.
+-- `activity_name`/`activity_type` are denormalized so a run stays readable
+-- after its activity is edited or removed. `range` holds a short summary of
+-- the chapter selection an activity ran over, if any.
+CREATE TABLE app_workflow_history (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  activity_id TEXT,
+  activity_name TEXT,
+  activity_type TEXT,
+  status TEXT NOT NULL,
+  range TEXT,
+  error TEXT,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  duration INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX app_workflow_history_workflow_id ON app_workflow_history (workflow_id);
+CREATE INDEX app_workflow_history_run_id ON app_workflow_history (run_id);

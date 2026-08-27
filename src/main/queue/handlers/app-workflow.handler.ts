@@ -1,15 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { createLogger } from '../../helpers/logger';
 import type { Db } from '../../database/client';
 import type { Container } from '../../container';
 import { QUEUE_NAMES } from '../queue-names';
 import { getAppWorkflow, updateAppWorkflow } from '../../database/repositories/app-workflow.repo';
 import { listAppWorkflowActivities } from '../../database/repositories/app-workflow-activity.repo';
+import { createAppWorkflowHistoryEntry, settleAppWorkflowHistoryEntry } from '../../database/repositories/app-workflow-history.repo';
 import { stripStamps } from '../../managers/app-workflow.manager';
 import { exportNovelLibrary } from '../../helpers/workflow-export';
 import { executeActivity } from './app-workflow-activity-executor';
-import { AppWorkflowStatus } from '../../../shared/app-workflow';
+import { AppWorkflowStatus, type AppWorkflow } from '../../../shared/app-workflow';
+import { AppWorkflowRunStatus } from '../../../shared/app-workflow-history';
 import { AppLibraryType } from '../../../shared/app-library';
 import type { AppWorkflowActivity } from '../../../shared/app-workflow-activity';
+import { activityRangeSummary } from '../../../shared/workflow-activity-format';
 
 const logger = createLogger('app-workflow');
 
@@ -36,6 +40,19 @@ async function runWorkflow(db: Db, workflowId: string): Promise<void> {
   const activities = listAppWorkflowActivities(db, workflowId);
   logger.info(`Workflow ${workflowId} started — ${activities.length} activity(ies)`);
 
+  const runId = randomUUID();
+  const runStartedAt = Date.now();
+  const overview = createAppWorkflowHistoryEntry(db, {
+    workflowId,
+    runId,
+    activityId: null,
+    activityName: null,
+    activityType: null,
+    status: AppWorkflowRunStatus.Running,
+    range: null,
+    startedAt: runStartedAt,
+  });
+
   try {
     if (workflow.libraryType === AppLibraryType.Novel) {
       exportNovelLibrary(db, workflow);
@@ -53,18 +70,47 @@ async function runWorkflow(db: Db, workflowId: string): Promise<void> {
       }
 
       const activity = byId.get(id);
-      const promise = activity ? Promise.all(activity.dependencies.map(run)).then(() => executeActivity(workflow, activity)) : Promise.resolve();
+      const promise = activity ? Promise.all(activity.dependencies.map(run)).then(() => runActivity(db, runId, workflow, activity)) : Promise.resolve();
       runs.set(id, promise);
       return promise;
     };
 
     await Promise.all(activities.map((activity) => run(activity.id)));
     settleStatus(db, workflowId, AppWorkflowStatus.Active);
+    settleAppWorkflowHistoryEntry(db, overview.id, { status: AppWorkflowRunStatus.Success, endedAt: Date.now(), duration: Date.now() - runStartedAt, error: null });
     logger.info(`Workflow ${workflowId} finished`);
   } catch (error) {
     settleStatus(db, workflowId, AppWorkflowStatus.Failed);
+    settleAppWorkflowHistoryEntry(db, overview.id, { status: AppWorkflowRunStatus.Failed, endedAt: Date.now(), duration: Date.now() - runStartedAt, error: errorMessage(error) });
     throw error;
   }
+}
+
+/** Runs one activity, recording its start/end/status/error as a history entry under the run's `runId`. */
+async function runActivity(db: Db, runId: string, workflow: AppWorkflow, activity: AppWorkflowActivity): Promise<void> {
+  const startedAt = Date.now();
+  const entry = createAppWorkflowHistoryEntry(db, {
+    workflowId: workflow.id,
+    runId,
+    activityId: activity.id,
+    activityName: activity.name,
+    activityType: activity.type,
+    status: AppWorkflowRunStatus.Running,
+    range: activityRangeSummary(activity),
+    startedAt,
+  });
+
+  try {
+    await executeActivity(workflow, activity);
+    settleAppWorkflowHistoryEntry(db, entry.id, { status: AppWorkflowRunStatus.Success, endedAt: Date.now(), duration: Date.now() - startedAt, error: null });
+  } catch (error) {
+    settleAppWorkflowHistoryEntry(db, entry.id, { status: AppWorkflowRunStatus.Failed, endedAt: Date.now(), duration: Date.now() - startedAt, error: errorMessage(error) });
+    throw error;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function settleStatus(db: Db, workflowId: string, status: AppWorkflowStatus): void {

@@ -6,6 +6,7 @@ import { useAppLibraries } from '../library/useAppLibraries';
 import { useAppWorkflows } from './useAppWorkflows';
 import { WorkflowFormDialog } from './WorkflowFormDialog';
 import { WorkflowDetailScreen } from './WorkflowDetailScreen';
+import { WorkflowHistoryScreen } from './WorkflowHistoryScreen';
 import { STATUS_LABEL, STATUS_TAG_CLASS } from './workflowFormat';
 
 function matchesQuery(item: AppWorkflow, query: string): boolean {
@@ -24,6 +25,7 @@ export function WorkflowScreen() {
   const [runError, setRunError] = useState<string | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
+  const [historyId, setHistoryId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!menuFor) return;
@@ -34,6 +36,7 @@ export function WorkflowScreen() {
 
   const visibleItems = useMemo(() => items.filter((item) => matchesQuery(item, query)), [items, query]);
   const activeItem = activeId === undefined ? undefined : items.find((item) => item.id === activeId);
+  const historyItem = historyId === undefined ? undefined : items.find((item) => item.id === historyId);
   const libraryCovers = useMemo(() => new Map(libraries.map((library) => [library.id, library.coverUrl])), [libraries]);
 
   const handleDelete = async (item: AppWorkflow) => {
@@ -78,6 +81,10 @@ export function WorkflowScreen() {
       </div>
     );
 
+  if (historyItem) {
+    return <WorkflowHistoryScreen item={historyItem} onBack={() => setHistoryId(undefined)} />;
+  }
+
   if (activeItem) {
     return (
       <>
@@ -87,6 +94,7 @@ export function WorkflowScreen() {
           onEdit={() => setDialogItem(activeItem)}
           onDelete={() => handleDelete(activeItem)}
           onRun={() => handleRun(activeItem)}
+          onHistory={() => setHistoryId(activeItem.id)}
           running={running === activeItem.id || activeItem.status === AppWorkflowStatus.Running}
           runError={runError}
         />

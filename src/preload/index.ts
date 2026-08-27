@@ -8,6 +8,7 @@ import { APP_SCRAPING_IPC_CHANNELS, type AppScrapingApi } from '../shared/app-sc
 import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '../shared/app-library-content';
 import { APP_WORKFLOW_IPC_CHANNELS, type AppWorkflowApi } from '../shared/app-workflow';
 import { APP_WORKFLOW_ACTIVITY_IPC_CHANNELS, type AppWorkflowActivityApi } from '../shared/app-workflow-activity';
+import { APP_WORKFLOW_HISTORY_IPC_CHANNELS, type AppWorkflowHistoryApi } from '../shared/app-workflow-history';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -60,5 +61,10 @@ contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appScrapingApi', appScrapingApi);
 contextBridge.exposeInMainWorld('appLibraryContentApi', appLibraryContentApi);
+const appWorkflowHistoryApi: AppWorkflowHistoryApi = {
+  listRuns: (workflowId) => ipcRenderer.invoke(APP_WORKFLOW_HISTORY_IPC_CHANNELS.listRuns, workflowId),
+};
+
 contextBridge.exposeInMainWorld('appWorkflowApi', appWorkflowApi);
 contextBridge.exposeInMainWorld('appWorkflowActivityApi', appWorkflowActivityApi);
+contextBridge.exposeInMainWorld('appWorkflowHistoryApi', appWorkflowHistoryApi);

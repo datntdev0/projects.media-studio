@@ -6,6 +6,7 @@ import { createAppScrapingManager, type AppScrapingManager } from './managers/ap
 import { createAppLibraryContentManager, type AppLibraryContentManager } from './managers/app-library-content.manager';
 import { createAppWorkflowManager, type AppWorkflowManager } from './managers/app-workflow.manager';
 import { createAppWorkflowActivityManager, type AppWorkflowActivityManager } from './managers/app-workflow-activity.manager';
+import { createAppWorkflowHistoryManager, type AppWorkflowHistoryManager } from './managers/app-workflow-history.manager';
 import { createMessageBus, type MessageBus } from './queue/message-bus';
 
 export interface Managers {
@@ -15,6 +16,7 @@ export interface Managers {
   appLibraryContent: AppLibraryContentManager;
   appWorkflow: AppWorkflowManager;
   appWorkflowActivity: AppWorkflowActivityManager;
+  appWorkflowHistory: AppWorkflowHistoryManager;
 }
 
 /**
@@ -44,6 +46,7 @@ export function createContainer(): Container {
     appLibraryContent: createAppLibraryContentManager(db),
     appWorkflow: createAppWorkflowManager(db, bus),
     appWorkflowActivity: createAppWorkflowActivityManager(db),
+    appWorkflowHistory: createAppWorkflowHistoryManager(db),
   };
 
   container = { db, manager, bus, scheduledJobs: [] };

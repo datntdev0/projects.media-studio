@@ -12,6 +12,9 @@ import {
   type TranslateConfig,
   type TtsConfig,
 } from '../../../shared/app-workflow-activity';
+import { chaptersOf, rangeSummary } from '../../../shared/workflow-activity-format';
+
+export { chaptersOf };
 
 export interface ActivityTypeMeta {
   code: string;
@@ -91,29 +94,6 @@ export function buildConfigFields(type: AppWorkflowActivityType, config: AppWork
     storyboardConfig: type === AppWorkflowActivityType.Storyboard ? (config as StoryboardConfig) : null,
     ttsConfig: type === AppWorkflowActivityType.Tts ? (config as TtsConfig) : null,
   };
-}
-
-/** The `chapters` selection, for every type except Profiles (which has none). */
-export function chaptersOf(activity: AppWorkflowActivity): ChapterSelection | undefined {
-  switch (activity.type) {
-    case AppWorkflowActivityType.Analyze:
-      return activity.analyzeConfig!.chapters;
-    case AppWorkflowActivityType.Translate:
-      return activity.translateConfig!.chapters;
-    case AppWorkflowActivityType.Storyboard:
-      return activity.storyboardConfig!.chapters;
-    case AppWorkflowActivityType.Tts:
-      return activity.ttsConfig!.chapters;
-    case AppWorkflowActivityType.Profiles:
-      return undefined;
-  }
-}
-
-function rangeSummary(chapters: ChapterSelection): string {
-  if (chapters.scope === ActivityChapterScope.All) return 'All chapters';
-  if (chapters.scope === ActivityChapterScope.Missing) return 'Missing output';
-  if (chapters.scope === ActivityChapterScope.Range) return `Ch. ${chapters.rangeFrom}–${chapters.rangeTo}`;
-  return `${chapters.pickedContentIds.length} chapter${chapters.pickedContentIds.length === 1 ? '' : 's'} picked`;
 }
 
 export function withChapters(activity: AppWorkflowActivity, chapters: ChapterSelection): AppWorkflowActivityConfig {

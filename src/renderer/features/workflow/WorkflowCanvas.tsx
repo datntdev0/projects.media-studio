@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGridIcon, MaximizeIcon, MinusIcon, PlusIcon } from '../../components/icons';
+import { EditIcon, LayoutGridIcon, MaximizeIcon, MinusIcon, PlusIcon, TrashIcon } from '../../components/icons';
 import type { AppWorkflow } from '../../../shared/app-workflow';
 import { AppWorkflowActivityType, type AppWorkflowActivity, type CreateAppWorkflowActivityInput, type UpdateAppWorkflowActivityInput } from '../../../shared/app-workflow-activity';
 import { AppLibraryContentType, type AppLibraryContent } from '../../../shared/app-library-content';
@@ -16,6 +16,8 @@ interface WorkflowCanvasProps {
   patch(id: string, input: UpdateAppWorkflowActivityInput): void;
   remove(id: string): void;
   moveMany(positions: { id: string; x: number; y: number }[]): void;
+  onEdit(): void;
+  onDelete(): void;
 }
 
 const NODE_W = 212;
@@ -33,7 +35,7 @@ function edgePath(fromX: number, fromY: number, toX: number, toY: number): strin
   return `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
 }
 
-export function WorkflowCanvas({ workflow, activities, loading, add: addActivityDraft, patch, remove, moveMany }: WorkflowCanvasProps) {
+export function WorkflowCanvas({ workflow, activities, loading, add: addActivityDraft, patch, remove, moveMany, onEdit, onDelete }: WorkflowCanvasProps) {
   const [contents, setContents] = useState<AppLibraryContent[]>([]);
   const [discoveredCount, setDiscoveredCount] = useState(0);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -234,35 +236,48 @@ export function WorkflowCanvas({ workflow, activities, loading, add: addActivity
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-      <div style={{ width: 236, flex: 'none', borderRight: '1px solid var(--color-divider)', paddingRight: '10.2px', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-        <div>
-          <div className="card-kicker">Library</div>
-          <div style={{ fontSize: 13, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{workflow.libraryTitle}</div>
-          <span className="tag tag-outline" style={{ fontSize: 10, marginTop: 4 }}>{TYPE_LABEL[workflow.libraryType]}</span>
+      <div style={{ width: 236, flex: 'none', borderRight: '1px solid var(--color-divider)', paddingRight: '10.2px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div>
+            <div className="card-kicker">Library</div>
+            <div style={{ fontSize: 13, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{workflow.libraryTitle}</div>
+            <span className="tag tag-outline" style={{ fontSize: 10, marginTop: 4 }}>{TYPE_LABEL[workflow.libraryType]}</span>
+          </div>
+          <div style={{ marginTop: '8px', padding: '8px 0px', borderTop: '1px solid var(--color-divider)' }}>
+            <div className="card-kicker">Activities</div>
+            <div className="text-muted" style={{ fontSize: 11, marginTop: 3, lineHeight: 1.4 }}>Click to drop one in the middle of the canvas.</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {paletteTypes.length === 0 ? (
+              <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.5, padding: '8px 2px' }}>Activity types for {TYPE_LABEL[workflow.libraryType]} libraries aren’t defined yet.</div>
+            ) : (
+              paletteTypes.map((type) => {
+                const meta = ACTIVITY_TYPE_META[type];
+                return (
+                  <div key={type} className="blueprint" onClick={() => addActivity(type)} style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
+                    <span style={{ width: 24, height: 24, flex: 'none', background: 'var(--color-accent-900)', color: 'var(--color-bg)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-heading)', fontSize: 11 }}>
+                      {meta.code}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, lineHeight: 1.15 }}>{meta.label}</span>
+                      <span className="text-muted" style={{ display: 'block', fontSize: 10 }}>{meta.hint}</span>
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-        <div style={{ marginTop: '8px', padding: '8px 0px', borderTop: '1px solid var(--color-divider)' }}>
-          <div className="card-kicker">Activities</div>
-          <div className="text-muted" style={{ fontSize: 11, marginTop: 3, lineHeight: 1.4 }}>Click to drop one in the middle of the canvas.</div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {paletteTypes.length === 0 ? (
-            <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.5, padding: '8px 2px' }}>Activity types for {TYPE_LABEL[workflow.libraryType]} libraries aren’t defined yet.</div>
-          ) : (
-            paletteTypes.map((type) => {
-              const meta = ACTIVITY_TYPE_META[type];
-              return (
-                <div key={type} className="blueprint" onClick={() => addActivity(type)} style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
-                  <span style={{ width: 24, height: 24, flex: 'none', background: 'var(--color-accent-900)', color: 'var(--color-bg)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-heading)', fontSize: 11 }}>
-                    {meta.code}
-                  </span>
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 13, lineHeight: 1.15 }}>{meta.label}</span>
-                    <span className="text-muted" style={{ display: 'block', fontSize: 10 }}>{meta.hint}</span>
-                  </span>
-                </div>
-              );
-            })
-          )}
+
+        <div style={{ flex: 'none', marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--color-divider)', display: 'flex', gap: 6 }}>
+          <button type="button" className="btn btn-secondary" style={{ flex: 1, gap: 6, fontSize: 13 }} onClick={onEdit}>
+            <EditIcon width={14} height={14} />
+            Edit info
+          </button>
+          <button type="button" className="btn btn-secondary" style={{ flex: 1, gap: 6, fontSize: 13, color: '#8a2f2f' }} onClick={onDelete}>
+            <TrashIcon width={14} height={14} />
+            Delete
+          </button>
         </div>
       </div>
 

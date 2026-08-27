@@ -1,4 +1,4 @@
-import { EditIcon, PlayIcon, SaveIcon, TrashIcon } from '../../components/icons';
+import { HistoryIcon, PlayIcon, SaveIcon } from '../../components/icons';
 import type { AppWorkflow } from '../../../shared/app-workflow';
 import { DetailHeader } from '../library/DetailHeader';
 import { STATUS_LABEL, STATUS_TAG_CLASS } from './workflowFormat';
@@ -11,11 +11,12 @@ interface WorkflowDetailScreenProps {
   onEdit(): void;
   onDelete(): void;
   onRun(): void;
+  onHistory(): void;
   running: boolean;
   runError: string | undefined;
 }
 
-export function WorkflowDetailScreen({ item, onBack, onEdit, onDelete, onRun, running, runError }: WorkflowDetailScreenProps) {
+export function WorkflowDetailScreen({ item, onBack, onEdit, onDelete, onRun, onHistory, running, runError }: WorkflowDetailScreenProps) {
   const { items: activities, loading, dirty, saving, saveError, add, patch, remove, moveMany, save } = useAppWorkflowActivities(item.id);
 
   return (
@@ -29,26 +30,22 @@ export function WorkflowDetailScreen({ item, onBack, onEdit, onDelete, onRun, ru
               {saveError || runError}
             </span>
           )}
-          <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13 }} onClick={onRun} disabled={running || activities.length === 0}>
-            <PlayIcon width={14} height={14} />
-            {running ? 'Running…' : 'Run'}
-          </button>
-          <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13 }} onClick={onEdit}>
-            <EditIcon width={14} height={14} />
-            Edit info
-          </button>
           <button type="button" className="btn btn-primary" style={{ gap: 6, fontSize: 13 }} onClick={save} disabled={!dirty || saving}>
             <SaveIcon width={14} height={14} />
             {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
           </button>
-          <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13, color: '#8a2f2f' }} onClick={onDelete}>
-            <TrashIcon width={14} height={14} />
-            Delete
+          <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13 }} onClick={onRun} disabled={running || activities.length === 0}>
+            <PlayIcon width={14} height={14} />
+            {running ? 'Running…' : 'Execute'}
+          </button>
+          <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13 }} onClick={onHistory}>
+            <HistoryIcon width={14} height={14} />
+            History
           </button>
         </div>
       </div>
 
-      <WorkflowCanvas workflow={item} activities={activities} loading={loading} add={add} patch={patch} remove={remove} moveMany={moveMany} />
+      <WorkflowCanvas workflow={item} activities={activities} loading={loading} add={add} patch={patch} remove={remove} moveMany={moveMany} onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { MessageBus } from '../queue/message-bus';
 import { QUEUE_NAMES } from '../queue/queue-names';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppWorkflow, deleteAppWorkflow, getAppWorkflow, listAppWorkflows, updateAppWorkflow } from '../database/repositories/app-workflow.repo';
+import { deleteAppWorkflowHistoryByWorkflowId } from '../database/repositories/app-workflow-history.repo';
 import { deleteWorkflowExport } from '../helpers/workflow-export';
 import {
   AppWorkflowStatus,
@@ -71,6 +72,7 @@ export function createAppWorkflowManager(db: Db, bus: MessageBus): AppWorkflowMa
     remove: (id) => {
       need(id);
       deleteAppWorkflow(db, id);
+      deleteAppWorkflowHistoryByWorkflowId(db, id);
       deleteWorkflowExport(id);
     },
 
