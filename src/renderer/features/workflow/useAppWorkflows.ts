@@ -1,0 +1,77 @@
+import { useCallback, useEffect, useState } from 'react';
+import { type AppWorkflow, type CreateAppWorkflowInput, type ListAppWorkflowsFilter, type UpdateAppWorkflowInput } from '../../../shared/app-workflow';
+
+export interface AppWorkflowsState {
+  items: AppWorkflow[];
+  loading: boolean;
+  error: string | undefined;
+  filter: ListAppWorkflowsFilter;
+  setFilter(filter: ListAppWorkflowsFilter): void;
+  refresh(): void;
+  create(input: CreateAppWorkflowInput): Promise<AppWorkflow>;
+  update(id: string, input: UpdateAppWorkflowInput): Promise<AppWorkflow>;
+  remove(id: string): Promise<void>;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function useAppWorkflows(): AppWorkflowsState {
+  const [items, setItems] = useState<AppWorkflow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [filter, setFilter] = useState<ListAppWorkflowsFilter>({});
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const load = useCallback(
+    (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      return window.appWorkflowApi
+        .list(filter)
+        .then((list) => {
+          setItems(list);
+          setError(undefined);
+        })
+        .catch((err) => setError(errorMessage(err)))
+        .finally(() => {
+          if (showLoading) setLoading(false);
+        });
+    },
+    [filter],
+  );
+
+  useEffect(() => {
+    load(true);
+  }, [load, reloadToken]);
+
+  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  const create = useCallback(
+    async (input: CreateAppWorkflowInput) => {
+      const created = await window.appWorkflowApi.create(input);
+      refresh();
+      return created;
+    },
+    [refresh],
+  );
+
+  const update = useCallback(
+    async (id: string, input: UpdateAppWorkflowInput) => {
+      const updated = await window.appWorkflowApi.update(id, input);
+      refresh();
+      return updated;
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      await window.appWorkflowApi.remove(id);
+      refresh();
+    },
+    [refresh],
+  );
+
+  return { items, loading, error, filter, setFilter, refresh, create, update, remove };
+}

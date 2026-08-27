@@ -233,3 +233,30 @@ export const CloseIcon = icon(
     <path d="m6 6 12 12" />
   </>,
 );
+
+export const MinusIcon = icon(<path d="M5 12h14" />);
+
+export const MaximizeIcon = icon(
+  <>
+    <path d="M3 8V5a2 2 0 0 1 2-2h3" />
+    <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+    <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+    <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+  </>,
+);
+
+export const SaveIcon = icon(
+  <>
+    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <path d="M17 21v-7H7v7" />
+    <path d="M7 3v4h8" />
+  </>,
+);
+
+export const LayoutGridIcon = icon(
+  <>
+    <rect x="3" y="4" width="6" height="6" />
+    <rect x="15" y="14" width="6" height="6" />
+    <path d="M9 7h4a2 2 0 0 1 2 2v8" />
+  </>,
+);

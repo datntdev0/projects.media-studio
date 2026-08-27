@@ -6,6 +6,8 @@ import { APP_INFO_IPC_CHANNELS, type AppInfoApi } from '../shared/app-info';
 import { APP_LIBRARY_IPC_CHANNELS, type AppLibraryApi } from '../shared/app-library';
 import { APP_SCRAPING_IPC_CHANNELS, type AppScrapingApi } from '../shared/app-scraping';
 import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '../shared/app-library-content';
+import { APP_WORKFLOW_IPC_CHANNELS, type AppWorkflowApi } from '../shared/app-workflow';
+import { APP_WORKFLOW_ACTIVITY_IPC_CHANNELS, type AppWorkflowActivityApi } from '../shared/app-workflow-activity';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -38,7 +40,24 @@ const appLibraryContentApi: AppLibraryContentApi = {
   remove: (libraryId, id) => ipcRenderer.invoke(APP_LIBRARY_CONTENT_IPC_CHANNELS.remove, libraryId, id),
 };
 
+const appWorkflowApi: AppWorkflowApi = {
+  list: (filter) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.list, filter),
+  get: (id) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.get, id),
+  create: (input) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.create, input),
+  update: (id, input) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.update, id, input),
+  remove: (id) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.remove, id),
+};
+
+const appWorkflowActivityApi: AppWorkflowActivityApi = {
+  list: (workflowId) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.list, workflowId),
+  create: (workflowId, input) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.create, workflowId, input),
+  update: (workflowId, id, input) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.update, workflowId, id, input),
+  remove: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.remove, workflowId, id),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appScrapingApi', appScrapingApi);
 contextBridge.exposeInMainWorld('appLibraryContentApi', appLibraryContentApi);
+contextBridge.exposeInMainWorld('appWorkflowApi', appWorkflowApi);
+contextBridge.exposeInMainWorld('appWorkflowActivityApi', appWorkflowActivityApi);
