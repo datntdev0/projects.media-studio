@@ -46,6 +46,7 @@ const appWorkflowApi: AppWorkflowApi = {
   create: (input) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.create, input),
   update: (id, input) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.update, id, input),
   remove: (id) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.remove, id),
+  execute: (id) => ipcRenderer.invoke(APP_WORKFLOW_IPC_CHANNELS.execute, id),
 };
 
 const appWorkflowActivityApi: AppWorkflowActivityApi = {

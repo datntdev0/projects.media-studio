@@ -15,11 +15,13 @@ function matchesQuery(item: AppWorkflow, query: string): boolean {
 }
 
 export function WorkflowScreen() {
-  const { items, loading, error, filter, setFilter, create, update, remove } = useAppWorkflows();
+  const { items, loading, error, filter, setFilter, create, update, remove, run } = useAppWorkflows();
   const { items: libraries } = useAppLibraries();
   const [query, setQuery] = useState('');
   const [dialogItem, setDialogItem] = useState<AppWorkflow | 'new' | undefined>(undefined);
   const [removing, setRemoving] = useState<string | undefined>(undefined);
+  const [running, setRunning] = useState<string | undefined>(undefined);
+  const [runError, setRunError] = useState<string | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
 
@@ -45,6 +47,18 @@ export function WorkflowScreen() {
     }
   };
 
+  const handleRun = async (item: AppWorkflow) => {
+    setRunning(item.id);
+    setRunError(undefined);
+    try {
+      await run(item.id);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunning(undefined);
+    }
+  };
+
   const toggleMenu = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setMenuFor((current) => (current === id ? undefined : id));
@@ -67,7 +81,15 @@ export function WorkflowScreen() {
   if (activeItem) {
     return (
       <>
-        <WorkflowDetailScreen item={activeItem} onBack={() => setActiveId(undefined)} onEdit={() => setDialogItem(activeItem)} onDelete={() => handleDelete(activeItem)} />
+        <WorkflowDetailScreen
+          item={activeItem}
+          onBack={() => setActiveId(undefined)}
+          onEdit={() => setDialogItem(activeItem)}
+          onDelete={() => handleDelete(activeItem)}
+          onRun={() => handleRun(activeItem)}
+          running={running === activeItem.id || activeItem.status === AppWorkflowStatus.Running}
+          runError={runError}
+        />
         {dialogItem !== undefined && (
           <WorkflowFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
         )}

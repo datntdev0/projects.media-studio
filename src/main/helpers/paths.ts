@@ -17,5 +17,10 @@ export function getAppCoverDir(): string {
   return path.join(getAppBaseDir(), 'data', 'covers');
 }
 
+/** Where a workflow's one-off export of its library — chapters, cover, manifest — lives on disk, keyed by workflow id. */
+export function getAppWorkflowExportDir(workflowId: string): string {
+  return path.join(getAppBaseDir(), 'data', 'workflows', workflowId);
+}
+
 /** Custom scheme the renderer loads cover images through — a raw file path is not a URL a browser will load. */
 export const COVER_PROTOCOL = 'app-cover';

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type AppWorkflow, type CreateAppWorkflowInput, type ListAppWorkflowsFilter, type UpdateAppWorkflowInput } from '../../../shared/app-workflow';
+import { AppWorkflowStatus, type AppWorkflow, type CreateAppWorkflowInput, type ListAppWorkflowsFilter, type UpdateAppWorkflowInput } from '../../../shared/app-workflow';
+
+const POLL_MS = 2000;
 
 export interface AppWorkflowsState {
   items: AppWorkflow[];
@@ -11,6 +13,7 @@ export interface AppWorkflowsState {
   create(input: CreateAppWorkflowInput): Promise<AppWorkflow>;
   update(id: string, input: UpdateAppWorkflowInput): Promise<AppWorkflow>;
   remove(id: string): Promise<void>;
+  run(id: string): Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -45,6 +48,12 @@ export function useAppWorkflows(): AppWorkflowsState {
     load(true);
   }, [load, reloadToken]);
 
+  useEffect(() => {
+    if (!items.some((item) => item.status === AppWorkflowStatus.Running)) return;
+    const timer = setInterval(() => load(false), POLL_MS);
+    return () => clearInterval(timer);
+  }, [items, load]);
+
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
   const create = useCallback(
@@ -73,5 +82,13 @@ export function useAppWorkflows(): AppWorkflowsState {
     [refresh],
   );
 
-  return { items, loading, error, filter, setFilter, refresh, create, update, remove };
+  const run = useCallback(
+    async (id: string) => {
+      await window.appWorkflowApi.execute(id);
+      refresh();
+    },
+    [refresh],
+  );
+
+  return { items, loading, error, filter, setFilter, refresh, create, update, remove, run };
 }

@@ -4,7 +4,7 @@ import { AppWorkflowStatus, type AppWorkflow, type CreateAppWorkflowInput, type 
 import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
 import { TYPE_LABEL, summaryOf } from '../library/libraryFormat';
 import { useAppLibraries } from '../library/useAppLibraries';
-import { STATUS_LABEL } from './workflowFormat';
+import { EDITABLE_STATUSES, STATUS_LABEL } from './workflowFormat';
 
 interface WorkflowFormDialogProps {
   /** Present in edit mode — the workflow's library stays fixed, only its own fields are shown. */
@@ -29,7 +29,7 @@ export function WorkflowFormDialog({ item, onClose, onCreate, onUpdate }: Workfl
 
   const [name, setName] = useState(item?.name ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [status, setStatus] = useState<AppWorkflowStatus>(item?.status ?? AppWorkflowStatus.Draft);
+  const [status, setStatus] = useState<AppWorkflowStatus>(item && EDITABLE_STATUSES.includes(item.status) ? item.status : AppWorkflowStatus.Draft);
   const [libraryId, setLibraryId] = useState<string | undefined>(undefined);
   const [libraryQuery, setLibraryQuery] = useState('');
 
@@ -78,7 +78,7 @@ export function WorkflowFormDialog({ item, onClose, onCreate, onUpdate }: Workfl
             <div className="field" style={{ width: 132, flex: 'none' }}>
               <label>Status</label>
               <select className="input" value={status} onChange={(e) => setStatus(e.target.value as AppWorkflowStatus)} style={{ cursor: 'pointer' }}>
-                {Object.values(AppWorkflowStatus).map((option) => (
+                {EDITABLE_STATUSES.map((option) => (
                   <option key={option} value={option}>
                     {STATUS_LABEL[option]}
                   </option>

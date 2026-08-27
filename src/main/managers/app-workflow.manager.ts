@@ -1,6 +1,9 @@
 import type { Db } from '../database/client';
+import type { MessageBus } from '../queue/message-bus';
+import { QUEUE_NAMES } from '../queue/queue-names';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppWorkflow, deleteAppWorkflow, getAppWorkflow, listAppWorkflows, updateAppWorkflow } from '../database/repositories/app-workflow.repo';
+import { deleteWorkflowExport } from '../helpers/workflow-export';
 import {
   AppWorkflowStatus,
   type AppWorkflow,
@@ -16,6 +19,7 @@ export interface AppWorkflowManager {
   create(input: CreateAppWorkflowInput): AppWorkflow;
   update(id: string, input: UpdateAppWorkflowInput): AppWorkflow;
   remove(id: string): void;
+  execute(id: string): void;
 }
 
 export function stripStamps(item: AppWorkflow): AppWorkflowDraft {
@@ -23,7 +27,7 @@ export function stripStamps(item: AppWorkflow): AppWorkflowDraft {
   return draft;
 }
 
-export function createAppWorkflowManager(db: Db): AppWorkflowManager {
+export function createAppWorkflowManager(db: Db, bus: MessageBus): AppWorkflowManager {
   const need = (id: string): AppWorkflow => {
     const item = getAppWorkflow(db, id);
     if (!item) {
@@ -67,6 +71,17 @@ export function createAppWorkflowManager(db: Db): AppWorkflowManager {
     remove: (id) => {
       need(id);
       deleteAppWorkflow(db, id);
+      deleteWorkflowExport(id);
+    },
+
+    execute: (id) => {
+      const current = need(id);
+      if (current.status === AppWorkflowStatus.Running) {
+        throw new Error(`Workflow ${id} is already running`);
+      }
+
+      updateAppWorkflow(db, id, { ...stripStamps(current), status: AppWorkflowStatus.Running });
+      bus.publish(QUEUE_NAMES.workflowRunRequested, { workflowId: id });
     },
   };
 }

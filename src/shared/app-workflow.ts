@@ -10,6 +10,8 @@ import type { AppLibraryType } from './app-library';
 export enum AppWorkflowStatus {
   Draft = 'draft',
   Active = 'active',
+  Running = 'running',
+  Failed = 'failed',
 }
 
 /** A row of the workflow listing. */
@@ -62,6 +64,7 @@ export const APP_WORKFLOW_IPC_CHANNELS = {
   create: 'app-workflow:create',
   update: 'app-workflow:update',
   remove: 'app-workflow:remove',
+  execute: 'app-workflow:execute',
 } as const;
 
 export interface AppWorkflowApi {
@@ -70,4 +73,5 @@ export interface AppWorkflowApi {
   create(input: CreateAppWorkflowInput): Promise<AppWorkflow>;
   update(id: string, input: UpdateAppWorkflowInput): Promise<AppWorkflow>;
   remove(id: string): Promise<void>;
+  execute(id: string): Promise<void>;
 }

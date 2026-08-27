@@ -8,4 +8,5 @@ export function registerAppWorkflowHandlers({ manager }: Container): void {
   ipcMain.handle(APP_WORKFLOW_IPC_CHANNELS.create, (_event, input) => manager.appWorkflow.create(input));
   ipcMain.handle(APP_WORKFLOW_IPC_CHANNELS.update, (_event, id: string, input) => manager.appWorkflow.update(id, input));
   ipcMain.handle(APP_WORKFLOW_IPC_CHANNELS.remove, (_event, id: string) => manager.appWorkflow.remove(id));
+  ipcMain.handle(APP_WORKFLOW_IPC_CHANNELS.execute, (_event, id: string) => manager.appWorkflow.execute(id));
 }

@@ -42,7 +42,7 @@ export function createContainer(): Container {
     appLibrary: createAppLibraryManager(db),
     appScraping: createAppScrapingManager(db, bus),
     appLibraryContent: createAppLibraryContentManager(db),
-    appWorkflow: createAppWorkflowManager(db),
+    appWorkflow: createAppWorkflowManager(db, bus),
     appWorkflowActivity: createAppWorkflowActivityManager(db),
   };
 
