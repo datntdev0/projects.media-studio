@@ -3,6 +3,7 @@ import { EditIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TrashIcon } from '../
 import { AppWorkflowStatus, type AppWorkflow } from '../../../shared/app-workflow';
 import { TYPE_LABEL, formatDate } from '../library/libraryFormat';
 import { useAppLibraries } from '../library/useAppLibraries';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAppWorkflows } from './useAppWorkflows';
 import { WorkflowFormDialog } from './WorkflowFormDialog';
 import { WorkflowDetailScreen } from './WorkflowDetailScreen';
@@ -20,6 +21,7 @@ export function WorkflowScreen() {
   const { items: libraries } = useAppLibraries();
   const [query, setQuery] = useState('');
   const [dialogItem, setDialogItem] = useState<AppWorkflow | 'new' | undefined>(undefined);
+  const [confirmDelete, setConfirmDelete] = useState<AppWorkflow | undefined>(undefined);
   const [removing, setRemoving] = useState<string | undefined>(undefined);
   const [running, setRunning] = useState<string | undefined>(undefined);
   const [runError, setRunError] = useState<string | undefined>(undefined);
@@ -40,7 +42,6 @@ export function WorkflowScreen() {
   const libraryCovers = useMemo(() => new Map(libraries.map((library) => [library.id, library.coverUrl])), [libraries]);
 
   const handleDelete = async (item: AppWorkflow) => {
-    if (!window.confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
     setRemoving(item.id);
     try {
       await remove(item.id);
@@ -74,7 +75,7 @@ export function WorkflowScreen() {
           <EditIcon width={14} height={14} />
           Edit
         </button>
-        <button type="button" className="row-menu-item is-danger" onClick={() => handleDelete(item)} disabled={removing === item.id}>
+        <button type="button" className="row-menu-item is-danger" onClick={() => setConfirmDelete(item)} disabled={removing === item.id}>
           <TrashIcon width={14} height={14} />
           Delete
         </button>
@@ -92,7 +93,7 @@ export function WorkflowScreen() {
           item={activeItem}
           onBack={() => setActiveId(undefined)}
           onEdit={() => setDialogItem(activeItem)}
-          onDelete={() => handleDelete(activeItem)}
+          onDelete={() => setConfirmDelete(activeItem)}
           onRun={() => handleRun(activeItem)}
           onHistory={() => setHistoryId(activeItem.id)}
           running={running === activeItem.id || activeItem.status === AppWorkflowStatus.Running}
@@ -100,6 +101,17 @@ export function WorkflowScreen() {
         />
         {dialogItem !== undefined && (
           <WorkflowFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
+        )}
+        {confirmDelete && (
+          <ConfirmDialog
+            title="Delete workflow"
+            message={`Delete "${confirmDelete.name}"? This cannot be undone.`}
+            onCancel={() => setConfirmDelete(undefined)}
+            onConfirm={() => {
+              handleDelete(confirmDelete);
+              setConfirmDelete(undefined);
+            }}
+          />
         )}
       </>
     );
@@ -206,6 +218,17 @@ export function WorkflowScreen() {
 
       {dialogItem !== undefined && (
         <WorkflowFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
+      )}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete workflow"
+          message={`Delete "${confirmDelete.name}"? This cannot be undone.`}
+          onCancel={() => setConfirmDelete(undefined)}
+          onConfirm={() => {
+            handleDelete(confirmDelete);
+            setConfirmDelete(undefined);
+          }}
+        />
       )}
     </div>
   );

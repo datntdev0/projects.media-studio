@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '../../components/icons';
 import { AppLibraryStatus, AppLibraryType, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAppLibraries } from './useAppLibraries';
 import { LibraryFormDialog } from './LibraryFormDialog';
 import { LibraryDetailScreen } from './LibraryDetailScreen';
@@ -19,6 +20,7 @@ export function LibraryScreen() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>('table');
   const [dialogItem, setDialogItem] = useState<AppLibrary | 'new' | undefined>(undefined);
+  const [confirmDelete, setConfirmDelete] = useState<AppLibrary | undefined>(undefined);
   const [removing, setRemoving] = useState<string | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
@@ -34,7 +36,6 @@ export function LibraryScreen() {
   const activeItem = activeId === undefined ? undefined : items.find((item) => item.id === activeId);
 
   const handleDelete = async (item: AppLibrary) => {
-    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
     setRemoving(item.id);
     try {
       await remove(item.id);
@@ -56,7 +57,7 @@ export function LibraryScreen() {
           <EditIcon width={14} height={14} />
           Edit
         </button>
-        <button type="button" className="row-menu-item is-danger" onClick={() => handleDelete(item)} disabled={removing === item.id}>
+        <button type="button" className="row-menu-item is-danger" onClick={() => setConfirmDelete(item)} disabled={removing === item.id}>
           <TrashIcon width={14} height={14} />
           Delete
         </button>
@@ -70,11 +71,22 @@ export function LibraryScreen() {
           item={activeItem}
           onBack={() => setActiveId(undefined)}
           onEdit={() => setDialogItem(activeItem)}
-          onDelete={() => handleDelete(activeItem)}
+          onDelete={() => setConfirmDelete(activeItem)}
           onContentChange={refresh}
         />
         {dialogItem !== undefined && (
           <LibraryFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
+        )}
+        {confirmDelete && (
+          <ConfirmDialog
+            title="Delete library item"
+            message={`Delete "${confirmDelete.title}"? This cannot be undone.`}
+            onCancel={() => setConfirmDelete(undefined)}
+            onConfirm={() => {
+              handleDelete(confirmDelete);
+              setConfirmDelete(undefined);
+            }}
+          />
         )}
       </>
     );
@@ -294,6 +306,17 @@ export function LibraryScreen() {
           onClose={() => setDialogItem(undefined)}
           onCreate={create}
           onUpdate={update}
+        />
+      )}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete library item"
+          message={`Delete "${confirmDelete.title}"? This cannot be undone.`}
+          onCancel={() => setConfirmDelete(undefined)}
+          onConfirm={() => {
+            handleDelete(confirmDelete);
+            setConfirmDelete(undefined);
+          }}
         />
       )}
     </div>
