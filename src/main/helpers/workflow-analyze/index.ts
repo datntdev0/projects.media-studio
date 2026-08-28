@@ -3,63 +3,23 @@ import path from 'node:path';
 import { createLogger } from '../logger';
 import { getAppWorkflowExportDir } from '../paths';
 import { createUsageAccumulator, runLlmPrint, type LlmUsage } from '../llm-cli';
+import { chapterId, errorMessage, loadPackagedContents, runPool, selectChapters, type PackagedContentRecord } from '../workflow-pipeline';
 import { mergeWorld } from './merge';
 import { renderGlossaryMarkdown } from './render';
 import { createAnalyzeProgress, type AnalyzeProgressTracker } from './progress';
 import { CHAPTER_SCHEMA, CHAPTER_TEMPLATE, RESOLVE_SCHEMA } from './schemas';
 import type { ChapterExtraction, ConflictResolution, WorldBible } from './types';
-import { ActivityChapterScope, AnalyzeEngine, type ChapterSelection } from '../../../shared/app-workflow-activity';
-import { AppLibraryContentType } from '../../../shared/app-library-content';
 import type { AppWorkflow } from '../../../shared/app-workflow';
-import type { AppWorkflowActivity } from '../../../shared/app-workflow-activity';
+import type { AnalyzeEngine, AppWorkflowActivity } from '../../../shared/app-workflow-activity';
 export { readAnalyzeOutput, readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeTimeline } from './output';
-export { readAnalyzeProgress } from './progress';
 
 const logger = createLogger('workflow-analyze');
 const EXTRACT_WORKERS = 1;
 const EXTRACT_TIMEOUT_MS = 300_000;
 const RESOLVE_TIMEOUT_MS = 600_000;
 
-interface PackagedContentRecord {
-  id: string;
-  idx: number;
-  type: string;
-  language: string;
-  title: string;
-  file: string | null;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function chapterFile(extractionDir: string, idx: number): string {
-  return path.join(extractionDir, `chapter-${String(idx).padStart(4, '0')}.json`);
-}
-
-/** Which exported original chapters an activity's `chapters` selection covers — resolved purely from the working directory's `contents.json`, the same manifest the export step wrote. */
-function selectChapters(records: PackagedContentRecord[], chapters: ChapterSelection, extractionDir: string): PackagedContentRecord[] {
-  const originals = records.filter((record) => record.type === AppLibraryContentType.Original && record.file);
-  switch (chapters.scope) {
-    case ActivityChapterScope.All:
-      return originals;
-    case ActivityChapterScope.Range:
-      return originals.filter((record) => record.idx >= chapters.rangeFrom && record.idx <= chapters.rangeTo);
-    case ActivityChapterScope.Picked:
-      return originals.filter((record) => chapters.pickedContentIds.includes(record.id));
-    case ActivityChapterScope.Missing:
-      return originals.filter((record) => !fs.existsSync(chapterFile(extractionDir, record.idx)));
-  }
-}
-
-async function runPool<T>(items: T[], workers: number, task: (item: T) => Promise<void>): Promise<void> {
-  let cursor = 0;
-  const lane = async (): Promise<void> => {
-    while (cursor < items.length) {
-      await task(items[cursor++]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(workers, items.length) }, lane));
+  return path.join(extractionDir, `${chapterId(idx)}.json`);
 }
 
 function buildExtractPrompt(chapterId: string, title: string, language: string, text: string): string {
@@ -94,29 +54,23 @@ async function extractChapter(engine: AnalyzeEngine, dir: string, extractionDir:
     return;
   }
 
-  const chapterId = `chapter-${String(record.idx).padStart(4, '0')}`;
   const text = fs.readFileSync(path.join(dir, record.file!), 'utf8');
-  const prompt = buildExtractPrompt(chapterId, record.title, record.language, text);
+  const prompt = buildExtractPrompt(chapterId(record.idx), record.title, record.language, text);
   const data = await runLlmPrint(engine, prompt, { schema: CHAPTER_SCHEMA, timeoutMs: EXTRACT_TIMEOUT_MS, onUsage });
   fs.writeFileSync(outFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
 async function runExtractStep(progress: AnalyzeProgressTracker, engine: AnalyzeEngine, dir: string, extractionDir: string, targets: PackagedContentRecord[], onUsage: (usage: LlmUsage) => void): Promise<void> {
-  progress.start('extract', `0/${targets.length} chapters`);
-  let completed = 0;
+  let counter = 1;
   try {
     await runPool(targets, EXTRACT_WORKERS, async (record) => {
+      progress.update('extract', `${counter++}/${targets.length} chapters`);
       await extractChapter(engine, dir, extractionDir, record, onUsage);
-      completed += 1;
-      if (completed < targets.length) {
-        progress.update('extract', `${completed}/${targets.length} chapters`);
-      }
     });
   } catch (error) {
     progress.fail('extract', errorMessage(error));
     throw error;
   }
-  progress.done('extract', `${completed}/${targets.length} chapters`);
 }
 
 function loadChapters(extractionDir: string): ChapterExtraction[] {
@@ -215,8 +169,8 @@ export async function runWorkflowAnalyze(workflow: AppWorkflow, activity: AppWor
   fs.mkdirSync(extractionDir, { recursive: true });
 
   const { engine, resolveConflicts } = activity.analyzeConfig!;
-  const records: PackagedContentRecord[] = JSON.parse(fs.readFileSync(contentsPath, 'utf8'));
-  const targets = selectChapters(records, activity.analyzeConfig!.chapters, extractionDir);
+  const records = loadPackagedContents(dir);
+  const targets = selectChapters(records, activity.analyzeConfig!.chapters, (record) => !fs.existsSync(chapterFile(extractionDir, record.idx)));
   logger.info(`Analyzing ${targets.length} chapter(s) for workflow ${workflow.id} with ${engine}`);
 
   const progress = createAnalyzeProgress(workflow.id, activity.id);

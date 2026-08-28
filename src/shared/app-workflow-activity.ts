@@ -42,6 +42,7 @@ export interface AnalyzeConfig {
 
 export interface TranslateConfig {
   chapters: ChapterSelection;
+  engine: AnalyzeEngine;
   language: ContentLanguage;
 }
 
@@ -143,29 +144,50 @@ export interface AnalyzeOutput {
   timelineGroupCount: number;
 }
 
-export interface AnalyzeOutputPage<T> {
+/** One lazily-fetched page of a pipeline activity's Output tab data — world-bible entries for Analyze, translated chapters for Translate. */
+export interface PipelineOutputPage<T> {
   items: T[];
   total: number;
 }
 
-export enum AnalyzeStepStatus {
+export enum PipelineStepStatus {
   Pending = 'pending',
   Running = 'running',
   Done = 'done',
   Failed = 'failed',
 }
 
-export interface AnalyzeStep {
+export interface PipelineStep {
   key: string;
   label: string;
-  status: AnalyzeStepStatus;
+  status: PipelineStepStatus;
   detail: string | null;
 }
 
-/** The Analyze activity's in-progress state — one entry per pipeline sub-step, refreshed as its run advances. */
-export interface AnalyzeProgress {
-  steps: AnalyzeStep[];
+/** A script-driven activity's (Analyze, Translate) in-progress state — one entry per pipeline sub-step, refreshed as its run advances. Shared by every activity type whose executor runs a multi-step, resumable pipeline against the workflow's working directory. */
+export interface PipelineProgress {
+  steps: PipelineStep[];
   updatedAt: number;
+}
+
+export interface TranslateOutputChapter {
+  chapterId: string;
+  idx: number;
+  title: string;
+  wordCount: number;
+}
+
+/**
+ * The Translate activity's Output tab data — counts from its working directory
+ * (`translation/<language>/` under the workflow's export dir). The translated chapter list itself
+ * is fetched separately, paginated, via `getTranslateChapters`, and one chapter's full translated
+ * text is fetched on demand via `getTranslateChapterText`.
+ */
+export interface TranslateOutput {
+  language: ContentLanguage;
+  totalChapters: number;
+  glossaryTranslated: boolean;
+  chaptersTranslated: number;
 }
 
 export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
@@ -174,10 +196,13 @@ export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
   update: 'app-workflow-activity:update',
   remove: 'app-workflow-activity:remove',
   getAnalyzeOutput: 'app-workflow-activity:get-analyze-output',
-  getAnalyzeProgress: 'app-workflow-activity:get-analyze-progress',
+  getPipelineProgress: 'app-workflow-activity:get-pipeline-progress',
   getAnalyzeCharacters: 'app-workflow-activity:get-analyze-characters',
   getAnalyzeGlossary: 'app-workflow-activity:get-analyze-glossary',
   getAnalyzeTimeline: 'app-workflow-activity:get-analyze-timeline',
+  getTranslateOutput: 'app-workflow-activity:get-translate-output',
+  getTranslateChapters: 'app-workflow-activity:get-translate-chapters',
+  getTranslateChapterText: 'app-workflow-activity:get-translate-chapter-text',
 } as const;
 
 export interface AppWorkflowActivityApi {
@@ -187,12 +212,18 @@ export interface AppWorkflowActivityApi {
   remove(workflowId: string, id: string): Promise<void>;
   /** `null` when the activity isn't an Analyze activity, or its pipeline hasn't produced a world bible yet. */
   getAnalyzeOutput(workflowId: string, id: string): Promise<AnalyzeOutput | null>;
-  /** `null` when the activity isn't an Analyze activity, or it has never been run. */
-  getAnalyzeProgress(workflowId: string, id: string): Promise<AnalyzeProgress | null>;
+  /** `null` when the activity isn't a script-driven pipeline (Analyze, Translate), or it has never been run. */
+  getPipelineProgress(workflowId: string, id: string): Promise<PipelineProgress | null>;
   /** Paginated world-bible characters, for the Output tab's lazy-loaded Characters section. */
-  getAnalyzeCharacters(workflowId: string, id: string, offset: number, limit: number): Promise<AnalyzeOutputPage<AnalyzeOutputCharacter>>;
+  getAnalyzeCharacters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<AnalyzeOutputCharacter>>;
   /** Paginated world-bible glossary, for the Output tab's lazy-loaded Glossary section. */
-  getAnalyzeGlossary(workflowId: string, id: string, offset: number, limit: number): Promise<AnalyzeOutputPage<AnalyzeOutputGlossaryEntry>>;
+  getAnalyzeGlossary(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<AnalyzeOutputGlossaryEntry>>;
   /** Paginated world-bible timeline, grouped by chapter, for the Output tab's lazy-loaded Timeline section. */
-  getAnalyzeTimeline(workflowId: string, id: string, offset: number, limit: number): Promise<AnalyzeOutputPage<AnalyzeOutputTimelineGroup>>;
+  getAnalyzeTimeline(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<AnalyzeOutputTimelineGroup>>;
+  /** `null` when the activity isn't a Translate activity, or its pipeline hasn't translated any chapter yet. */
+  getTranslateOutput(workflowId: string, id: string): Promise<TranslateOutput | null>;
+  /** Paginated translated chapters, for the Output tab's lazy-loaded Translated Chapters section. */
+  getTranslateChapters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<TranslateOutputChapter>>;
+  /** One chapter's full translated text, fetched on demand when its Output tab row is expanded. `null` if it hasn't been translated. */
+  getTranslateChapterText(workflowId: string, id: string, chapterId: string): Promise<string | null>;
 }

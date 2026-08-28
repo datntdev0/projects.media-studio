@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getAppWorkflowExportDir } from '../paths';
 import type { WorldBible } from './types';
-import type { AnalyzeOutput, AnalyzeOutputCharacter, AnalyzeOutputGlossaryEntry, AnalyzeOutputPage, AnalyzeOutputTimelineGroup } from '../../../shared/app-workflow-activity';
+import type { AnalyzeOutput, AnalyzeOutputCharacter, AnalyzeOutputGlossaryEntry, PipelineOutputPage, AnalyzeOutputTimelineGroup } from '../../../shared/app-workflow-activity';
 
 interface AnalyzeStats {
   chaptersCovered: number;
@@ -80,7 +80,7 @@ export function readAnalyzeOutput(workflowId: string): AnalyzeOutput | null {
 }
 
 /** One page of the world bible's characters, for the Output tab's lazy-loaded Characters section. */
-export function readAnalyzeCharacters(workflowId: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputCharacter> {
+export function readAnalyzeCharacters(workflowId: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputCharacter> {
   const loaded = loadWorld(workflowId);
   if (!loaded) {
     return { items: [], total: 0 };
@@ -91,7 +91,7 @@ export function readAnalyzeCharacters(workflowId: string, offset: number, limit:
 }
 
 /** One page of the world bible's glossary, for the Output tab's lazy-loaded Glossary section. */
-export function readAnalyzeGlossary(workflowId: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputGlossaryEntry> {
+export function readAnalyzeGlossary(workflowId: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputGlossaryEntry> {
   const loaded = loadWorld(workflowId);
   if (!loaded) {
     return { items: [], total: 0 };
@@ -102,7 +102,7 @@ export function readAnalyzeGlossary(workflowId: string, offset: number, limit: n
 }
 
 /** One page of the world bible's timeline, grouped by chapter, for the Output tab's lazy-loaded Timeline section. */
-export function readAnalyzeTimeline(workflowId: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputTimelineGroup> {
+export function readAnalyzeTimeline(workflowId: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputTimelineGroup> {
   const loaded = loadWorld(workflowId);
   if (!loaded) {
     return { items: [], total: 0 };

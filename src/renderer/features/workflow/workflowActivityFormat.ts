@@ -48,7 +48,7 @@ export const ART_STYLES = ['2D Chinese Guofeng', '3D Chinese Traditional', 'Real
 export const VOICES = ['Narrator — Male, Warm', 'Narrator — Female, Bright', 'Narrator — Male, Deep'];
 export const PACES = ['0.85×', '1.0×', '1.2×'];
 
-export const ANALYZE_ENGINE_LABEL: Record<AnalyzeEngine, string> = {
+export const ENGINE_LABEL: Record<AnalyzeEngine, string> = {
   [AnalyzeEngine.Codex]: 'Codex CLI',
   [AnalyzeEngine.Claude]: 'Claude CLI',
 };
@@ -69,7 +69,7 @@ export function defaultConfigFor(type: AppWorkflowActivityType): AppWorkflowActi
     case AppWorkflowActivityType.Analyze:
       return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, resolveConflicts: false };
     case AppWorkflowActivityType.Translate:
-      return { chapters: defaultChapters(), language: ContentLanguage.Vietnamese };
+      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, language: ContentLanguage.Vietnamese };
     case AppWorkflowActivityType.Profiles:
       return { style: ART_STYLES[0] };
     case AppWorkflowActivityType.Storyboard:
@@ -107,7 +107,7 @@ export function withChapters(activity: AppWorkflowActivity, chapters: ChapterSel
     case AppWorkflowActivityType.Analyze:
       return { chapters, engine: activity.analyzeConfig!.engine, resolveConflicts: activity.analyzeConfig!.resolveConflicts };
     case AppWorkflowActivityType.Translate:
-      return { chapters, language: activity.translateConfig!.language };
+      return { chapters, engine: activity.translateConfig!.engine, language: activity.translateConfig!.language };
     case AppWorkflowActivityType.Storyboard:
       return { chapters, style: activity.storyboardConfig!.style };
     case AppWorkflowActivityType.Tts:
@@ -130,7 +130,9 @@ export function withStyle(activity: AppWorkflowActivity, style: string): AppWork
 }
 
 export function withEngine(activity: AppWorkflowActivity, engine: AnalyzeEngine): AppWorkflowActivityConfig {
-  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, engine } : configOf(activity);
+  if (activity.type === AppWorkflowActivityType.Analyze) return { ...activity.analyzeConfig!, engine };
+  if (activity.type === AppWorkflowActivityType.Translate) return { ...activity.translateConfig!, engine };
+  return configOf(activity);
 }
 
 export function withResolveConflicts(activity: AppWorkflowActivity, resolveConflicts: boolean): AppWorkflowActivityConfig {

@@ -1,19 +1,19 @@
 import { useState, type ReactNode } from 'react';
-import type { AnalyzeOutputPage } from '../../../shared/app-workflow-activity';
+import type { PipelineOutputPage } from '../../../shared/app-workflow-activity';
 
 const PAGE_SIZE = 50;
 
-interface AnalyzeLazySectionProps<T> {
+interface LazySectionProps<T> {
   title: string;
   count: number;
   emptyLabel: string;
-  fetchPage(offset: number, limit: number): Promise<AnalyzeOutputPage<T>>;
+  fetchPage(offset: number, limit: number): Promise<PipelineOutputPage<T>>;
   renderItem(item: T, index: number): ReactNode;
   keyOf(item: T, index: number): string;
 }
 
-/** A collapsible Output-tab section that only fetches its (paginated) data once expanded — keeps a large novel's world bible from being loaded or rendered all at once. */
-export function AnalyzeLazySection<T>({ title, count, emptyLabel, fetchPage, renderItem, keyOf }: AnalyzeLazySectionProps<T>) {
+/** A collapsible Output-tab section that only fetches its (paginated) data once expanded — keeps a large novel's pipeline output (world bible, translated chapters, ...) from being loaded or rendered all at once. */
+export function LazySection<T>({ title, count, emptyLabel, fetchPage, renderItem, keyOf }: LazySectionProps<T>) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState<number | null>(null);

@@ -8,18 +8,22 @@ import {
   updateAppWorkflowActivity,
   type AppWorkflowActivityDraft,
 } from '../database/repositories/app-workflow-activity.repo';
-import { readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeOutput, readAnalyzeProgress, readAnalyzeTimeline } from '../helpers/workflow-analyze';
+import { readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeOutput, readAnalyzeTimeline } from '../helpers/workflow-analyze';
+import { readTranslateChapterText, readTranslateChapters, readTranslateOutput } from '../helpers/workflow-translate';
+import { readPipelineProgress } from '../helpers/pipeline-progress';
 import {
   AppWorkflowActivityType,
   type AnalyzeOutput,
   type AnalyzeOutputCharacter,
   type AnalyzeOutputGlossaryEntry,
-  type AnalyzeOutputPage,
   type AnalyzeOutputTimelineGroup,
-  type AnalyzeProgress,
   type AppWorkflowActivity,
   type AppWorkflowActivityConfig,
   type CreateAppWorkflowActivityInput,
+  type PipelineOutputPage,
+  type PipelineProgress,
+  type TranslateOutput,
+  type TranslateOutputChapter,
   type UpdateAppWorkflowActivityInput,
 } from '../../shared/app-workflow-activity';
 
@@ -29,10 +33,13 @@ export interface AppWorkflowActivityManager {
   update(workflowId: string, id: string, input: UpdateAppWorkflowActivityInput): AppWorkflowActivity;
   remove(workflowId: string, id: string): void;
   getAnalyzeOutput(workflowId: string, id: string): AnalyzeOutput | null;
-  getAnalyzeProgress(workflowId: string, id: string): AnalyzeProgress | null;
-  getAnalyzeCharacters(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputCharacter>;
-  getAnalyzeGlossary(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputGlossaryEntry>;
-  getAnalyzeTimeline(workflowId: string, id: string, offset: number, limit: number): AnalyzeOutputPage<AnalyzeOutputTimelineGroup>;
+  getPipelineProgress(workflowId: string, id: string): PipelineProgress | null;
+  getAnalyzeCharacters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputCharacter>;
+  getAnalyzeGlossary(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputGlossaryEntry>;
+  getAnalyzeTimeline(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<AnalyzeOutputTimelineGroup>;
+  getTranslateOutput(workflowId: string, id: string): TranslateOutput | null;
+  getTranslateChapters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<TranslateOutputChapter>;
+  getTranslateChapterText(workflowId: string, id: string, chapterId: string): string | null;
 }
 
 const DEFAULT_RETRY = 3;
@@ -131,9 +138,11 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
       return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeOutput(workflowId) : null;
     },
 
-    getAnalyzeProgress: (workflowId, id) => {
-      const activity = needActivity(workflowId, id);
-      return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeProgress(workflowId, id) : null;
+    // Progress files are keyed only by activity id, not by activity type, so every script-driven
+    // pipeline activity (Analyze, Translate) shares this one reader.
+    getPipelineProgress: (workflowId, id) => {
+      needActivity(workflowId, id);
+      return readPipelineProgress(workflowId, id);
     },
 
     getAnalyzeCharacters: (workflowId, id, offset, limit) => {
@@ -149,6 +158,21 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
     getAnalyzeTimeline: (workflowId, id, offset, limit) => {
       const activity = needActivity(workflowId, id);
       return activity.type === AppWorkflowActivityType.Analyze ? readAnalyzeTimeline(workflowId, offset, limit) : { items: [], total: 0 };
+    },
+
+    getTranslateOutput: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Translate ? readTranslateOutput(workflowId, activity.translateConfig!.language) : null;
+    },
+
+    getTranslateChapters: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Translate ? readTranslateChapters(workflowId, activity.translateConfig!.language, offset, limit) : { items: [], total: 0 };
+    },
+
+    getTranslateChapterText: (workflowId, id, chapterId) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Translate ? readTranslateChapterText(workflowId, activity.translateConfig!.language, chapterId) : null;
     },
   };
 }

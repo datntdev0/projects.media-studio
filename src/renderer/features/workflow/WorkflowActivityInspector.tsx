@@ -2,25 +2,28 @@ import { useEffect, useState } from 'react';
 import { CheckIcon, CloseIcon, TrashIcon } from '../../components/icons';
 import {
   ActivityChapterScope,
-  AnalyzeStepStatus,
   AppWorkflowActivityType,
+  PipelineStepStatus,
   type AnalyzeEngine,
   type AnalyzeOutput,
   type AnalyzeOutputCharacter,
   type AnalyzeOutputGlossaryEntry,
   type AnalyzeOutputTimelineGroup,
-  type AnalyzeProgress,
   type AppWorkflowActivity,
   type ChapterSelection,
+  type PipelineProgress,
+  type TranslateOutput,
+  type TranslateOutputChapter,
   type UpdateAppWorkflowActivityInput,
 } from '../../../shared/app-workflow-activity';
 import { ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
-import { AnalyzeLazySection } from './AnalyzeLazySection';
+import { LazySection } from './LazySection';
+import { TranslateChapterRow } from './TranslateChapterRow';
 import {
   ACTIVITY_TYPE_META,
-  ANALYZE_ENGINE_LABEL,
   ART_STYLES,
   CHAPTER_SCOPE_LABEL,
+  ENGINE_LABEL,
   LANGUAGE_LABEL,
   PACES,
   VOICES,
@@ -59,12 +62,12 @@ function initials(name: string): string {
 
 const PROGRESS_POLL_MS = 2000;
 
-function ProgressSteps({ progress }: { progress: AnalyzeProgress }) {
+function ProgressSteps({ progress }: { progress: PipelineProgress }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 16, border: '1px solid var(--color-divider)', padding: '4px 11px' }}>
       {progress.steps.map((step) => (
         <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 0' }}>
-          {step.status === AnalyzeStepStatus.Done ? (
+          {step.status === PipelineStepStatus.Done ? (
             <span style={{ width: 16, height: 16, flex: 'none', borderRadius: '50%', background: 'var(--color-accent-300)', color: 'var(--color-accent-900)', display: 'grid', placeItems: 'center' }}>
               <CheckIcon width={10} height={10} />
             </span>
@@ -76,15 +79,15 @@ function ProgressSteps({ progress }: { progress: AnalyzeProgress }) {
                 margin: 4,
                 flex: 'none',
                 borderRadius: '50%',
-                background: step.status === AnalyzeStepStatus.Failed ? '#8a2f2f' : step.status === AnalyzeStepStatus.Running ? 'var(--color-accent)' : 'var(--color-divider)',
+                background: step.status === PipelineStepStatus.Failed ? '#8a2f2f' : step.status === PipelineStepStatus.Running ? 'var(--color-accent)' : 'var(--color-divider)',
               }}
             />
           )}
-          <span className={step.status === AnalyzeStepStatus.Pending ? 'text-muted' : undefined} style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
+          <span className={step.status === PipelineStepStatus.Pending ? 'text-muted' : undefined} style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
             {step.label}
           </span>
           {step.detail && (
-            <span className="text-muted" style={{ fontSize: 11, color: step.status === AnalyzeStepStatus.Failed ? '#8a2f2f' : undefined }}>
+            <span className="text-muted" style={{ fontSize: 11, color: step.status === PipelineStepStatus.Failed ? '#8a2f2f' : undefined }}>
               {step.detail}
             </span>
           )}
@@ -100,8 +103,9 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const [description, setDescription] = useState(activity.description);
   const [retry, setRetry] = useState(activity.retry);
   const [delay, setDelay] = useState(activity.delay);
-  const [output, setOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
-  const [progress, setProgress] = useState<AnalyzeProgress | null | undefined>(undefined);
+  const [analyzeOutput, setAnalyzeOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
+  const [translateOutput, setTranslateOutput] = useState<TranslateOutput | null | undefined>(undefined);
+  const [progress, setProgress] = useState<PipelineProgress | null | undefined>(undefined);
 
   useEffect(() => {
     setTab('general');
@@ -109,21 +113,29 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
     setDescription(activity.description);
     setRetry(activity.retry);
     setDelay(activity.delay);
-    setOutput(undefined);
+    setAnalyzeOutput(undefined);
+    setTranslateOutput(undefined);
     setProgress(undefined);
   }, [activity.id]);
 
   useEffect(() => {
-    if (tab !== 'output' || activity.type !== AppWorkflowActivityType.Analyze) return;
+    const isPipeline = activity.type === AppWorkflowActivityType.Analyze || activity.type === AppWorkflowActivityType.Translate;
+    if (tab !== 'output' || !isPipeline) return;
     let cancelled = false;
 
     const poll = () => {
-      window.appWorkflowActivityApi.getAnalyzeProgress(workflowId, activity.id).then((result) => {
+      window.appWorkflowActivityApi.getPipelineProgress(workflowId, activity.id).then((result) => {
         if (!cancelled) setProgress(result);
       });
-      window.appWorkflowActivityApi.getAnalyzeOutput(workflowId, activity.id).then((result) => {
-        if (!cancelled) setOutput(result);
-      });
+      if (activity.type === AppWorkflowActivityType.Analyze) {
+        window.appWorkflowActivityApi.getAnalyzeOutput(workflowId, activity.id).then((result) => {
+          if (!cancelled) setAnalyzeOutput(result);
+        });
+      } else {
+        window.appWorkflowActivityApi.getTranslateOutput(workflowId, activity.id).then((result) => {
+          if (!cancelled) setTranslateOutput(result);
+        });
+      }
     };
 
     poll();
@@ -340,7 +352,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 <div className="field" style={{ marginBottom: 13.6 }}>
                   <label htmlFor="activity-engine">Engine</label>
                   <select className="input" id="activity-engine" value={activity.analyzeConfig!.engine} onChange={(e) => onUpdate(activity.id, { config: withEngine(activity, e.target.value as AnalyzeEngine) })}>
-                    {Object.entries(ANALYZE_ENGINE_LABEL).map(([value, label]) => (
+                    {Object.entries(ENGINE_LABEL).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
@@ -361,13 +373,23 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
             )}
 
             {activity.type === AppWorkflowActivityType.Translate && (
-              <div className="field" style={{ marginBottom: 13.6 }}>
-                <label htmlFor="activity-lang">Target language</label>
-                <select className="input" id="activity-lang" value={activity.translateConfig!.language} onChange={(e) => onUpdate(activity.id, { config: withLanguage(activity, e.target.value as ContentLanguage) })}>
-                  {Object.entries(LANGUAGE_LABEL).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
+              <div style={{ display: 'flex', gap: 13.6, marginBottom: 13.6 }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label htmlFor="activity-engine">Engine</label>
+                  <select className="input" id="activity-engine" value={activity.translateConfig!.engine} onChange={(e) => onUpdate(activity.id, { config: withEngine(activity, e.target.value as AnalyzeEngine) })}>
+                    {Object.entries(ENGINE_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label htmlFor="activity-lang">Target language</label>
+                  <select className="input" id="activity-lang" value={activity.translateConfig!.language} onChange={(e) => onUpdate(activity.id, { config: withLanguage(activity, e.target.value as ContentLanguage) })}>
+                    {Object.entries(LANGUAGE_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -424,24 +446,22 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
           </div>
         )}
 
-        {tab === 'output' && (
+        {tab === 'output' && activity.type === AppWorkflowActivityType.Analyze && (
           <>
-            {activity.type !== AppWorkflowActivityType.Analyze ? (
-              <div className="text-muted" style={{ fontSize: 12 }}>Output isn’t available for this activity type yet.</div>
-            ) : output === undefined && progress === undefined ? (
+            {analyzeOutput === undefined && progress === undefined ? (
               <div className="text-muted" style={{ fontSize: 12 }}>Loading output…</div>
             ) : (
               <>
                 {progress && <ProgressSteps progress={progress} />}
 
-                {output ? (
+                {analyzeOutput ? (
                   <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
                   {[
-                    { label: 'Characters', value: output.characterCount },
-                    { label: 'Glossary terms', value: output.glossaryCount },
-                    { label: 'Chapters mapped', value: output.chaptersCovered },
-                    { label: 'Conflicts resolved', value: output.conflictsResolved },
+                    { label: 'Characters', value: analyzeOutput.characterCount },
+                    { label: 'Glossary terms', value: analyzeOutput.glossaryCount },
+                    { label: 'Chapters mapped', value: analyzeOutput.chaptersCovered },
+                    { label: 'Conflicts resolved', value: analyzeOutput.conflictsResolved },
                   ].map((stat) => (
                     <div key={stat.label} className="blueprint" style={{ padding: '9px 11px' }}>
                       <div className="text-muted" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{stat.label}</div>
@@ -451,12 +471,12 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 </div>
 
                 <div className="card-kicker">Story summary</div>
-                <p style={{ fontSize: 13, lineHeight: 1.55, margin: '6px 0 16px' }}>{output.summary || 'No summary yet.'}</p>
+                <p style={{ fontSize: 13, lineHeight: 1.55, margin: '6px 0 16px' }}>{analyzeOutput.summary || 'No summary yet.'}</p>
 
-                <AnalyzeLazySection<AnalyzeOutputCharacter>
-                  key={`characters-${workflowId}-${activity.id}-${output.characterCount}`}
+                <LazySection<AnalyzeOutputCharacter>
+                  key={`characters-${workflowId}-${activity.id}-${analyzeOutput.characterCount}`}
                   title="Characters"
-                  count={output.characterCount}
+                  count={analyzeOutput.characterCount}
                   emptyLabel="No characters found."
                   fetchPage={(offset, limit) => window.appWorkflowActivityApi.getAnalyzeCharacters(workflowId, activity.id, offset, limit)}
                   keyOf={(character) => character.name}
@@ -475,10 +495,10 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                   )}
                 />
 
-                <AnalyzeLazySection<AnalyzeOutputGlossaryEntry>
-                  key={`glossary-${workflowId}-${activity.id}-${output.glossaryCount}`}
+                <LazySection<AnalyzeOutputGlossaryEntry>
+                  key={`glossary-${workflowId}-${activity.id}-${analyzeOutput.glossaryCount}`}
                   title="Glossary"
-                  count={output.glossaryCount}
+                  count={analyzeOutput.glossaryCount}
                   emptyLabel="No glossary terms yet."
                   fetchPage={(offset, limit) => window.appWorkflowActivityApi.getAnalyzeGlossary(workflowId, activity.id, offset, limit)}
                   keyOf={(entry) => entry.term}
@@ -490,10 +510,10 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                   )}
                 />
 
-                <AnalyzeLazySection<AnalyzeOutputTimelineGroup>
-                  key={`timeline-${workflowId}-${activity.id}-${output.timelineGroupCount}`}
+                <LazySection<AnalyzeOutputTimelineGroup>
+                  key={`timeline-${workflowId}-${activity.id}-${analyzeOutput.timelineGroupCount}`}
                   title="Timeline"
-                  count={output.timelineGroupCount}
+                  count={analyzeOutput.timelineGroupCount}
                   emptyLabel="No timeline entries yet."
                   fetchPage={(offset, limit) => window.appWorkflowActivityApi.getAnalyzeTimeline(workflowId, activity.id, offset, limit)}
                   keyOf={(group) => group.chapterId}
@@ -509,12 +529,59 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                   )}
                 />
                   </>
-                ) : output === null && progress === null ? (
+                ) : analyzeOutput === null && progress === null ? (
                   <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>This activity hasn’t produced output yet — run the workflow to build the world bible.</div>
                 ) : null}
               </>
             )}
           </>
+        )}
+
+        {tab === 'output' && activity.type === AppWorkflowActivityType.Translate && (
+          <>
+            {translateOutput === undefined && progress === undefined ? (
+              <div className="text-muted" style={{ fontSize: 12 }}>Loading output…</div>
+            ) : (
+              <>
+                {progress && <ProgressSteps progress={progress} />}
+
+                {translateOutput ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { label: 'Target language', value: LANGUAGE_LABEL[translateOutput.language] },
+                        { label: 'Chapters translated', value: `${translateOutput.chaptersTranslated} / ${translateOutput.totalChapters}` },
+                        { label: 'Glossary', value: translateOutput.glossaryTranslated ? 'Translated' : 'Pending' },
+                      ].map((stat) => (
+                        <div key={stat.label} className="blueprint" style={{ padding: '9px 11px' }}>
+                          <div className="text-muted" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{stat.label}</div>
+                          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{stat.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <LazySection<TranslateOutputChapter>
+                      key={`translated-chapters-${workflowId}-${activity.id}-${translateOutput.chaptersTranslated}`}
+                      title="Translated Chapters"
+                      count={translateOutput.chaptersTranslated}
+                      emptyLabel="No chapters translated yet."
+                      fetchPage={(offset, limit) => window.appWorkflowActivityApi.getTranslateChapters(workflowId, activity.id, offset, limit)}
+                      keyOf={(chapter) => chapter.chapterId}
+                      renderItem={(chapter) => (
+                        <TranslateChapterRow chapter={chapter} fetchText={(chapterId) => window.appWorkflowActivityApi.getTranslateChapterText(workflowId, activity.id, chapterId)} />
+                      )}
+                    />
+                  </>
+                ) : translateOutput === null && progress === null ? (
+                  <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>This activity hasn’t produced output yet — run the workflow to translate chapters.</div>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'output' && activity.type !== AppWorkflowActivityType.Analyze && activity.type !== AppWorkflowActivityType.Translate && (
+          <div className="text-muted" style={{ fontSize: 12 }}>Output isn’t available for this activity type yet.</div>
         )}
       </div>
       </div>
