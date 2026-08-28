@@ -3,13 +3,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { config } from './config';
 import { createLogger } from './logger';
 import { AnalyzeEngine } from '../../shared/app-workflow-activity';
 
 const logger = createLogger('llm-cli');
 
-const DEFAULT_CODEX_MODEL = process.env.CODEX_MODEL ?? 'gpt-5.5';
-const DEFAULT_CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-5';
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 export interface LlmUsage {
@@ -76,7 +75,7 @@ function parseCodexUsage(stdout: string): LlmUsage | null {
  * in `schema` must set `additionalProperties: false` and list every key as `required`, no
  * dynamic-keyed maps). Read-only sandbox: the caller supplies every fact the model needs in the
  * prompt and reads/writes the filesystem itself, so codex never needs write access. Model
- * defaults to `gpt-5.5`, overridable via the `CODEX_MODEL` env var. Every call's token usage
+ * defaults to `gpt-5.5`, overridable via `llm.codexModel` in config.json. Every call's token usage
  * (parsed from `--json`'s event stream) is logged, and handed to `onUsage` if given.
  */
 async function runCodexPrint(prompt: string, options: LlmPrintOptions = {}): Promise<unknown> {
@@ -87,7 +86,7 @@ async function runCodexPrint(prompt: string, options: LlmPrintOptions = {}): Pro
     fs.writeFileSync(schemaFile, JSON.stringify(options.schema), 'utf8');
   }
 
-  const args = ['exec', '-s', 'read-only', '--skip-git-repo-check', '--color', 'never', '--json', '-m', DEFAULT_CODEX_MODEL, '-o', outFile];
+  const args = ['exec', '-s', 'read-only', '--skip-git-repo-check', '--color', 'never', '--json', '-m', config.llm.codexModel, '-o', outFile];
   if (schemaFile) {
     args.push('--output-schema', schemaFile);
   }
@@ -148,12 +147,12 @@ function extractJson(text: string): string {
  * `--permission-mode plan` keeps the call read-only, mirroring codex's `-s read-only` sandbox — the
  * caller supplies every fact the model needs in the prompt and reads/writes the filesystem itself.
  * Runs from a scratch cwd so this app's own CLAUDE.md doesn't leak into chapter-analysis prompts.
- * Model defaults to `claude-sonnet-5`, overridable via the `CLAUDE_MODEL` env var. Every call's
- * token usage is logged, and handed to `onUsage` if given.
+ * Model defaults to `claude-sonnet-5`, overridable via `llm.claudeModel` in config.json. Every
+ * call's token usage is logged, and handed to `onUsage` if given.
  */
 async function runClaudePrint(prompt: string, options: LlmPrintOptions = {}): Promise<unknown> {
   const fullPrompt = options.schema ? `${prompt}${claudeSchemaInstruction(options.schema)}` : prompt;
-  const args = ['-p', '--output-format', 'json', '--model', DEFAULT_CLAUDE_MODEL, '--permission-mode', 'plan'];
+  const args = ['-p', '--output-format', 'json', '--model', config.llm.claudeModel, '--permission-mode', 'plan'];
 
   const stdout = await new Promise<string>((resolve, reject) => {
     const child = spawn('claude', args, { cwd: os.tmpdir(), timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS });

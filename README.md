@@ -43,7 +43,7 @@ Scraping features require the FastAPI worker running alongside the app:
 npm run worker
 ```
 
-This starts the worker at `127.0.0.1:8000` from `src/worker` (override with `SCRAPER_BASE_URL`).
+This starts the worker at `127.0.0.1:8000` from `src/worker` (override the app's expected URL via `scraper.baseUrl` in `config.json`).
 
 ## Scripts
 

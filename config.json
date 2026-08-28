@@ -1,0 +1,10 @@
+{
+  "appDir": ".",
+  "scraper": {
+    "baseUrl": "http://127.0.0.1:8000"
+  },
+  "llm": {
+    "codexModel": "gpt-5.5",
+    "claudeModel": "claude-sonnet-5"
+  }
+}

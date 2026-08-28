@@ -62,6 +62,9 @@ export interface TtsConfig {
   language: ContentLanguage;
 }
 
+/** Scheme the renderer plays bundled TTS voice-sample clips through (see src/main/helpers/protocols/tts-sample.protocol.ts). */
+export const TTS_SAMPLE_PROTOCOL = 'app-tts-sample';
+
 export type AppWorkflowActivityConfig = AnalyzeConfig | TranslateConfig | ProfilesConfig | StoryboardConfig | TtsConfig;
 
 /** A node on a workflow's canvas. Exactly one of the five config fields is set, matching `type`. `dependencies` holds the ids of other activities on the same workflow that must complete before this one runs. */

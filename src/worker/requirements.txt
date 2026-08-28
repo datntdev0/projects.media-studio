@@ -1,4 +1,7 @@
 scrapling[fetchers]==0.4.14
-fastapi==0.121.2
+fastapi==0.141.1
 uvicorn[standard]==0.41.0
 pydantic==2.13.0
+vieneu==3.3.0
+ffmpeg-python==0.2.0
+soundfile==0.14.0

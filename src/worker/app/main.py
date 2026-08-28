@@ -6,10 +6,13 @@ from types import ModuleType
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 
+from . import config  # noqa: F401  (loaded first: sets HF_HOME before vieneu is imported)
 from . import images, logs
 from .browser import browser
-from .models import Chapter, ChapterContent, FetchOptions, Health, Novel
+from .models import Chapter, ChapterContent, FetchOptions, Health, Novel, Speech, SpeechRequest
 from .parsers import CRAWLERS
+from .speech import generate_speech
+from .tts import tts_engine
 
 logs.configure()
 logger = logging.getLogger(__name__)
@@ -22,6 +25,10 @@ async def lifespan(_: FastAPI):
         await browser.start()
     except Exception:
         logger.warning("browser failed to warm up, will retry on first request", exc_info=True)
+    try:
+        await tts_engine.load()
+    except Exception:
+        logger.warning("TTS model failed to load, will retry on first request", exc_info=True)
     yield
     await browser.close()
 
@@ -184,3 +191,14 @@ async def get_cover(
         raise HTTPException(status_code=502, detail="The cover URL did not return an image")
 
     return Response(content=body, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.post("/speech", response_model=Speech)
+async def create_speech(request: SpeechRequest) -> Speech:
+    """Synthesize `texts` as one line each, stitch them into a wav, and write a matching srt.
+
+    Synchronous: the response only comes back once both files are written. The files land
+    under the shared app data dir, so the caller reads them straight off disk instead of
+    fetching them back over HTTP.
+    """
+    return await generate_speech(request)

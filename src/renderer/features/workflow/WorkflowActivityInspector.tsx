@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { CheckIcon, CloseIcon, TrashIcon } from '../../components/icons';
+import { useEffect, useRef, useState } from 'react';
+import { CheckIcon, CloseIcon, PauseIcon, PlayIcon, TrashIcon } from '../../components/icons';
 import {
   ActivityChapterScope,
   AppWorkflowActivityType,
@@ -35,6 +35,7 @@ import {
   withResolveConflicts,
   withStyle,
   withVoice,
+  voiceSampleUrl,
 } from './workflowActivityFormat';
 
 interface WorkflowActivityInspectorProps {
@@ -106,6 +107,8 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const [analyzeOutput, setAnalyzeOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
   const [translateOutput, setTranslateOutput] = useState<TranslateOutput | null | undefined>(undefined);
   const [progress, setProgress] = useState<PipelineProgress | null | undefined>(undefined);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setTab('general');
@@ -149,6 +152,28 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const meta = ACTIVITY_TYPE_META[activity.type];
   const chapters = chaptersOf(activity);
   const upstream = activity.dependencies.map((id) => activities.find((a) => a.id === id)).filter((a): a is AppWorkflowActivity => a !== undefined);
+  // An activity saved before VOICES/PACES last changed can hold a value neither list offers any more — fall back
+  // to a valid default rather than leaving the <select> on a value with no matching <option>.
+  const ttsVoice = activity.type === AppWorkflowActivityType.Tts && VOICES.includes(activity.ttsConfig!.voice) ? activity.ttsConfig!.voice : VOICES[0];
+  const ttsPace = activity.type === AppWorkflowActivityType.Tts && PACES.includes(activity.ttsConfig!.pace) ? activity.ttsConfig!.pace : PACES[1];
+  const ttsSampleUrl =
+    activity.type === AppWorkflowActivityType.Tts && activity.ttsConfig!.language === ContentLanguage.Vietnamese ? voiceSampleUrl(ttsVoice, ttsPace) : null;
+
+  useEffect(() => {
+    previewRef.current?.pause();
+    setPreviewPlaying(false);
+  }, [ttsSampleUrl]);
+
+  const togglePreview = () => {
+    const audio = previewRef.current;
+    if (!audio) return;
+    if (previewPlaying) {
+      audio.pause();
+    } else {
+      audio.currentTime = 0;
+      audio.play();
+    }
+  };
 
   const patchChapters = (patch: Partial<ChapterSelection>) => onUpdate(activity.id, { config: withChapters(activity, { ...chapters!, ...patch }) });
 
@@ -405,24 +430,38 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
             )}
 
             {activity.type === AppWorkflowActivityType.Tts && (
-              <div style={{ display: 'flex', gap: 13.6, marginBottom: 13.6 }}>
-                <div className="field" style={{ flex: 1 }}>
-                  <label htmlFor="activity-voice">Voice</label>
-                  <select className="input" id="activity-voice" value={activity.ttsConfig!.voice} onChange={(e) => onUpdate(activity.id, { config: withVoice(activity, e.target.value) })}>
-                    {VOICES.map((voice) => (
-                      <option key={voice} value={voice}>{voice}</option>
-                    ))}
-                  </select>
+              <>
+                <div style={{ display: 'flex', gap: 13.6, marginBottom: 6, alignItems: 'flex-end' }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label htmlFor="activity-voice">Voice</label>
+                    <select className="input" id="activity-voice" value={ttsVoice} onChange={(e) => onUpdate(activity.id, { config: withVoice(activity, e.target.value) })}>
+                      {VOICES.map((voice) => (
+                        <option key={voice} value={voice}>{voice}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field" style={{ width: 96 }}>
+                    <label htmlFor="activity-pace">Pace</label>
+                    <select className="input" id="activity-pace" value={ttsPace} onChange={(e) => onUpdate(activity.id, { config: withPace(activity, e.target.value) })}>
+                      {PACES.map((pace) => (
+                        <option key={pace} value={pace}>{pace}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    id="activity-voice-preview"
+                    type="button"
+                    className="btn btn-secondary btn-icon"
+                    style={{ width: 34, height: 34, flex: 'none' }}
+                    disabled={!ttsSampleUrl}
+                    onClick={togglePreview}
+                    title={ttsSampleUrl ? 'Preview this voice' : 'Sample only available for Vietnamese'}
+                  >
+                    {previewPlaying ? <PauseIcon width={14} height={14} /> : <PlayIcon width={14} height={14} />}
+                  </button>
+                  <audio ref={previewRef} src={ttsSampleUrl ?? undefined} onPlay={() => setPreviewPlaying(true)} onPause={() => setPreviewPlaying(false)} onEnded={() => setPreviewPlaying(false)} style={{ display: 'none' }} />
                 </div>
-                <div className="field" style={{ width: 96 }}>
-                  <label htmlFor="activity-pace">Pace</label>
-                  <select className="input" id="activity-pace" value={activity.ttsConfig!.pace} onChange={(e) => onUpdate(activity.id, { config: withPace(activity, e.target.value) })}>
-                    {PACES.map((pace) => (
-                      <option key={pace} value={pace}>{pace}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field" style={{ flex: 1 }}>
+                <div className="field" style={{ marginBottom: 13.6 }}>
                   <label htmlFor="activity-tts-lang">Language</label>
                   <select className="input" id="activity-tts-lang" value={activity.ttsConfig!.language} onChange={(e) => onUpdate(activity.id, { config: withLanguage(activity, e.target.value as ContentLanguage) })}>
                     {Object.entries(LANGUAGE_LABEL).map(([value, label]) => (
@@ -430,7 +469,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                     ))}
                   </select>
                 </div>
-              </div>
+              </>
             )}
           </>
         )}

@@ -12,6 +12,7 @@ import {
   type StoryboardConfig,
   type TranslateConfig,
   type TtsConfig,
+  TTS_SAMPLE_PROTOCOL,
 } from '../../../shared/app-workflow-activity';
 import { chaptersOf, rangeSummary } from '../../../shared/workflow-activity-format';
 
@@ -45,8 +46,20 @@ export const LANGUAGE_LABEL: Record<ContentLanguage, string> = {
 };
 
 export const ART_STYLES = ['2D Chinese Guofeng', '3D Chinese Traditional', 'Real People — Ancient Chinese', 'Real People — Modern City'];
-export const VOICES = ['Narrator — Male, Warm', 'Narrator — Female, Bright', 'Narrator — Male, Deep'];
+export const VOICES = ['Mỹ Duyên', 'Ngọc Huyền'];
 export const PACES = ['0.85×', '1.0×', '1.2×'];
+
+// Maps a voice/pace pair to the matching bundled sample clip's file name (see
+// src/main/assets/tts-voice-samples) — only these voices, at these paces, have one.
+const VOICE_SAMPLE_SLUGS: Record<string, string> = { 'Mỹ Duyên': 'my-duyen', 'Ngọc Huyền': 'ngoc-huyen' };
+const PACE_SAMPLE_SLUGS: Record<string, string> = { '0.85×': '085', '1.0×': '100', '1.2×': '120' };
+
+/** The sample clip's URL for a voice/pace, or null when no sample was recorded for that pair (e.g. a non-Vietnamese language). */
+export function voiceSampleUrl(voice: string, pace: string): string | null {
+  const voiceSlug = VOICE_SAMPLE_SLUGS[voice];
+  const paceSlug = PACE_SAMPLE_SLUGS[pace];
+  return voiceSlug && paceSlug ? `${TTS_SAMPLE_PROTOCOL}://sample/${voiceSlug}-${paceSlug}.wav` : null;
+}
 
 export const ENGINE_LABEL: Record<AnalyzeEngine, string> = {
   [AnalyzeEngine.Codex]: 'Codex CLI',

@@ -41,7 +41,7 @@ class BrowserManager:
     def __init__(self) -> None:
         self._session: AsyncStealthySession | None = None
         self._lock = asyncio.Lock()
-        self._slots = asyncio.Semaphore(settings.max_pages)
+        self._slots = asyncio.Semaphore(settings.scraper.max_pages)
         self._last_used = 0.0
 
     @property
@@ -63,23 +63,22 @@ class BrowserManager:
     async def _ensure_session(self) -> AsyncStealthySession:
         """Caller must hold the lock. Recreates the session when idle for too long."""
         idle = time.monotonic() - self._last_used
-        if self._session is not None and settings.idle_restart_seconds and idle > settings.idle_restart_seconds:
+        if self._session is not None and settings.scraper.idle_restart_seconds and idle > settings.scraper.idle_restart_seconds:
             logger.info("browser idle for %.0fs, restarting it", idle)
             await self._close_session()
 
         if self._session is None:
-            logger.info("starting browser (headless=%s, profile=%s)", DEFAULTS.headless, settings.user_data_dir or "-")
+            profile = settings.app_dir_path / "browser-profile"
+            logger.info("starting browser (headless=%s, profile=%s)", DEFAULTS.headless, profile)
+            profile.mkdir(parents=True, exist_ok=True)
+            _clear_profile_locks(profile)
             options = {
                 "headless": DEFAULTS.headless,
                 "solve_cloudflare": DEFAULTS.solve,
                 "timeout": DEFAULTS.timeout_ms,
-                "max_pages": settings.max_pages,
+                "max_pages": settings.scraper.max_pages,
+                "user_data_dir": str(profile),
             }
-            if settings.user_data_dir:
-                profile = Path(settings.user_data_dir)
-                profile.mkdir(parents=True, exist_ok=True)
-                _clear_profile_locks(profile)
-                options["user_data_dir"] = str(profile)
             session = AsyncStealthySession(**options)
             await session.start()
             self._session = session

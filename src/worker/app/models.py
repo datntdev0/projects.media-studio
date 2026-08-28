@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -68,3 +68,16 @@ class Health(CamelModel):
     status: str
     browser_running: bool
     pages_in_use: int | None = None
+
+
+class SpeechRequest(CamelModel):
+    """One line is synthesized per entry of `texts`, at `pace` (1.0 is normal speed)."""
+
+    voice: str
+    texts: list[str] = Field(min_length=1)
+    pace: float = Field(default=1.0, gt=0)
+
+
+class Speech(CamelModel):
+    id: str
+    date: str

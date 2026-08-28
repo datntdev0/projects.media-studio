@@ -4,6 +4,7 @@ import type { MessageBus } from '../queue/message-bus';
 import { QUEUE_NAMES } from '../queue/queue-names';
 import { setSystemCacheItem } from '../database/repositories/system-cache.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, writeCoverFile } from '../helpers/cover-storage';
+import { config } from '../helpers/config';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
 import { createScrapingJob, deleteScrapingJob, getScrapingJob, listScrapingJobs, updateScrapingJob } from '../database/repositories/app-scraping-job.repo';
@@ -141,7 +142,7 @@ interface WorkerChapter {
 }
 
 export function workerBaseUrl(): string {
-  return process.env.SCRAPER_BASE_URL ?? 'http://127.0.0.1:8000';
+  return config.scraper.baseUrl;
 }
 
 /** Matches a novel's stored language onto one of the three languages content rows carry; falls back to the crawler's default. */

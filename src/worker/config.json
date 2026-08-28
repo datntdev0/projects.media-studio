@@ -1,0 +1,11 @@
+{
+  "appDir": "../../data",
+  "scraper": {
+    "maxPages": 4,
+    "idleRestartSeconds": 900
+  },
+  "speech": {
+    "device": "cpu",
+    "modelsDir": "models"
+  }
+}

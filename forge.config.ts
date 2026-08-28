@@ -15,7 +15,11 @@ const config: ForgeConfig = {
     // src/main/database/migrate.ts), so it can't be bundled into main.js —
     // ship it next to the app instead. Packager copies this using the
     // directory's basename, i.e. into resources/migrations/.
-    extraResource: ['src/main/database/migrations'],
+    // The TTS voice-sample clips (see src/main/helpers/paths.ts) ship the same way,
+    // into resources/tts-voice-samples/.
+    // config.json (see src/main/helpers/config.ts) ships as a loose file next to the
+    // app the same way, so it stays editable after packaging.
+    extraResource: ['src/main/database/migrations', 'src/main/assets/tts-voice-samples', 'config.json'],
   },
   rebuildConfig: {},
   makers: [
