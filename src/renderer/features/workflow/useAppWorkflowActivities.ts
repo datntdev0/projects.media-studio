@@ -40,6 +40,7 @@ function activityEquals(a: AppWorkflowActivity, b: AppWorkflowActivity): boolean
     a.y === b.y &&
     a.retry === b.retry &&
     a.delay === b.delay &&
+    a.enabled === b.enabled &&
     sameIds(a.dependencies, b.dependencies) &&
     JSON.stringify(configOf(a)) === JSON.stringify(configOf(b))
   );
@@ -88,6 +89,7 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
         y: input.y,
         retry: input.retry ?? DEFAULT_RETRY,
         delay: input.delay ?? DEFAULT_DELAY,
+        enabled: input.enabled ?? true,
         dependencies: input.dependencies ?? [],
         createdAt: now,
         updatedAt: now,
@@ -113,6 +115,7 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           y: input.y ?? item.y,
           retry: input.retry ?? item.retry,
           delay: input.delay ?? item.delay,
+          enabled: input.enabled ?? item.enabled,
           dependencies: input.dependencies ?? item.dependencies,
         };
       }),
@@ -152,6 +155,7 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           y: draft.y,
           retry: draft.retry,
           delay: draft.delay,
+          enabled: draft.enabled,
           config: configOf(draft),
         });
         idMap.set(draft.id, created.id);
@@ -171,6 +175,7 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           y: draft.y,
           retry: draft.retry,
           delay: draft.delay,
+          enabled: draft.enabled,
           config: configOf(draft),
           dependencies,
         });

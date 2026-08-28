@@ -204,6 +204,21 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 onBlur={() => description !== activity.description && onUpdate(activity.id, { description })}
               />
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 13.6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={activity.enabled}
+                onChange={(e) => onUpdate(activity.id, { enabled: e.target.checked })}
+                style={{ accentColor: 'var(--color-accent)', width: 14, height: 14 }}
+              />
+              <span style={{ fontSize: 13 }}>Enabled</span>
+            </label>
+            {!activity.enabled && (
+              <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.45, marginBottom: 13.6 }}>
+                Disabled — the orchestrator skips this activity when the workflow runs, and moves on to its dependents.
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 13.6, marginBottom: 13.6 }}>
               <div className="field" style={{ flex: 1 }}>
                 <label htmlFor="activity-retry">Retry times</label>

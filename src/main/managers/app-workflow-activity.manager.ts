@@ -78,6 +78,7 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
         y: input.y,
         retry: input.retry ?? DEFAULT_RETRY,
         delay: input.delay ?? DEFAULT_DELAY,
+        enabled: input.enabled ?? true,
         config: input.config,
         dependencies: input.dependencies ? needDependencies(workflowId, input.dependencies) : [],
       };
@@ -96,6 +97,7 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
         y: input.y ?? current.y,
         retry: input.retry ?? current.retry,
         delay: input.delay ?? current.delay,
+        enabled: input.enabled ?? current.enabled,
         config: input.config ?? configOf(current),
         dependencies: input.dependencies ? needDependencies(workflowId, input.dependencies, id) : current.dependencies,
       };
@@ -117,6 +119,7 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
           y: activity.y,
           retry: activity.retry,
           delay: activity.delay,
+          enabled: activity.enabled,
           config: configOf(activity),
           dependencies: activity.dependencies.filter((dependsOnId) => dependsOnId !== id),
         });

@@ -9,6 +9,7 @@ export enum AppWorkflowRunStatus {
   Running = 'running',
   Success = 'success',
   Failed = 'failed',
+  Skipped = 'skipped',
 }
 
 export interface AppWorkflowHistoryEntry {

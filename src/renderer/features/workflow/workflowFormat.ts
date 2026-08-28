@@ -22,12 +22,14 @@ export const RUN_STATUS_LABEL: Record<AppWorkflowRunStatus, string> = {
   [AppWorkflowRunStatus.Running]: 'Running',
   [AppWorkflowRunStatus.Success]: 'Success',
   [AppWorkflowRunStatus.Failed]: 'Failed',
+  [AppWorkflowRunStatus.Skipped]: 'Skipped',
 };
 
 export const RUN_STATUS_TAG_CLASS: Record<AppWorkflowRunStatus, string> = {
   [AppWorkflowRunStatus.Running]: 'tag-accent',
   [AppWorkflowRunStatus.Success]: 'tag-primary',
   [AppWorkflowRunStatus.Failed]: 'tag-outline',
+  [AppWorkflowRunStatus.Skipped]: 'tag-outline',
 };
 
 export function formatDuration(ms: number | null): string {

@@ -74,6 +74,8 @@ export interface AppWorkflowActivity {
   y: number;
   retry: number;
   delay: number;
+  /** When `false`, the orchestrator skips this activity entirely — its dependents still run once its (skipped) turn has passed. */
+  enabled: boolean;
   analyzeConfig: AnalyzeConfig | null;
   translateConfig: TranslateConfig | null;
   profilesConfig: ProfilesConfig | null;
@@ -92,6 +94,7 @@ export interface CreateAppWorkflowActivityInput {
   y: number;
   retry?: number;
   delay?: number;
+  enabled?: boolean;
   config: AppWorkflowActivityConfig;
   dependencies?: string[];
 }
@@ -104,6 +107,7 @@ export interface UpdateAppWorkflowActivityInput {
   y?: number;
   retry?: number;
   delay?: number;
+  enabled?: boolean;
   config?: AppWorkflowActivityConfig;
   dependencies?: string[];
 }

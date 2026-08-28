@@ -356,6 +356,7 @@ export function WorkflowCanvas({ workflow, activities, loading, add: addActivity
                   border: `${isSelected ? 2 : 1}px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-divider)'}`,
                   cursor: 'grab',
                   userSelect: 'none',
+                  opacity: activity.enabled ? 1 : 0.5,
                   boxShadow: isSelected ? 'var(--shadow-md)' : 'none',
                 }}
               >
@@ -367,6 +368,7 @@ export function WorkflowCanvas({ workflow, activities, loading, add: addActivity
                     <span style={{ display: 'block', fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activity.name}</span>
                     <span className="text-muted" style={{ display: 'block', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{meta.label}</span>
                   </span>
+                  {!activity.enabled && <span className="tag tag-outline" style={{ fontSize: 9, flex: 'none' }}>Disabled</span>}
                 </div>
                 <div className="text-muted" style={{ padding: '7px 10px 0', fontSize: 11, lineHeight: 1.3 }}>{activity.description || 'No description yet.'}</div>
                 <div style={{ padding: '2px 10px 8px', fontSize: 10, letterSpacing: '0.03em', color: 'var(--color-accent-700)' }}>{summaryFor(activity)}</div>

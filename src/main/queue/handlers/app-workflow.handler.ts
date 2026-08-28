@@ -86,7 +86,7 @@ async function runWorkflow(db: Db, workflowId: string): Promise<void> {
   }
 }
 
-/** Runs one activity, recording its start/end/status/error as a history entry under the run's `runId`. */
+/** Runs one activity, recording its start/end/status/error as a history entry under the run's `runId`. A disabled activity is recorded as skipped and never dispatched to its executor — its dependents still proceed once it settles. */
 async function runActivity(db: Db, runId: string, workflow: AppWorkflow, activity: AppWorkflowActivity): Promise<void> {
   const startedAt = Date.now();
   const entry = createAppWorkflowHistoryEntry(db, {
@@ -95,10 +95,15 @@ async function runActivity(db: Db, runId: string, workflow: AppWorkflow, activit
     activityId: activity.id,
     activityName: activity.name,
     activityType: activity.type,
-    status: AppWorkflowRunStatus.Running,
+    status: activity.enabled ? AppWorkflowRunStatus.Running : AppWorkflowRunStatus.Skipped,
     range: activityRangeSummary(activity),
     startedAt,
   });
+
+  if (!activity.enabled) {
+    settleAppWorkflowHistoryEntry(db, entry.id, { status: AppWorkflowRunStatus.Skipped, endedAt: startedAt, duration: 0, error: null });
+    return;
+  }
 
   try {
     await executeActivity(workflow, activity);
