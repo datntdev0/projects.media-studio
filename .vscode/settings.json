@@ -1,0 +1,23 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.venv": true,
+    "**/.vite": true,
+    "**/node_modules": true,
+    "*.tsbuildinfo": true,
+  },
+  "search.exclude": {
+    "**/.git": true,
+    "**/.venv": true,
+    "**/.vite": true,
+    "**/node_modules": true,
+    "*.tsbuildinfo": true,
+  },
+  "files.watcherExclude": {
+    "**/.git": true,
+    "**/.venv": true,
+    "**/.vite": true,
+    "**/node_modules/**": true,
+    "*.tsbuildinfo": true,
+  }
+}

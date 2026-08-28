@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 output/
+mockup/
 *.wav
 
 # Logs
@@ -96,6 +97,10 @@ typings/
 
 # Electron-Forge
 out/
+
+# Playwright
+/test-results/
+/playwright-report/
 
 # App's local SQLite data (see src/main/db/client.ts) — stored next to
 # wherever the app runs from, so it lands here in dev

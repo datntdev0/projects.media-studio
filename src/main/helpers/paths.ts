@@ -6,9 +6,11 @@ import path from 'node:path';
  * actually running from (the executable's directory once packaged, the
  * project root in dev) rather than the OS-specific per-user profile
  * directory (`app.getPath('userData')`). Subsystems (db, logs, ...) each
- * get their own folder under this root.
+ * get their own folder under this root. `APP_DATA_DIR` overrides this,
+ * so e2e runs get an isolated, disposable data dir per test.
  */
 export function getAppBaseDir(): string {
+  if (process.env.APP_DATA_DIR) return process.env.APP_DATA_DIR;
   return app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath();
 }
 
