@@ -21,6 +21,7 @@
     "forge.config.ts",
     "forge.env.d.ts",
     "vite.main.config.ts",
-    "vite.preload.config.ts"
+    "vite.preload.config.ts",
+    "vitest.config.mts"
   ]
 }
