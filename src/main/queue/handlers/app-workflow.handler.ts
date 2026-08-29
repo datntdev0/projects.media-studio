@@ -9,6 +9,7 @@ import { createAppWorkflowHistoryEntry, settleAppWorkflowHistoryEntry } from '..
 import { stripStamps } from '../../managers/app-workflow.manager';
 import { exportNovelLibrary } from '../../helpers/workflow-export';
 import { executeActivity } from './app-workflow-activity-executor';
+import { markWorkflowRunEnded, markWorkflowRunStarted } from '../workflow-run-tracker';
 import { AppWorkflowStatus, type AppWorkflow } from '../../../shared/app-workflow';
 import { AppWorkflowRunStatus } from '../../../shared/app-workflow-history';
 import { AppLibraryType } from '../../../shared/app-library';
@@ -37,6 +38,7 @@ async function runWorkflow(db: Db, workflowId: string): Promise<void> {
     return;
   }
 
+  markWorkflowRunStarted(workflowId);
   const activities = listAppWorkflowActivities(db, workflowId);
   logger.info(`Workflow ${workflowId} started — ${activities.length} activity(ies)`);
 
@@ -83,6 +85,8 @@ async function runWorkflow(db: Db, workflowId: string): Promise<void> {
     settleStatus(db, workflowId, AppWorkflowStatus.Failed);
     settleAppWorkflowHistoryEntry(db, overview.id, { status: AppWorkflowRunStatus.Failed, endedAt: Date.now(), duration: Date.now() - runStartedAt, error: errorMessage(error) });
     throw error;
+  } finally {
+    markWorkflowRunEnded(workflowId);
   }
 }
 

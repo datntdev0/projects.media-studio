@@ -15,4 +15,7 @@ export function registerAppWorkflowActivityHandlers({ manager }: Container): voi
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateOutput, (_event, workflowId: string, id: string) => manager.appWorkflowActivity.getTranslateOutput(workflowId, id));
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateChapters, (_event, workflowId: string, id: string, offset: number, limit: number) => manager.appWorkflowActivity.getTranslateChapters(workflowId, id, offset, limit));
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateChapterText, (_event, workflowId: string, id: string, chapterId: string) => manager.appWorkflowActivity.getTranslateChapterText(workflowId, id, chapterId));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsOutput, (_event, workflowId: string, id: string) => manager.appWorkflowActivity.getTtsOutput(workflowId, id));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapters, (_event, workflowId: string, id: string, offset: number, limit: number) => manager.appWorkflowActivity.getTtsChapters(workflowId, id, offset, limit));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapterSrt, (_event, workflowId: string, id: string, chapterId: string) => manager.appWorkflowActivity.getTtsChapterSrt(workflowId, id, chapterId));
 }

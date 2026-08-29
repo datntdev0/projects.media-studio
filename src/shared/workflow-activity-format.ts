@@ -4,6 +4,10 @@
 
 import { ActivityChapterScope, AppWorkflowActivityType, type AppWorkflowActivity, type ChapterSelection } from './app-workflow-activity';
 
+/** The voices the worker's TTS engine (see src/worker/app/tts.py) actually serves — the single source of truth the Tts activity's config is validated against, both for the Input tab's picker and before a run is sent to the worker. */
+export const VOICES = ['Mỹ Duyên', 'Ngọc Huyền'];
+export const PACES = ['0.85×', '1.0×', '1.2×'];
+
 /** The `chapters` selection, for every type except Profiles (which has none). */
 export function chaptersOf(activity: AppWorkflowActivity): ChapterSelection | undefined {
   switch (activity.type) {

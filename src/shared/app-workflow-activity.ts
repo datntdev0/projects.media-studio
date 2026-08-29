@@ -193,6 +193,31 @@ export interface TranslateOutput {
   chaptersTranslated: number;
 }
 
+/** Scheme the renderer plays a workflow's generated per-chapter narration clips through (see src/main/helpers/protocols/tts-output.protocol.ts). */
+export const TTS_OUTPUT_PROTOCOL = 'app-tts-output';
+
+export interface TtsOutputChapter {
+  chapterId: string;
+  idx: number;
+  title: string;
+  durationSec: number;
+  /** `app-tts-output://` URL the Output tab's `<audio>` element plays this chapter's narration through. */
+  audioUrl: string;
+}
+
+/**
+ * The Tts activity's Output tab data — counts from its working directory (`tts/<language>/` under
+ * the workflow's export dir). The narrated chapter list itself is fetched separately, paginated, via
+ * `getTtsChapters`, and one chapter's srt is fetched on demand via `getTtsChapterSrt`.
+ */
+export interface TtsOutput {
+  language: ContentLanguage;
+  voice: string;
+  pace: string;
+  totalChapters: number;
+  chaptersGenerated: number;
+}
+
 export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
   list: 'app-workflow-activity:list',
   create: 'app-workflow-activity:create',
@@ -206,6 +231,9 @@ export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
   getTranslateOutput: 'app-workflow-activity:get-translate-output',
   getTranslateChapters: 'app-workflow-activity:get-translate-chapters',
   getTranslateChapterText: 'app-workflow-activity:get-translate-chapter-text',
+  getTtsOutput: 'app-workflow-activity:get-tts-output',
+  getTtsChapters: 'app-workflow-activity:get-tts-chapters',
+  getTtsChapterSrt: 'app-workflow-activity:get-tts-chapter-srt',
 } as const;
 
 export interface AppWorkflowActivityApi {
@@ -229,4 +257,10 @@ export interface AppWorkflowActivityApi {
   getTranslateChapters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<TranslateOutputChapter>>;
   /** One chapter's full translated text, fetched on demand when its Output tab row is expanded. `null` if it hasn't been translated. */
   getTranslateChapterText(workflowId: string, id: string, chapterId: string): Promise<string | null>;
+  /** `null` when the activity isn't a Tts activity, or its pipeline hasn't narrated any chapter yet. */
+  getTtsOutput(workflowId: string, id: string): Promise<TtsOutput | null>;
+  /** Paginated narrated chapters, for the Output tab's lazy-loaded Narrated Chapters section. */
+  getTtsChapters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<TtsOutputChapter>>;
+  /** One chapter's srt subtitles, fetched on demand when its Output tab row is expanded. `null` if it hasn't been narrated. */
+  getTtsChapterSrt(workflowId: string, id: string, chapterId: string): Promise<string | null>;
 }

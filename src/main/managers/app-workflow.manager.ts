@@ -3,8 +3,9 @@ import type { MessageBus } from '../queue/message-bus';
 import { QUEUE_NAMES } from '../queue/queue-names';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppWorkflow, deleteAppWorkflow, getAppWorkflow, listAppWorkflows, updateAppWorkflow } from '../database/repositories/app-workflow.repo';
-import { deleteAppWorkflowHistoryByWorkflowId } from '../database/repositories/app-workflow-history.repo';
+import { deleteAppWorkflowHistoryByWorkflowId, settleStaleAppWorkflowHistoryEntries } from '../database/repositories/app-workflow-history.repo';
 import { deleteWorkflowExport } from '../helpers/workflow-export';
+import { isWorkflowRunActive } from '../queue/workflow-run-tracker';
 import {
   AppWorkflowStatus,
   type AppWorkflow,
@@ -79,7 +80,13 @@ export function createAppWorkflowManager(db: Db, bus: MessageBus): AppWorkflowMa
     execute: (id) => {
       const current = need(id);
       if (current.status === AppWorkflowStatus.Running) {
-        throw new Error(`Workflow ${id} is already running`);
+        if (isWorkflowRunActive(id)) {
+          throw new Error(`Workflow ${id} is already running`);
+        }
+        // Nothing is actually executing this workflow in this process — its `running` status and any
+        // history entries stuck the same way are left over from a run interrupted by an app restart
+        // or crash. Settle them before starting a fresh run instead of refusing to run at all.
+        settleStaleAppWorkflowHistoryEntries(db, id, 'Interrupted — the app was closed while this was running');
       }
 
       updateAppWorkflow(db, id, { ...stripStamps(current), status: AppWorkflowStatus.Running });

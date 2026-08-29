@@ -14,11 +14,14 @@ import {
   type PipelineProgress,
   type TranslateOutput,
   type TranslateOutputChapter,
+  type TtsOutput,
+  type TtsOutputChapter,
   type UpdateAppWorkflowActivityInput,
 } from '../../../shared/app-workflow-activity';
 import { ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
 import { LazySection } from './LazySection';
 import { TranslateChapterRow } from './TranslateChapterRow';
+import { TtsChapterRow } from './TtsChapterRow';
 import {
   ACTIVITY_TYPE_META,
   ART_STYLES,
@@ -106,6 +109,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const [delay, setDelay] = useState(activity.delay);
   const [analyzeOutput, setAnalyzeOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
   const [translateOutput, setTranslateOutput] = useState<TranslateOutput | null | undefined>(undefined);
+  const [ttsOutput, setTtsOutput] = useState<TtsOutput | null | undefined>(undefined);
   const [progress, setProgress] = useState<PipelineProgress | null | undefined>(undefined);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const previewRef = useRef<HTMLAudioElement | null>(null);
@@ -118,11 +122,12 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
     setDelay(activity.delay);
     setAnalyzeOutput(undefined);
     setTranslateOutput(undefined);
+    setTtsOutput(undefined);
     setProgress(undefined);
   }, [activity.id]);
 
   useEffect(() => {
-    const isPipeline = activity.type === AppWorkflowActivityType.Analyze || activity.type === AppWorkflowActivityType.Translate;
+    const isPipeline = activity.type === AppWorkflowActivityType.Analyze || activity.type === AppWorkflowActivityType.Translate || activity.type === AppWorkflowActivityType.Tts;
     if (tab !== 'output' || !isPipeline) return;
     let cancelled = false;
 
@@ -134,9 +139,13 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
         window.appWorkflowActivityApi.getAnalyzeOutput(workflowId, activity.id).then((result) => {
           if (!cancelled) setAnalyzeOutput(result);
         });
-      } else {
+      } else if (activity.type === AppWorkflowActivityType.Translate) {
         window.appWorkflowActivityApi.getTranslateOutput(workflowId, activity.id).then((result) => {
           if (!cancelled) setTranslateOutput(result);
+        });
+      } else {
+        window.appWorkflowActivityApi.getTtsOutput(workflowId, activity.id).then((result) => {
+          if (!cancelled) setTtsOutput(result);
         });
       }
     };
@@ -619,7 +628,50 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
           </>
         )}
 
-        {tab === 'output' && activity.type !== AppWorkflowActivityType.Analyze && activity.type !== AppWorkflowActivityType.Translate && (
+        {tab === 'output' && activity.type === AppWorkflowActivityType.Tts && (
+          <>
+            {ttsOutput === undefined && progress === undefined ? (
+              <div className="text-muted" style={{ fontSize: 12 }}>Loading output…</div>
+            ) : (
+              <>
+                {progress && <ProgressSteps progress={progress} />}
+
+                {ttsOutput ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { label: 'Voice', value: `${ttsOutput.voice} · ${ttsOutput.pace}` },
+                        { label: 'Chapters narrated', value: `${ttsOutput.chaptersGenerated} / ${ttsOutput.totalChapters}` },
+                        { label: 'Language', value: LANGUAGE_LABEL[ttsOutput.language] },
+                      ].map((stat) => (
+                        <div key={stat.label} className="blueprint" style={{ padding: '9px 11px' }}>
+                          <div className="text-muted" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{stat.label}</div>
+                          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 16 }}>{stat.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <LazySection<TtsOutputChapter>
+                      key={`narrated-chapters-${workflowId}-${activity.id}-${ttsOutput.chaptersGenerated}`}
+                      title="Narrated Chapters"
+                      count={ttsOutput.chaptersGenerated}
+                      emptyLabel="No chapters narrated yet."
+                      fetchPage={(offset, limit) => window.appWorkflowActivityApi.getTtsChapters(workflowId, activity.id, offset, limit)}
+                      keyOf={(chapter) => chapter.chapterId}
+                      renderItem={(chapter) => (
+                        <TtsChapterRow chapter={chapter} fetchSrt={(chapterId) => window.appWorkflowActivityApi.getTtsChapterSrt(workflowId, activity.id, chapterId)} />
+                      )}
+                    />
+                  </>
+                ) : ttsOutput === null && progress === null ? (
+                  <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>This activity hasn’t produced output yet — run the workflow to narrate chapters.</div>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'output' && activity.type !== AppWorkflowActivityType.Analyze && activity.type !== AppWorkflowActivityType.Translate && activity.type !== AppWorkflowActivityType.Tts && (
           <div className="text-muted" style={{ fontSize: 12 }}>Output isn’t available for this activity type yet.</div>
         )}
       </div>

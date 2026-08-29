@@ -93,3 +93,11 @@ export function settleAppWorkflowHistoryEntry(db: Db, id: string, patch: AppWork
 export function deleteAppWorkflowHistoryByWorkflowId(db: Db, workflowId: string): void {
   db.prepare('DELETE FROM app_workflow_history WHERE workflow_id = ?').run(workflowId);
 }
+
+/** Settles every entry a workflow's interrupted run left stuck at `running` (the overview row and whichever activity was mid-flight) as `failed`, so re-running it starts from a clean history instead of a run that can never finish. */
+export function settleStaleAppWorkflowHistoryEntries(db: Db, workflowId: string, error: string): void {
+  const now = Date.now();
+  db.prepare(
+    `UPDATE app_workflow_history SET status = ?, ended_at = ?, duration = ? - started_at, error = ?, updated_at = ? WHERE workflow_id = ? AND status = ?`,
+  ).run(AppWorkflowRunStatus.Failed, now, now, error, now, workflowId, AppWorkflowRunStatus.Running);
+}

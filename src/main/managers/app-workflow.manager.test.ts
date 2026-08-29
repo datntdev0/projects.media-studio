@@ -4,7 +4,8 @@ import { createTestDb } from '../database/test-db';
 import { seedLibrary, seedWorkflow } from '../database/test-fixtures';
 import { createMessageBus, type MessageBus } from '../queue/message-bus';
 import { QUEUE_NAMES } from '../queue/queue-names';
-import { createAppWorkflowHistoryEntry } from '../database/repositories/app-workflow-history.repo';
+import { createAppWorkflowHistoryEntry, listAppWorkflowHistoryEntries } from '../database/repositories/app-workflow-history.repo';
+import { markWorkflowRunEnded, markWorkflowRunStarted } from '../queue/workflow-run-tracker';
 import type { Db } from '../database/client';
 import { AppLibraryType } from '../../shared/app-library';
 import { AppWorkflowRunStatus } from '../../shared/app-workflow-history';
@@ -90,10 +91,32 @@ describe('app workflow manager', () => {
     expect(received).toEqual([{ workflowId: workflow.id }]);
   });
 
-  it('execute() throws when the workflow is already running', () => {
+  it('execute() throws when the workflow is genuinely running in this process', () => {
     const workflow = seedWorkflow(db, { status: AppWorkflowStatus.Running });
     const manager = createAppWorkflowManager(db, bus);
-    expect(() => manager.execute(workflow.id)).toThrow(/already running/);
+    markWorkflowRunStarted(workflow.id);
+
+    try {
+      expect(() => manager.execute(workflow.id)).toThrow(/already running/);
+    } finally {
+      markWorkflowRunEnded(workflow.id);
+    }
+  });
+
+  it('execute() resets a workflow left running by an interrupted run and starts a fresh one', () => {
+    const workflow = seedWorkflow(db, { status: AppWorkflowStatus.Running });
+    const stuck = createAppWorkflowHistoryEntry(db, { workflowId: workflow.id, runId: 'run-1', activityId: null, activityName: null, activityType: null, status: AppWorkflowRunStatus.Running, range: null, startedAt: Date.now() });
+    const manager = createAppWorkflowManager(db, bus);
+    const received: unknown[] = [];
+    bus.subscribe(QUEUE_NAMES.workflowRunRequested, (message) => received.push(message.payload));
+
+    manager.execute(workflow.id);
+
+    expect(manager.get(workflow.id)?.status).toBe(AppWorkflowStatus.Running);
+    expect(received).toEqual([{ workflowId: workflow.id }]);
+    const settled = listAppWorkflowHistoryEntries(db, workflow.id).find((entry) => entry.id === stuck.id);
+    expect(settled?.status).toBe(AppWorkflowRunStatus.Failed);
+    expect(settled?.error).toMatch(/interrupted/i);
   });
 
   it('execute() throws for a workflow that does not exist', () => {

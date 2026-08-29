@@ -9,9 +9,9 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 from . import config  # noqa: F401  (loaded first: sets HF_HOME before vieneu is imported)
 from . import images, logs
 from .browser import browser
-from .models import Chapter, ChapterContent, FetchOptions, Health, Novel, Speech, SpeechRequest
+from .models import Chapter, ChapterContent, FetchOptions, Health, Novel, SpeechJob, SpeechRequest
 from .parsers import CRAWLERS
-from .speech import generate_speech
+from .speech import start_speech_generation
 from .tts import tts_engine
 
 logs.configure()
@@ -193,12 +193,16 @@ async def get_cover(
     return Response(content=body, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
 
 
-@app.post("/speech", response_model=Speech)
-async def create_speech(request: SpeechRequest) -> Speech:
-    """Synthesize `texts` as one line each, stitch them into a wav, and write a matching srt.
+@app.post("/speech", response_model=SpeechJob)
+async def create_speech(request: SpeechRequest) -> SpeechJob:
+    """Schedule `texts` to be synthesized as one line each, stitched into a wav with a matching
+    srt, and return immediately with the job's id.
 
-    Synchronous: the response only comes back once both files are written. The files land
-    under the shared app data dir, so the caller reads them straight off disk instead of
-    fetching them back over HTTP.
+    Idempotent: a payload identical to an earlier call (same texts/voice/pace) reuses that
+    call's files, or joins its run if still in flight, instead of resynthesizing.
+
+    Asynchronous: a whole chapter can take many minutes on CPU, so this doesn't wait for
+    synthesis — the caller polls the shared speech directory for `<id>.wav`/`<id>.srt` (done)
+    or `<id>.error` (failed), resolved against its own copy of the shared app data dir.
     """
-    return await generate_speech(request)
+    return SpeechJob(id=await start_speech_generation(request))

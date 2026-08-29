@@ -10,6 +10,7 @@ import {
 } from '../database/repositories/app-workflow-activity.repo';
 import { readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeOutput, readAnalyzeTimeline } from '../helpers/workflow-analyze';
 import { readTranslateChapterText, readTranslateChapters, readTranslateOutput } from '../helpers/workflow-translate';
+import { readTtsChapters, readTtsChapterSrt, readTtsOutput } from '../helpers/workflow-tts';
 import { readPipelineProgress } from '../helpers/pipeline-progress';
 import {
   AppWorkflowActivityType,
@@ -24,6 +25,8 @@ import {
   type PipelineProgress,
   type TranslateOutput,
   type TranslateOutputChapter,
+  type TtsOutput,
+  type TtsOutputChapter,
   type UpdateAppWorkflowActivityInput,
 } from '../../shared/app-workflow-activity';
 
@@ -40,6 +43,9 @@ export interface AppWorkflowActivityManager {
   getTranslateOutput(workflowId: string, id: string): TranslateOutput | null;
   getTranslateChapters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<TranslateOutputChapter>;
   getTranslateChapterText(workflowId: string, id: string, chapterId: string): string | null;
+  getTtsOutput(workflowId: string, id: string): TtsOutput | null;
+  getTtsChapters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<TtsOutputChapter>;
+  getTtsChapterSrt(workflowId: string, id: string, chapterId: string): string | null;
 }
 
 const DEFAULT_RETRY = 3;
@@ -173,6 +179,21 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
     getTranslateChapterText: (workflowId, id, chapterId) => {
       const activity = needActivity(workflowId, id);
       return activity.type === AppWorkflowActivityType.Translate ? readTranslateChapterText(workflowId, activity.translateConfig!.language, chapterId) : null;
+    },
+
+    getTtsOutput: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Tts ? readTtsOutput(workflowId, activity.ttsConfig!) : null;
+    },
+
+    getTtsChapters: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Tts ? readTtsChapters(workflowId, activity.ttsConfig!, offset, limit) : { items: [], total: 0 };
+    },
+
+    getTtsChapterSrt: (workflowId, id, chapterId) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.Tts ? readTtsChapterSrt(workflowId, activity.ttsConfig!, chapterId) : null;
     },
   };
 }

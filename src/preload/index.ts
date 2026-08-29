@@ -63,6 +63,9 @@ const appWorkflowActivityApi: AppWorkflowActivityApi = {
   getTranslateOutput: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateOutput, workflowId, id),
   getTranslateChapters: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateChapters, workflowId, id, offset, limit),
   getTranslateChapterText: (workflowId, id, chapterId) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTranslateChapterText, workflowId, id, chapterId),
+  getTtsOutput: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsOutput, workflowId, id),
+  getTtsChapters: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapters, workflowId, id, offset, limit),
+  getTtsChapterSrt: (workflowId, id, chapterId) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapterSrt, workflowId, id, chapterId),
 };
 
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);

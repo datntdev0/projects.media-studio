@@ -78,6 +78,10 @@ class SpeechRequest(CamelModel):
     pace: float = Field(default=1.0, gt=0)
 
 
-class Speech(CamelModel):
+class SpeechJob(CamelModel):
+    """A synthesis run accepted by `/speech`. `id` is a hash of the request payload — the caller
+    polls the worker's shared speech directory for `<id>.wav`/`<id>.srt` (done) or `<id>.error`
+    (failed) instead of waiting on the request.
+    """
+
     id: str
-    date: str

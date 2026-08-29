@@ -36,3 +36,8 @@ export function getTtsVoiceSamplesDir(): string {
     ? path.join(process.resourcesPath, 'tts-voice-samples')
     : path.join(app.getAppPath(), 'src/main/assets/tts-voice-samples');
 }
+
+/** The `data` folder both this app and the worker (see src/worker/app/config.py's `appDir`) are configured to share by default — e.g. the worker's `/speech` response returns wav/srt paths relative to this root. */
+export function getWorkerDataDir(): string {
+  return path.join(getAppBaseDir(), 'data');
+}

@@ -24,6 +24,13 @@ class SpeechSettings(CamelModel):
     device: str = "cpu"
     # Where the TTS model weights are downloaded/cached, relative to appDir.
     models_dir: str = "models"
+    # How many lines the engine groups into one forward pass — bigger batches amortize model
+    # overhead (most useful on GPU; the CPU/ONNX backend still runs them sequentially).
+    batch_size: int = 8
+    # How many model instances to load at startup. Each concurrent speech request holds one
+    # instance for its duration, so a larger pool lets more requests run at once instead of
+    # queuing behind a single model.
+    pool_size: int = 1
 
 
 class Settings(CamelModel):

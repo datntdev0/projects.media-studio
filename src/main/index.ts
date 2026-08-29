@@ -4,6 +4,7 @@ import './helpers/logger';
 import { closeContainer, createContainer } from './container';
 import { registerCoverProtocolHandler } from './helpers/protocols/cover.protocol';
 import { registerTtsSampleProtocolHandler } from './helpers/protocols/tts-sample.protocol';
+import { registerTtsOutputProtocolHandler } from './helpers/protocols/tts-output.protocol';
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
 import { registerQueueHandlers } from './queue';
@@ -21,6 +22,7 @@ if (started) {
 app.whenReady().then(() => {
   registerCoverProtocolHandler();
   registerTtsSampleProtocolHandler();
+  registerTtsOutputProtocolHandler();
 
   const container = createContainer();
   runMigrations(container.db);

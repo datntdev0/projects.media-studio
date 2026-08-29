@@ -5,7 +5,9 @@
     "idleRestartSeconds": 900
   },
   "speech": {
-    "device": "cpu",
-    "modelsDir": "models"
+    "device": "cuda",
+    "modelsDir": "models",
+    "batchSize": 32,
+    "poolSize": 2
   }
 }

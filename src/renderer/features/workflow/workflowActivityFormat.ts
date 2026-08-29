@@ -14,9 +14,9 @@ import {
   type TtsConfig,
   TTS_SAMPLE_PROTOCOL,
 } from '../../../shared/app-workflow-activity';
-import { chaptersOf, rangeSummary } from '../../../shared/workflow-activity-format';
+import { chaptersOf, rangeSummary, PACES, VOICES } from '../../../shared/workflow-activity-format';
 
-export { chaptersOf };
+export { chaptersOf, PACES, VOICES };
 
 export interface ActivityTypeMeta {
   code: string;
@@ -46,8 +46,6 @@ export const LANGUAGE_LABEL: Record<ContentLanguage, string> = {
 };
 
 export const ART_STYLES = ['2D Chinese Guofeng', '3D Chinese Traditional', 'Real People — Ancient Chinese', 'Real People — Modern City'];
-export const VOICES = ['Mỹ Duyên', 'Ngọc Huyền'];
-export const PACES = ['0.85×', '1.0×', '1.2×'];
 
 // Maps a voice/pace pair to the matching bundled sample clip's file name (see
 // src/main/assets/tts-voice-samples) — only these voices, at these paces, have one.

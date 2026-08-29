@@ -96,7 +96,7 @@ export function WorkflowScreen() {
           onDelete={() => setConfirmDelete(activeItem)}
           onRun={() => handleRun(activeItem)}
           onHistory={() => setHistoryId(activeItem.id)}
-          running={running === activeItem.id || activeItem.status === AppWorkflowStatus.Running}
+          running={running === activeItem.id}
           runError={runError}
         />
         {dialogItem !== undefined && (
