@@ -9,5 +9,8 @@
     "modelsDir": "models",
     "batchSize": 32,
     "poolSize": 2
+  },
+  "export": {
+    "videoCodec": "h264_nvenc"
   }
 }

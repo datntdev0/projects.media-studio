@@ -2,6 +2,7 @@ import { createLogger } from '../../helpers/logger';
 import { runWorkflowAnalyze } from '../../helpers/workflow-analyze';
 import { runWorkflowTranslate } from '../../helpers/workflow-translate';
 import { runWorkflowTts } from '../../helpers/workflow-tts';
+import { runWorkflowExportVideo } from '../../helpers/workflow-export-video';
 import type { AppWorkflow } from '../../../shared/app-workflow';
 import { AppWorkflowActivityType, type AppWorkflowActivity } from '../../../shared/app-workflow-activity';
 
@@ -30,6 +31,7 @@ const ACTIVITY_EXECUTORS: Record<AppWorkflowActivityType, ActivityExecutor> = {
   [AppWorkflowActivityType.Profiles]: (workflow, activity) => logOnly('profiles', workflow, activity),
   [AppWorkflowActivityType.Storyboard]: (workflow, activity) => logOnly('storyboard', workflow, activity),
   [AppWorkflowActivityType.Tts]: (workflow, activity) => runWorkflowTts(workflow, activity),
+  [AppWorkflowActivityType.ExportVideo]: (workflow, activity) => runWorkflowExportVideo(workflow, activity),
 };
 
 export function executeActivity(workflow: AppWorkflow, activity: AppWorkflowActivity): Promise<void> {

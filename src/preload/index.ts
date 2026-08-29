@@ -66,6 +66,11 @@ const appWorkflowActivityApi: AppWorkflowActivityApi = {
   getTtsOutput: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsOutput, workflowId, id),
   getTtsChapters: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapters, workflowId, id, offset, limit),
   getTtsChapterSrt: (workflowId, id, chapterId) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapterSrt, workflowId, id, chapterId),
+  getExportVideoOutput: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoOutput, workflowId, id),
+  getExportVideoChapters: (workflowId, id, offset, limit) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoChapters, workflowId, id, offset, limit),
+  getExportVideoChapterSrt: (workflowId, id, chapterId) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoChapterSrt, workflowId, id, chapterId),
+  getExportVideoSrt: (workflowId, id) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoSrt, workflowId, id),
+  uploadExportVideoImage: (workflowId, fileName, contentType, data) => ipcRenderer.invoke(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.uploadExportVideoImage, workflowId, fileName, contentType, data),
 };
 
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);

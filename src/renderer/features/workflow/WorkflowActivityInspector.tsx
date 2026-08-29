@@ -11,6 +11,8 @@ import {
   type AnalyzeOutputTimelineGroup,
   type AppWorkflowActivity,
   type ChapterSelection,
+  type ExportVideoOutput,
+  type ExportVideoOutputChapter,
   type PipelineProgress,
   type TranslateOutput,
   type TranslateOutputChapter,
@@ -22,6 +24,8 @@ import { ContentLanguage, type AppLibraryContent } from '../../../shared/app-lib
 import { LazySection } from './LazySection';
 import { TranslateChapterRow } from './TranslateChapterRow';
 import { TtsChapterRow } from './TtsChapterRow';
+import { ExportVideoChapterRow } from './ExportVideoChapterRow';
+import { ExportVideoImagePicker } from './ExportVideoImagePicker';
 import {
   ACTIVITY_TYPE_META,
   ART_STYLES,
@@ -33,9 +37,11 @@ import {
   chaptersOf,
   withChapters,
   withEngine,
+  withImageFile,
   withLanguage,
   withPace,
   withResolveConflicts,
+  withSoundWave,
   withStyle,
   withVoice,
   voiceSampleUrl,
@@ -101,6 +107,42 @@ function ProgressSteps({ progress }: { progress: PipelineProgress }) {
   );
 }
 
+/** The Export Video Output tab's final combined video — a player up front, its unified srt fetched and shown on demand. */
+function ExportVideoCombinedPlayer({ workflowId, activityId, videoUrl }: { workflowId: string; activityId: string; videoUrl: string }) {
+  const [open, setOpen] = useState(false);
+  const [srt, setSrt] = useState<string | null | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && srt === undefined) {
+      setLoading(true);
+      window.appWorkflowActivityApi.getExportVideoSrt(workflowId, activityId).then((result) => {
+        setSrt(result);
+        setLoading(false);
+      });
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <video controls preload="none" src={videoUrl} style={{ width: '100%' }} />
+      <button type="button" className="btn btn-ghost" style={{ marginTop: 8, fontSize: 11 }} onClick={toggle}>
+        {open ? 'Hide subtitles' : 'Show subtitles'}
+      </button>
+      {open &&
+        (loading ? (
+          <div className="text-muted" style={{ fontSize: 12, padding: '8px 0' }}>Loading…</div>
+        ) : !srt ? (
+          <div className="text-muted" style={{ fontSize: 12, padding: '8px 0' }}>Subtitles not found.</div>
+        ) : (
+          <pre style={{ fontSize: 11.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto', padding: '8px 0', margin: 0, fontFamily: 'inherit' }}>{srt}</pre>
+        ))}
+    </div>
+  );
+}
+
 export function WorkflowActivityInspector({ workflowId, activity, activities, contents, maxChapters, onUpdate, onRemove, onClose }: WorkflowActivityInspectorProps) {
   const [tab, setTab] = useState<'general' | 'input' | 'output'>('general');
   const [name, setName] = useState(activity.name);
@@ -110,6 +152,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const [analyzeOutput, setAnalyzeOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
   const [translateOutput, setTranslateOutput] = useState<TranslateOutput | null | undefined>(undefined);
   const [ttsOutput, setTtsOutput] = useState<TtsOutput | null | undefined>(undefined);
+  const [exportVideoOutput, setExportVideoOutput] = useState<ExportVideoOutput | null | undefined>(undefined);
   const [progress, setProgress] = useState<PipelineProgress | null | undefined>(undefined);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const previewRef = useRef<HTMLAudioElement | null>(null);
@@ -123,11 +166,16 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
     setAnalyzeOutput(undefined);
     setTranslateOutput(undefined);
     setTtsOutput(undefined);
+    setExportVideoOutput(undefined);
     setProgress(undefined);
   }, [activity.id]);
 
   useEffect(() => {
-    const isPipeline = activity.type === AppWorkflowActivityType.Analyze || activity.type === AppWorkflowActivityType.Translate || activity.type === AppWorkflowActivityType.Tts;
+    const isPipeline =
+      activity.type === AppWorkflowActivityType.Analyze ||
+      activity.type === AppWorkflowActivityType.Translate ||
+      activity.type === AppWorkflowActivityType.Tts ||
+      activity.type === AppWorkflowActivityType.ExportVideo;
     if (tab !== 'output' || !isPipeline) return;
     let cancelled = false;
 
@@ -142,6 +190,10 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
       } else if (activity.type === AppWorkflowActivityType.Translate) {
         window.appWorkflowActivityApi.getTranslateOutput(workflowId, activity.id).then((result) => {
           if (!cancelled) setTranslateOutput(result);
+        });
+      } else if (activity.type === AppWorkflowActivityType.ExportVideo) {
+        window.appWorkflowActivityApi.getExportVideoOutput(workflowId, activity.id).then((result) => {
+          if (!cancelled) setExportVideoOutput(result);
         });
       } else {
         window.appWorkflowActivityApi.getTtsOutput(workflowId, activity.id).then((result) => {
@@ -165,6 +217,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   // to a valid default rather than leaving the <select> on a value with no matching <option>.
   const ttsVoice = activity.type === AppWorkflowActivityType.Tts && VOICES.includes(activity.ttsConfig!.voice) ? activity.ttsConfig!.voice : VOICES[0];
   const ttsPace = activity.type === AppWorkflowActivityType.Tts && PACES.includes(activity.ttsConfig!.pace) ? activity.ttsConfig!.pace : PACES[1];
+  const exportVideoVoice = activity.type === AppWorkflowActivityType.ExportVideo && VOICES.includes(activity.exportVideoConfig!.voice) ? activity.exportVideoConfig!.voice : VOICES[0];
   const ttsSampleUrl =
     activity.type === AppWorkflowActivityType.Tts && activity.ttsConfig!.language === ContentLanguage.Vietnamese ? voiceSampleUrl(ttsVoice, ttsPace) : null;
 
@@ -480,6 +533,32 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 </div>
               </>
             )}
+
+            {activity.type === AppWorkflowActivityType.ExportVideo && (
+              <>
+                <div className="field" style={{ marginBottom: 13.6 }}>
+                  <label htmlFor="activity-export-video-voice">Translated TTS</label>
+                  <select className="input" id="activity-export-video-voice" value={exportVideoVoice} onChange={(e) => onUpdate(activity.id, { config: withVoice(activity, e.target.value) })}>
+                    {VOICES.map((voice) => (
+                      <option key={voice} value={voice}>{voice} — Vietnamese</option>
+                    ))}
+                  </select>
+                </div>
+                <ExportVideoImagePicker workflowId={workflowId} value={activity.exportVideoConfig!.imageFile} onChange={(imageFile) => onUpdate(activity.id, { config: withImageFile(activity, imageFile) })} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 13.6, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={activity.exportVideoConfig!.soundWave}
+                    onChange={(e) => onUpdate(activity.id, { config: withSoundWave(activity, e.target.checked) })}
+                    style={{ accentColor: 'var(--color-accent)', width: 14, height: 14 }}
+                  />
+                  <span style={{ fontSize: 13 }}>Generate sound waves</span>
+                </label>
+                <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.45, marginTop: 6 }}>
+                  Overlays a waveform of the narration at the bottom center of the exported video.
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -671,9 +750,62 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
           </>
         )}
 
-        {tab === 'output' && activity.type !== AppWorkflowActivityType.Analyze && activity.type !== AppWorkflowActivityType.Translate && activity.type !== AppWorkflowActivityType.Tts && (
-          <div className="text-muted" style={{ fontSize: 12 }}>Output isn’t available for this activity type yet.</div>
+        {tab === 'output' && activity.type === AppWorkflowActivityType.ExportVideo && (
+          <>
+            {exportVideoOutput === undefined && progress === undefined ? (
+              <div className="text-muted" style={{ fontSize: 12 }}>Loading output…</div>
+            ) : (
+              <>
+                {progress && <ProgressSteps progress={progress} />}
+
+                {exportVideoOutput ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { label: 'Translated TTS', value: exportVideoOutput.voice },
+                        { label: 'Chapters exported', value: `${exportVideoOutput.chaptersExported} / ${exportVideoOutput.totalChapters}` },
+                      ].map((stat) => (
+                        <div key={stat.label} className="blueprint" style={{ padding: '9px 11px' }}>
+                          <div className="text-muted" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{stat.label}</div>
+                          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 16 }}>{stat.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="card-kicker" style={{ marginBottom: 8 }}>Combined video</div>
+                    {exportVideoOutput.videoUrl ? (
+                      <ExportVideoCombinedPlayer workflowId={workflowId} activityId={activity.id} videoUrl={exportVideoOutput.videoUrl} />
+                    ) : (
+                      <div className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>Not combined yet — the final video appears once every exported chapter has been muxed together.</div>
+                    )}
+
+                    <LazySection<ExportVideoOutputChapter>
+                      key={`export-video-chapters-${workflowId}-${activity.id}-${exportVideoOutput.chaptersExported}`}
+                      title="Exported Chapters"
+                      count={exportVideoOutput.chaptersExported}
+                      emptyLabel="No chapters exported yet."
+                      fetchPage={(offset, limit) => window.appWorkflowActivityApi.getExportVideoChapters(workflowId, activity.id, offset, limit)}
+                      keyOf={(chapter) => chapter.chapterId}
+                      renderItem={(chapter) => (
+                        <ExportVideoChapterRow chapter={chapter} fetchSrt={(chapterId) => window.appWorkflowActivityApi.getExportVideoChapterSrt(workflowId, activity.id, chapterId)} />
+                      )}
+                    />
+                  </>
+                ) : exportVideoOutput === null && progress === null ? (
+                  <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>This activity hasn’t produced output yet — run the workflow to export chapters.</div>
+                ) : null}
+              </>
+            )}
+          </>
         )}
+
+        {tab === 'output' &&
+          activity.type !== AppWorkflowActivityType.Analyze &&
+          activity.type !== AppWorkflowActivityType.Translate &&
+          activity.type !== AppWorkflowActivityType.Tts &&
+          activity.type !== AppWorkflowActivityType.ExportVideo && (
+            <div className="text-muted" style={{ fontSize: 12 }}>Output isn’t available for this activity type yet.</div>
+          )}
       </div>
       </div>
     </div>

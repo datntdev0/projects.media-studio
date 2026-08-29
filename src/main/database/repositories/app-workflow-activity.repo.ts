@@ -53,6 +53,7 @@ function toAppWorkflowActivity(row: AppWorkflowActivityRow): AppWorkflowActivity
     profilesConfig: type === AppWorkflowActivityType.Profiles ? config : null,
     storyboardConfig: type === AppWorkflowActivityType.Storyboard ? config : null,
     ttsConfig: type === AppWorkflowActivityType.Tts ? config : null,
+    exportVideoConfig: type === AppWorkflowActivityType.ExportVideo ? config : null,
     dependencies: JSON.parse(row.dependencies),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

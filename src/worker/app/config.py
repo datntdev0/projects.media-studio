@@ -19,6 +19,13 @@ class ScraperSettings(CamelModel):
     idle_restart_seconds: int = 900
 
 
+class ExportSettings(CamelModel):
+    # ffmpeg video encoder /export muxes narration+image into an mp4 with. "libx264" (CPU,
+    # default) or a hardware encoder available on this machine, e.g. "h264_nvenc" (NVIDIA),
+    # "h264_amf" (AMD), "h264_qsv" (Intel Quick Sync) — must be one `ffmpeg -encoders` lists.
+    video_codec: str = "libx264"
+
+
 class SpeechSettings(CamelModel):
     # Device the TTS model runs inference on, e.g. "cpu" or "cuda".
     device: str = "cpu"
@@ -39,6 +46,7 @@ class Settings(CamelModel):
     app_dir: str = "data"
     scraper: ScraperSettings = ScraperSettings()
     speech: SpeechSettings = SpeechSettings()
+    export: ExportSettings = ExportSettings()
 
     @property
     def app_dir_path(self) -> Path:

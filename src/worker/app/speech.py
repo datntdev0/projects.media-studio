@@ -24,6 +24,7 @@ from ffmpeg import Error as FFmpegError
 
 from .config import settings
 from .models import SpeechRequest
+from .srt import write_srt
 from .tts import tts_engine
 
 logger = logging.getLogger(__name__)
@@ -83,23 +84,6 @@ async def _concat_wavs(parts: list[Path], dst: Path) -> None:
         await asyncio.to_thread(_run_ffmpeg, ffmpeg.output(stream, str(dst), c="copy", format="wav"))
     finally:
         list_file.unlink(missing_ok=True)
-
-
-def _timestamp(seconds: float) -> str:
-    total_ms = round(seconds * 1000)
-    hours, total_ms = divmod(total_ms, 3_600_000)
-    minutes, total_ms = divmod(total_ms, 60_000)
-    secs, ms = divmod(total_ms, 1_000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
-
-
-def _write_srt(texts: list[str], durations: list[float], path: Path) -> None:
-    cursor = 0.0
-    blocks = []
-    for index, (text, duration) in enumerate(zip(texts, durations), start=1):
-        start, cursor = cursor, cursor + duration
-        blocks.append(f"{index}\n{_timestamp(start)} --> {_timestamp(cursor)}\n{text}")
-    path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
 
 
 async def _synthesize(speech_id: str, texts: list[str], voice: str, pace: float, tmp_dir: Path) -> tuple[list[Path], list[float]]:
@@ -174,7 +158,7 @@ async def _run_generation(request: SpeechRequest, speech_id: str, wav_path: Path
         with tempfile.TemporaryDirectory(prefix="speech-") as tmp:
             parts, durations = await _synthesize(speech_id, request.texts, request.voice, request.pace, Path(tmp))
             await _concat_wavs(parts, tmp_wav)
-        _write_srt(request.texts, durations, tmp_srt)
+        write_srt(request.texts, durations, tmp_srt)
         os.replace(tmp_srt, srt_path)
         os.replace(tmp_wav, wav_path)
         logger.info("speech generation complete: %s", wav_path.name)

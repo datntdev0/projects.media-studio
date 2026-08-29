@@ -5,3 +5,5 @@ pydantic==2.13.0
 vieneu==3.3.0
 ffmpeg-python==0.2.0
 soundfile==0.14.0
+numpy==2.4.6
+Pillow==12.3.0

@@ -18,4 +18,9 @@ export function registerAppWorkflowActivityHandlers({ manager }: Container): voi
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsOutput, (_event, workflowId: string, id: string) => manager.appWorkflowActivity.getTtsOutput(workflowId, id));
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapters, (_event, workflowId: string, id: string, offset: number, limit: number) => manager.appWorkflowActivity.getTtsChapters(workflowId, id, offset, limit));
   ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getTtsChapterSrt, (_event, workflowId: string, id: string, chapterId: string) => manager.appWorkflowActivity.getTtsChapterSrt(workflowId, id, chapterId));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoOutput, (_event, workflowId: string, id: string) => manager.appWorkflowActivity.getExportVideoOutput(workflowId, id));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoChapters, (_event, workflowId: string, id: string, offset: number, limit: number) => manager.appWorkflowActivity.getExportVideoChapters(workflowId, id, offset, limit));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoChapterSrt, (_event, workflowId: string, id: string, chapterId: string) => manager.appWorkflowActivity.getExportVideoChapterSrt(workflowId, id, chapterId));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.getExportVideoSrt, (_event, workflowId: string, id: string) => manager.appWorkflowActivity.getExportVideoSrt(workflowId, id));
+  ipcMain.handle(APP_WORKFLOW_ACTIVITY_IPC_CHANNELS.uploadExportVideoImage, (_event, workflowId: string, fileName: string, contentType: string, data: ArrayBuffer) => manager.appWorkflowActivity.uploadExportVideoImage(workflowId, fileName, contentType, Buffer.from(data)));
 }

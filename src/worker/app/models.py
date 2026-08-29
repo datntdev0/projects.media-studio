@@ -85,3 +85,28 @@ class SpeechJob(CamelModel):
     """
 
     id: str
+
+
+class ExportRequest(CamelModel):
+    """Concatenates the already-narrated audio for each of `chapter_range`'s chapters (see
+    /speech), in order, and muxes the result against one static image into an mp4 — the same
+    request shape for a single chapter (a resumable per-chapter checkpoint) or the whole
+    selection (the final combined video). `image_file` is relative to the worker's app dir.
+    When `sound_wave` is set, a waveform of the narration is overlaid at the center of the video.
+    """
+
+    workflow_id: str
+    chapter_range: list[str] = Field(min_length=1)
+    image_file: str
+    sound_wave: bool = False
+
+
+class ExportJob(CamelModel):
+    """An export run accepted by `/export`. `id` is a hash of the request payload — the caller
+    polls the worker's shared export directory for `<id>.mp4`/`<id>.srt` (done) or `<id>.error`
+    (failed) instead of waiting on the request. `output_file` is `<id>.mp4`, spelled out so the
+    caller doesn't need to know the id/file-name convention.
+    """
+
+    id: str
+    output_file: str

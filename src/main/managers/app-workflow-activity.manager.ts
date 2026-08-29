@@ -11,6 +11,8 @@ import {
 import { readAnalyzeCharacters, readAnalyzeGlossary, readAnalyzeOutput, readAnalyzeTimeline } from '../helpers/workflow-analyze';
 import { readTranslateChapterText, readTranslateChapters, readTranslateOutput } from '../helpers/workflow-translate';
 import { readTtsChapters, readTtsChapterSrt, readTtsOutput } from '../helpers/workflow-tts';
+import { readExportVideoChapters, readExportVideoChapterSrt, readExportVideoOutput, readExportVideoSrt } from '../helpers/workflow-export-video';
+import { writeExportVideoImage } from '../helpers/workflow-export-video/image-storage';
 import { readPipelineProgress } from '../helpers/pipeline-progress';
 import {
   AppWorkflowActivityType,
@@ -21,6 +23,8 @@ import {
   type AppWorkflowActivity,
   type AppWorkflowActivityConfig,
   type CreateAppWorkflowActivityInput,
+  type ExportVideoOutput,
+  type ExportVideoOutputChapter,
   type PipelineOutputPage,
   type PipelineProgress,
   type TranslateOutput,
@@ -46,13 +50,18 @@ export interface AppWorkflowActivityManager {
   getTtsOutput(workflowId: string, id: string): TtsOutput | null;
   getTtsChapters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<TtsOutputChapter>;
   getTtsChapterSrt(workflowId: string, id: string, chapterId: string): string | null;
+  getExportVideoOutput(workflowId: string, id: string): ExportVideoOutput | null;
+  getExportVideoChapters(workflowId: string, id: string, offset: number, limit: number): PipelineOutputPage<ExportVideoOutputChapter>;
+  getExportVideoChapterSrt(workflowId: string, id: string, chapterId: string): string | null;
+  getExportVideoSrt(workflowId: string, id: string): string | null;
+  uploadExportVideoImage(workflowId: string, fileName: string, contentType: string, data: Buffer): string;
 }
 
 const DEFAULT_RETRY = 3;
 const DEFAULT_DELAY = 30;
 
 function configOf(activity: AppWorkflowActivity): AppWorkflowActivityConfig {
-  return (activity.analyzeConfig ?? activity.translateConfig ?? activity.profilesConfig ?? activity.storyboardConfig ?? activity.ttsConfig)!;
+  return (activity.analyzeConfig ?? activity.translateConfig ?? activity.profilesConfig ?? activity.storyboardConfig ?? activity.ttsConfig ?? activity.exportVideoConfig)!;
 }
 
 export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityManager {
@@ -194,6 +203,31 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
     getTtsChapterSrt: (workflowId, id, chapterId) => {
       const activity = needActivity(workflowId, id);
       return activity.type === AppWorkflowActivityType.Tts ? readTtsChapterSrt(workflowId, activity.ttsConfig!, chapterId) : null;
+    },
+
+    getExportVideoOutput: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.ExportVideo ? readExportVideoOutput(workflowId, id, activity.exportVideoConfig!) : null;
+    },
+
+    getExportVideoChapters: (workflowId, id, offset, limit) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.ExportVideo ? readExportVideoChapters(workflowId, id, offset, limit) : { items: [], total: 0 };
+    },
+
+    getExportVideoChapterSrt: (workflowId, id, chapterId) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.ExportVideo ? readExportVideoChapterSrt(workflowId, id, chapterId) : null;
+    },
+
+    getExportVideoSrt: (workflowId, id) => {
+      const activity = needActivity(workflowId, id);
+      return activity.type === AppWorkflowActivityType.ExportVideo ? readExportVideoSrt(workflowId, id) : null;
+    },
+
+    uploadExportVideoImage: (workflowId, fileName, contentType, data) => {
+      needWorkflow(workflowId);
+      return writeExportVideoImage(workflowId, fileName, contentType, data);
     },
   };
 }

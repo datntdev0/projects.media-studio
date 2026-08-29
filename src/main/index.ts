@@ -5,6 +5,8 @@ import { closeContainer, createContainer } from './container';
 import { registerCoverProtocolHandler } from './helpers/protocols/cover.protocol';
 import { registerTtsSampleProtocolHandler } from './helpers/protocols/tts-sample.protocol';
 import { registerTtsOutputProtocolHandler } from './helpers/protocols/tts-output.protocol';
+import { registerExportVideoImageProtocolHandler } from './helpers/protocols/export-video-image.protocol';
+import { registerExportVideoOutputProtocolHandler } from './helpers/protocols/export-video-output.protocol';
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
 import { registerQueueHandlers } from './queue';
@@ -23,6 +25,8 @@ app.whenReady().then(() => {
   registerCoverProtocolHandler();
   registerTtsSampleProtocolHandler();
   registerTtsOutputProtocolHandler();
+  registerExportVideoImageProtocolHandler();
+  registerExportVideoOutputProtocolHandler();
 
   const container = createContainer();
   runMigrations(container.db);

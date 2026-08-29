@@ -12,6 +12,7 @@ export enum AppWorkflowActivityType {
   Profiles = 'profiles',
   Storyboard = 'storyboard',
   Tts = 'tts',
+  ExportVideo = 'export-video',
 }
 
 export enum ActivityChapterScope {
@@ -65,9 +66,18 @@ export interface TtsConfig {
 /** Scheme the renderer plays bundled TTS voice-sample clips through (see src/main/helpers/protocols/tts-sample.protocol.ts). */
 export const TTS_SAMPLE_PROTOCOL = 'app-tts-sample';
 
-export type AppWorkflowActivityConfig = AnalyzeConfig | TranslateConfig | ProfilesConfig | StoryboardConfig | TtsConfig;
+export interface ExportVideoConfig {
+  chapters: ChapterSelection;
+  voice: string;
+  /** `app-export-video-image://` URL of the uploaded static image, or `null` before one is picked. */
+  imageFile: string | null;
+  /** When `true`, the worker overlays a sound-wave visualization of the narration at the bottom center of the exported video. */
+  soundWave: boolean;
+}
 
-/** A node on a workflow's canvas. Exactly one of the five config fields is set, matching `type`. `dependencies` holds the ids of other activities on the same workflow that must complete before this one runs. */
+export type AppWorkflowActivityConfig = AnalyzeConfig | TranslateConfig | ProfilesConfig | StoryboardConfig | TtsConfig | ExportVideoConfig;
+
+/** A node on a workflow's canvas. Exactly one of the six config fields is set, matching `type`. `dependencies` holds the ids of other activities on the same workflow that must complete before this one runs. */
 export interface AppWorkflowActivity {
   id: string;
   workflowId: string;
@@ -85,6 +95,7 @@ export interface AppWorkflowActivity {
   profilesConfig: ProfilesConfig | null;
   storyboardConfig: StoryboardConfig | null;
   ttsConfig: TtsConfig | null;
+  exportVideoConfig: ExportVideoConfig | null;
   dependencies: string[];
   createdAt: number;
   updatedAt: number;
@@ -218,6 +229,37 @@ export interface TtsOutput {
   chaptersGenerated: number;
 }
 
+/** Scheme the renderer plays a workflow's generated per-chapter (and final combined) export videos through (see src/main/helpers/protocols/export-video-output.protocol.ts). */
+export const EXPORT_VIDEO_OUTPUT_PROTOCOL = 'app-export-video-output';
+
+/** Scheme the renderer previews a workflow's uploaded export-video source image through (see src/main/helpers/protocols/export-video-image.protocol.ts). */
+export const EXPORT_VIDEO_IMAGE_PROTOCOL = 'app-export-video-image';
+
+export interface ExportVideoOutputChapter {
+  chapterId: string;
+  idx: number;
+  title: string;
+  durationSec: number;
+  /** `app-export-video-output://` URL the Output tab's `<video>` element plays this chapter's clip through. */
+  videoUrl: string;
+}
+
+/**
+ * The Export Video activity's Output tab data — counts from its working directory
+ * (`export-video/<activityId>/` under the workflow's export dir). Chapters are exported one at
+ * a time (resumable — an existing chapter clip is skipped on re-run), then combined into one
+ * final video once every exported chapter is ready. The per-chapter clip list itself is fetched
+ * separately, paginated, via `getExportVideoChapters`; a chapter's srt via `getExportVideoChapterSrt`,
+ * and the final video's unified srt via `getExportVideoSrt`.
+ */
+export interface ExportVideoOutput {
+  voice: string;
+  totalChapters: number;
+  chaptersExported: number;
+  /** `app-export-video-output://` URL of the final combined video, or `null` until the combine step has run. */
+  videoUrl: string | null;
+}
+
 export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
   list: 'app-workflow-activity:list',
   create: 'app-workflow-activity:create',
@@ -234,6 +276,11 @@ export const APP_WORKFLOW_ACTIVITY_IPC_CHANNELS = {
   getTtsOutput: 'app-workflow-activity:get-tts-output',
   getTtsChapters: 'app-workflow-activity:get-tts-chapters',
   getTtsChapterSrt: 'app-workflow-activity:get-tts-chapter-srt',
+  getExportVideoOutput: 'app-workflow-activity:get-export-video-output',
+  getExportVideoChapters: 'app-workflow-activity:get-export-video-chapters',
+  getExportVideoChapterSrt: 'app-workflow-activity:get-export-video-chapter-srt',
+  getExportVideoSrt: 'app-workflow-activity:get-export-video-srt',
+  uploadExportVideoImage: 'app-workflow-activity:upload-export-video-image',
 } as const;
 
 export interface AppWorkflowActivityApi {
@@ -263,4 +310,14 @@ export interface AppWorkflowActivityApi {
   getTtsChapters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<TtsOutputChapter>>;
   /** One chapter's srt subtitles, fetched on demand when its Output tab row is expanded. `null` if it hasn't been narrated. */
   getTtsChapterSrt(workflowId: string, id: string, chapterId: string): Promise<string | null>;
+  /** `null` when the activity isn't an Export Video activity, or it hasn't exported any chapter yet. */
+  getExportVideoOutput(workflowId: string, id: string): Promise<ExportVideoOutput | null>;
+  /** Paginated exported per-chapter clips, for the Output tab's lazy-loaded Exported Chapters section. */
+  getExportVideoChapters(workflowId: string, id: string, offset: number, limit: number): Promise<PipelineOutputPage<ExportVideoOutputChapter>>;
+  /** One chapter's srt subtitles, fetched on demand when its Output tab row is expanded. `null` if it hasn't been exported. */
+  getExportVideoChapterSrt(workflowId: string, id: string, chapterId: string): Promise<string | null>;
+  /** The final combined video's unified srt, fetched on demand. `null` until the combine step has run. */
+  getExportVideoSrt(workflowId: string, id: string): Promise<string | null>;
+  /** Saves a locally picked source image into the workflow's working directory and returns the `app-export-video-image://` URL its `imageFile` config can be set to. */
+  uploadExportVideoImage(workflowId: string, fileName: string, contentType: string, data: ArrayBuffer): Promise<string>;
 }

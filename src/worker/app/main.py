@@ -9,7 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 from . import config  # noqa: F401  (loaded first: sets HF_HOME before vieneu is imported)
 from . import images, logs
 from .browser import browser
-from .models import Chapter, ChapterContent, FetchOptions, Health, Novel, SpeechJob, SpeechRequest
+from .export import start_export_generation
+from .models import Chapter, ChapterContent, ExportJob, ExportRequest, FetchOptions, Health, Novel, SpeechJob, SpeechRequest
 from .parsers import CRAWLERS
 from .speech import start_speech_generation
 from .tts import tts_engine
@@ -206,3 +207,19 @@ async def create_speech(request: SpeechRequest) -> SpeechJob:
     or `<id>.error` (failed), resolved against its own copy of the shared app data dir.
     """
     return SpeechJob(id=await start_speech_generation(request))
+
+
+@app.post("/export", response_model=ExportJob)
+async def create_export(request: ExportRequest) -> ExportJob:
+    """Schedule `chapterRange`'s already-narrated audio to be concatenated and muxed against
+    `imageFile` into an mp4, and return immediately with the job's id and expected output file
+    name.
+
+    Idempotent and asynchronous like /speech — the caller polls the shared export directory.
+    400s if a chapter has no narration yet, or the image file doesn't exist.
+    """
+    try:
+        export_id, output_file = await start_export_generation(request)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return ExportJob(id=export_id, output_file=output_file)
