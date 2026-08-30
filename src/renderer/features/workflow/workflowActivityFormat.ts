@@ -80,7 +80,7 @@ function defaultChapters(): ChapterSelection {
 export function defaultConfigFor(type: AppWorkflowActivityType): AppWorkflowActivityConfig {
   switch (type) {
     case AppWorkflowActivityType.Analyze:
-      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, resolveConflicts: false };
+      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, resolveConflicts: false, generateSummary: true };
     case AppWorkflowActivityType.Translate:
       return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, language: ContentLanguage.Vietnamese };
     case AppWorkflowActivityType.Profiles:
@@ -122,7 +122,7 @@ export function buildConfigFields(type: AppWorkflowActivityType, config: AppWork
 export function withChapters(activity: AppWorkflowActivity, chapters: ChapterSelection): AppWorkflowActivityConfig {
   switch (activity.type) {
     case AppWorkflowActivityType.Analyze:
-      return { chapters, engine: activity.analyzeConfig!.engine, resolveConflicts: activity.analyzeConfig!.resolveConflicts };
+      return { ...activity.analyzeConfig!, chapters };
     case AppWorkflowActivityType.Translate:
       return { chapters, engine: activity.translateConfig!.engine, language: activity.translateConfig!.language };
     case AppWorkflowActivityType.Storyboard:
@@ -156,6 +156,10 @@ export function withEngine(activity: AppWorkflowActivity, engine: AnalyzeEngine)
 
 export function withResolveConflicts(activity: AppWorkflowActivity, resolveConflicts: boolean): AppWorkflowActivityConfig {
   return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, resolveConflicts } : configOf(activity);
+}
+
+export function withGenerateSummary(activity: AppWorkflowActivity, generateSummary: boolean): AppWorkflowActivityConfig {
+  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, generateSummary } : configOf(activity);
 }
 
 export function withVoice(activity: AppWorkflowActivity, voice: string): AppWorkflowActivityConfig {

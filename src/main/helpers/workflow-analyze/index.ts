@@ -81,10 +81,10 @@ function loadChapters(extractionDir: string): ChapterExtraction[] {
     .map((file) => JSON.parse(fs.readFileSync(path.join(extractionDir, file), 'utf8')) as ChapterExtraction);
 }
 
-async function runMergeStep(progress: AnalyzeProgressTracker, engine: AnalyzeEngine, chapters: ChapterExtraction[], onUsage: (usage: LlmUsage) => void): Promise<WorldBible> {
+async function runMergeStep(progress: AnalyzeProgressTracker, engine: AnalyzeEngine, chapters: ChapterExtraction[], generateSummary: boolean, onUsage: (usage: LlmUsage) => void): Promise<WorldBible> {
   progress.start('merge', `${chapters.length} chapter(s)`);
   try {
-    const world = await mergeWorld(engine, chapters, onUsage);
+    const world = await mergeWorld(engine, chapters, generateSummary, onUsage);
     progress.done('merge', `${chapters.length} chapter(s)`);
     return world;
   } catch (error) {
@@ -168,7 +168,7 @@ export async function runWorkflowAnalyze(workflow: AppWorkflow, activity: AppWor
   const extractionDir = path.join(dir, 'extraction');
   fs.mkdirSync(extractionDir, { recursive: true });
 
-  const { engine, resolveConflicts } = activity.analyzeConfig!;
+  const { engine, resolveConflicts, generateSummary = true } = activity.analyzeConfig!;
   const records = loadPackagedContents(dir);
   const targets = selectChapters(records, activity.analyzeConfig!.chapters, (record) => !fs.existsSync(chapterFile(extractionDir, record.idx)));
   logger.info(`Analyzing ${targets.length} chapter(s) for workflow ${workflow.id} with ${engine}`);
@@ -183,7 +183,7 @@ export async function runWorkflowAnalyze(workflow: AppWorkflow, activity: AppWor
     return;
   }
 
-  const merged = await runMergeStep(progress, engine, chapters, usage.add);
+  const merged = await runMergeStep(progress, engine, chapters, generateSummary, usage.add);
 
   let world = merged;
   let resolutions: ConflictResolution[] = [];

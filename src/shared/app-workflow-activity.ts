@@ -39,6 +39,8 @@ export interface AnalyzeConfig {
   chapters: ChapterSelection;
   engine: AnalyzeEngine;
   resolveConflicts: boolean;
+  /** When `false`, the merge step skips the LLM call that writes `world.json`'s `overview.summary`. */
+  generateSummary: boolean;
 }
 
 export interface TranslateConfig {

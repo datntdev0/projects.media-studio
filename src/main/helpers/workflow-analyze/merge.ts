@@ -65,8 +65,8 @@ function mergeTimeline(timeline: WorldBible['timeline'], scenes: ChapterExtracti
   timeline.push(...scenes);
 }
 
-/** Merges every chapter extraction into one world bible, including the single LLM call that synthesizes a cohesive story summary from the per-chapter ones. */
-export async function mergeWorld(engine: AnalyzeEngine, chapters: ChapterExtraction[], onUsage?: (usage: LlmUsage) => void): Promise<WorldBible> {
+/** Merges every chapter extraction into one world bible, including — unless `generateSummary` is `false` — the single LLM call that synthesizes a cohesive story summary from the per-chapter ones. */
+export async function mergeWorld(engine: AnalyzeEngine, chapters: ChapterExtraction[], generateSummary: boolean, onUsage?: (usage: LlmUsage) => void): Promise<WorldBible> {
   const world: WorldBible = { overview: { summary: '', glossary: [] }, characters: [], timeline: [] };
   const termSeen = new Set<string>();
   const nameIndex = new Map<string, number>();
@@ -79,7 +79,7 @@ export async function mergeWorld(engine: AnalyzeEngine, chapters: ChapterExtract
     mergeTimeline(world.timeline, chapter.timeline);
   }
 
-  if (chapterSummaries.length > 0) {
+  if (generateSummary && chapterSummaries.length > 0) {
     const summary = await runLlmPrint(engine, summaryPrompt(chapterSummaries), { timeoutMs: SUMMARY_TIMEOUT_MS, onUsage });
     world.overview.summary = String(summary).trim();
   }

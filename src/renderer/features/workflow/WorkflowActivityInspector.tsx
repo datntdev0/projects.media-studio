@@ -37,6 +37,7 @@ import {
   chaptersOf,
   withChapters,
   withEngine,
+  withGenerateSummary,
   withImageFile,
   withLanguage,
   withPace,
@@ -455,6 +456,18 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 </label>
                 <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.45, marginBottom: 13.6 }}>
                   Finds and fixes inconsistent characters, glossary terms, and timeline entries in the merged world bible with an extra model call.
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={activity.analyzeConfig!.generateSummary ?? true}
+                    onChange={(e) => onUpdate(activity.id, { config: withGenerateSummary(activity, e.target.checked) })}
+                    style={{ accentColor: 'var(--color-accent)', width: 14, height: 14 }}
+                  />
+                  <span style={{ fontSize: 13 }}>Generate summary</span>
+                </label>
+                <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.45, marginBottom: 13.6 }}>
+                  Asks the model to write a whole-story summary into the world bible. Uncheck to skip that call.
                 </div>
               </>
             )}
