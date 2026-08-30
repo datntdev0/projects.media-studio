@@ -43,19 +43,14 @@ export interface ChapterTimelineEntry {
 
 /** One chapter's extraction — `chapter-NNNN.json` under a workflow's `extraction/` directory. */
 export interface ChapterExtraction {
-  overview: { summary: string; glossary: GlossaryEntry[] };
+  glossary: GlossaryEntry[];
   characters: CharacterEntry[];
   timeline: ChapterTimelineEntry[];
 }
 
-/** The merged world bible — `world.json` under a workflow's `extraction/` directory. Same shape as a chapter extraction; `timeline` stays a flat array (scene ids are already unique across the book, so nothing needs grouping). */
+/** A world bible merged from one or more chapter extractions — same shape as a chapter extraction; `timeline` stays a flat array (scene ids are already unique across the book, so nothing needs grouping). Computed on demand from `extraction/chapter-NNNN.json` files, never persisted as a whole. */
 export interface WorldBible {
-  overview: { summary: string; glossary: GlossaryEntry[] };
+  glossary: GlossaryEntry[];
   characters: WorldCharacterEntry[];
   timeline: ChapterTimelineEntry[];
-}
-
-export interface ConflictResolution {
-  issue: string;
-  resolution: string;
 }

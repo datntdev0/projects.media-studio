@@ -1,11 +1,6 @@
 import { createPipelineProgress, type PipelineProgressTracker } from '../pipeline-progress';
 
-const STEP_DEFS = [
-  { key: 'extract', label: 'Extracting chapters' },
-  { key: 'merge', label: 'Merging world bible' },
-  { key: 'resolve', label: 'Resolving conflicts' },
-  { key: 'render', label: 'Rendering world bible' },
-];
+const STEP_DEFS = [{ key: 'extract', label: 'Extracting chapters' }];
 
 export type AnalyzeProgressTracker = PipelineProgressTracker;
 

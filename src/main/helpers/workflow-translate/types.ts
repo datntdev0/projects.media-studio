@@ -14,7 +14,7 @@ export interface TranslatedCharacterEntry {
   translatedAliases: string[];
 }
 
-/** The whole-book bilingual reference a translate run builds once (`translation/<language>/glossary.json`) and every chapter's translation reuses. */
+/** The bilingual reference a translate activity builds once (`translation/<language>/glossary.<activityId>.json`) and every chapter's translation reuses. */
 export interface TranslatedGlossary {
   glossary: TranslatedGlossaryEntry[];
   characters: TranslatedCharacterEntry[];

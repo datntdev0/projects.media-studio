@@ -19,7 +19,7 @@ function renderCharacters(characters: TranslatedGlossary['characters']): string[
   return lines;
 }
 
-/** Renders the whole-book bilingual glossary to Markdown — `translation/<language>/glossary.md`, the reference every chapter's translation looks up original terms/names against. */
+/** Renders a translate run's bilingual glossary to Markdown — `translation/<language>/glossary.<activityId>.md`, the reference every chapter's translation looks up original terms/names against. */
 export function renderTranslatedGlossaryMarkdown(glossary: TranslatedGlossary): string {
   return ['# Translated Glossary', '', ...renderGlossary(glossary.glossary), ...renderCharacters(glossary.characters)].join('\n');
 }

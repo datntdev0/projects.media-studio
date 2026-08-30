@@ -34,10 +34,10 @@ function listChapterIndices(dir: string): number[] {
 }
 
 /** Reads a Translate activity's already-produced output — translated chapter counts for `language` — or `null` if it hasn't translated anything yet. */
-export function readTranslateOutput(workflowId: string, language: ContentLanguage): TranslateOutput | null {
+export function readTranslateOutput(workflowId: string, activityId: string, language: ContentLanguage): TranslateOutput | null {
   const dir = languageDir(workflowId, language);
   const chaptersTranslated = listChapterIndices(path.join(dir, 'chapters')).length;
-  const glossaryTranslated = fs.existsSync(path.join(dir, 'glossary.md'));
+  const glossaryTranslated = fs.existsSync(path.join(dir, `glossary.${activityId}.md`));
   if (chaptersTranslated === 0 && !glossaryTranslated) {
     return null;
   }

@@ -1,17 +1,13 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { getAppWorkflowExportDir } from '../paths';
+import { loadChapters } from './extraction';
+import { mergeWorld } from './merge';
 import type { WorldBible } from './types';
 import type { AnalyzeOutput, AnalyzeOutputCharacter, AnalyzeOutputGlossaryEntry, PipelineOutputPage, AnalyzeOutputTimelineGroup } from '../../../shared/app-workflow-activity';
 
-interface AnalyzeStats {
-  chaptersCovered: number;
-  conflictsResolved: number;
-}
-
 interface LoadedWorld {
   world: WorldBible;
-  stats: AnalyzeStats;
+  chaptersCovered: number;
 }
 
 function chapterLabel(sceneId: string): string | null {
@@ -44,16 +40,14 @@ function groupTimeline(world: WorldBible): AnalyzeOutputTimelineGroup[] {
   return [...byChapter.entries()].map(([chapterId, scenes]) => ({ chapterId, scenes }));
 }
 
+/** Merges every chapter extracted so far into a world bible, or `null` if the Analyze activity hasn't extracted any chapter yet. Recomputed on every call — merging is a pure, non-LLM operation over already-extracted JSON, so nothing needs to be persisted. */
 function loadWorld(workflowId: string): LoadedWorld | null {
   const extractionDir = path.join(getAppWorkflowExportDir(workflowId), 'extraction');
-  const worldPath = path.join(extractionDir, 'world.json');
-  const statsPath = path.join(extractionDir, 'stats.json');
-  if (!fs.existsSync(worldPath) || !fs.existsSync(statsPath)) {
+  const chapters = loadChapters(extractionDir);
+  if (chapters.length === 0) {
     return null;
   }
-  const world = JSON.parse(fs.readFileSync(worldPath, 'utf8')) as WorldBible;
-  const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8')) as AnalyzeStats;
-  return { world, stats };
+  return { world: mergeWorld(chapters), chaptersCovered: chapters.length };
 }
 
 /**
@@ -67,14 +61,12 @@ export function readAnalyzeOutput(workflowId: string): AnalyzeOutput | null {
   if (!loaded) {
     return null;
   }
-  const { world, stats } = loaded;
+  const { world, chaptersCovered } = loaded;
 
   return {
-    summary: world.overview.summary,
     characterCount: world.characters.length,
-    glossaryCount: world.overview.glossary.length,
-    chaptersCovered: stats.chaptersCovered,
-    conflictsResolved: stats.conflictsResolved,
+    glossaryCount: world.glossary.length,
+    chaptersCovered,
     timelineGroupCount: groupTimeline(world).length,
   };
 }
@@ -96,7 +88,7 @@ export function readAnalyzeGlossary(workflowId: string, offset: number, limit: n
   if (!loaded) {
     return { items: [], total: 0 };
   }
-  const { glossary } = loaded.world.overview;
+  const { glossary } = loaded.world;
   const items = glossary.slice(offset, offset + limit).map((entry) => ({ term: entry.term, definition: entry.definition }));
   return { items, total: glossary.length };
 }

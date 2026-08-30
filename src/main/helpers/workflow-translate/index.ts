@@ -4,7 +4,9 @@ import { createLogger } from '../logger';
 import { getAppWorkflowExportDir } from '../paths';
 import { createUsageAccumulator, runLlmPrint, type LlmUsage } from '../llm-cli';
 import { chapterId, errorMessage, loadPackagedContents, runPool, selectChapters, type PackagedContentRecord } from '../workflow-pipeline';
-import type { WorldBible } from '../workflow-analyze/types';
+import { chapterFile, loadChapter } from '../workflow-analyze/extraction';
+import { mergeWorld } from '../workflow-analyze/merge';
+import type { ChapterExtraction, WorldBible } from '../workflow-analyze/types';
 import { CHAPTER_TRANSLATION_SCHEMA, GLOSSARY_TRANSLATION_SCHEMA } from './schemas';
 import { renderTranslatedGlossaryMarkdown } from './render';
 import type { TranslatedGlossary } from './types';
@@ -25,6 +27,18 @@ const LANGUAGE_NAME: Record<ContentLanguage, string> = {
   [ContentLanguage.Chinese]: 'Chinese',
 };
 
+/** The word a chapter title is normalized to start with, per target language — see `formatChapterTitle`. */
+const CHAPTER_WORD: Record<ContentLanguage, string> = {
+  [ContentLanguage.Vietnamese]: 'Chương',
+  [ContentLanguage.English]: 'Chapter',
+  [ContentLanguage.Chinese]: '章',
+};
+
+/** Normalizes a translated chapter title to "<chapter word> <NNNN>: <title>" rather than trusting the model's own numbering/formatting. */
+function formatChapterTitle(chapterWord: string, idx: number, title: string): string {
+  return `${chapterWord} ${String(idx).padStart(4, '0')}: ${title}`;
+}
+
 const RULES_TEXT = `Translation rules:
 - Translate meaning and tone, not word-for-word; keep the register of a web/light novel (colloquial, punchy, fast to read).
 - Keep character names, place names, titles, and setting-specific terms consistent with how they were translated elsewhere in the book. When a glossary is given, treat it as the authority for that.
@@ -34,12 +48,12 @@ const RULES_TEXT = `Translation rules:
 - Preserve the source's paragraph and line structure exactly; do not reflow line breaks.
 - Output only the translated content itself, with no preamble like "Here is the translation" and no surrounding quotes or code fences.`;
 
-function glossaryJsonFile(langDir: string): string {
-  return path.join(langDir, 'glossary.json');
+function glossaryJsonFile(langDir: string, activityId: string): string {
+  return path.join(langDir, `glossary.${activityId}.json`);
 }
 
-function glossaryFile(langDir: string): string {
-  return path.join(langDir, 'glossary.md');
+function glossaryFile(langDir: string, activityId: string): string {
+  return path.join(langDir, `glossary.${activityId}.md`);
 }
 
 function chapterTextFile(langDir: string, idx: number): string {
@@ -51,7 +65,7 @@ function chapterTitleFile(langDir: string, idx: number): string {
 }
 
 function buildGlossaryPrompt(language: string, world: WorldBible): string {
-  const glossary = world.overview.glossary.map(({ term, category, definition }) => ({ term, category, definition }));
+  const glossary = world.glossary.map(({ term, category, definition }) => ({ term, category, definition }));
   const characters = world.characters.map(({ name, aliases }) => ({ name, aliases }));
 
   return `${RULES_TEXT}
@@ -95,28 +109,39 @@ Return a JSON object with:
 Return only the JSON object.`;
 }
 
-/** Translates the book's whole-book world bible (`extraction/world.json`, from the Semantic Analyze activity) into a bilingual glossary, once — the fixed original/translated term and name pairing every chapter's translation reuses so nothing drifts chapter to chapter, and no original-language name survives into the translated text. */
-async function translateGlossary(engine: AnalyzeEngine, extractionDir: string, langDir: string, language: string, onUsage: (usage: LlmUsage) => void): Promise<void> {
-  if (fs.existsSync(glossaryFile(langDir))) {
+/** Merges the extraction data of only the chapters this run is translating — not every chapter the Semantic Analyze activity has ever extracted — into one world bible for the glossary prompt. */
+function loadWorldForChapters(extractionDir: string, targets: PackagedContentRecord[]): WorldBible {
+  const chapters = targets.map((record) => loadChapter(extractionDir, record.idx)).filter((chapter): chapter is ChapterExtraction => chapter !== null);
+  return mergeWorld(chapters);
+}
+
+/** Every target chapter not yet extracted by the Semantic Analyze activity — translation can't build a reliable glossary or render consistent names for a chapter it has no world-bible data for. */
+function findUnanalyzedChapters(extractionDir: string, targets: PackagedContentRecord[]): PackagedContentRecord[] {
+  return targets.filter((record) => !fs.existsSync(chapterFile(extractionDir, record.idx)));
+}
+
+/** Translates the selected chapters' world-bible glossary and character roster into a bilingual reference, once per activity — the fixed original/translated term and name pairing every chapter's translation reuses so nothing drifts chapter to chapter, and no original-language name survives into the translated text. Cached per activity id, since different Translate activities can target the same language with different chapter selections. */
+async function translateGlossary(engine: AnalyzeEngine, extractionDir: string, langDir: string, activityId: string, language: string, targets: PackagedContentRecord[], onUsage: (usage: LlmUsage) => void): Promise<void> {
+  const unanalyzed = findUnanalyzedChapters(extractionDir, targets);
+  if (unanalyzed.length > 0) {
+    throw new Error(`Chapters not analyzed yet: ${unanalyzed.map((record) => chapterId(record.idx)).join(', ')} — run the Semantic Analyze activity for this chapter range first`);
+  }
+
+  if (fs.existsSync(glossaryFile(langDir, activityId))) {
     return;
   }
 
-  const sourceFile = path.join(extractionDir, 'world.json');
-  if (!fs.existsSync(sourceFile)) {
-    throw new Error(`${sourceFile} not found — run the Semantic Analyze activity first`);
-  }
-
-  const world = JSON.parse(fs.readFileSync(sourceFile, 'utf8')) as WorldBible;
+  const world = loadWorldForChapters(extractionDir, targets);
   const prompt = buildGlossaryPrompt(language, world);
   const translated = (await runLlmPrint(engine, prompt, { schema: GLOSSARY_TRANSLATION_SCHEMA, timeoutMs: GLOSSARY_TIMEOUT_MS, onUsage })) as TranslatedGlossary;
-  fs.writeFileSync(glossaryJsonFile(langDir), JSON.stringify(translated, null, 2), 'utf8');
-  fs.writeFileSync(glossaryFile(langDir), renderTranslatedGlossaryMarkdown(translated), 'utf8');
+  fs.writeFileSync(glossaryJsonFile(langDir, activityId), JSON.stringify(translated, null, 2), 'utf8');
+  fs.writeFileSync(glossaryFile(langDir, activityId), renderTranslatedGlossaryMarkdown(translated), 'utf8');
 }
 
-async function runGlossaryStep(progress: TranslateProgressTracker, engine: AnalyzeEngine, extractionDir: string, langDir: string, language: string, onUsage: (usage: LlmUsage) => void): Promise<void> {
+async function runGlossaryStep(progress: TranslateProgressTracker, engine: AnalyzeEngine, extractionDir: string, langDir: string, activityId: string, language: string, targets: PackagedContentRecord[], onUsage: (usage: LlmUsage) => void): Promise<void> {
   progress.start('glossary');
   try {
-    await translateGlossary(engine, extractionDir, langDir, language, onUsage);
+    await translateGlossary(engine, extractionDir, langDir, activityId, language, targets, onUsage);
     progress.done('glossary');
   } catch (error) {
     progress.fail('glossary', errorMessage(error));
@@ -124,8 +149,8 @@ async function runGlossaryStep(progress: TranslateProgressTracker, engine: Analy
   }
 }
 
-/** Translates one chapter's title and original text in a single call, reusing the whole-book translated glossary (from `runGlossaryStep`) for consistent names and terms. */
-async function translateChapter(engine: AnalyzeEngine, dir: string, langDir: string, language: string, glossary: string, record: PackagedContentRecord, onUsage: (usage: LlmUsage) => void): Promise<void> {
+/** Translates one chapter's title and original text in a single call, reusing the whole-book translated glossary (from `runGlossaryStep`) for consistent names and terms. The stored title is normalized to "<chapter word> <NNNN>: <title>" rather than trusting the model's own numbering. */
+async function translateChapter(engine: AnalyzeEngine, dir: string, langDir: string, language: string, chapterWord: string, glossary: string, record: PackagedContentRecord, onUsage: (usage: LlmUsage) => void): Promise<void> {
   const outFile = chapterTextFile(langDir, record.idx);
   if (fs.existsSync(outFile)) {
     return;
@@ -137,16 +162,16 @@ async function translateChapter(engine: AnalyzeEngine, dir: string, langDir: str
   const result = (await runLlmPrint(engine, prompt, { schema: CHAPTER_TRANSLATION_SCHEMA, timeoutMs: CHAPTER_TIMEOUT_MS, onUsage })) as { title: string; body: string };
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, result.body.trim(), 'utf8');
-  fs.writeFileSync(chapterTitleFile(langDir, record.idx), result.title.trim(), 'utf8');
+  fs.writeFileSync(chapterTitleFile(langDir, record.idx), formatChapterTitle(chapterWord, record.idx, result.title.trim()), 'utf8');
 }
 
-async function runChaptersStep(progress: TranslateProgressTracker, engine: AnalyzeEngine, dir: string, langDir: string, language: string, glossary: string, targets: PackagedContentRecord[], onUsage: (usage: LlmUsage) => void): Promise<void> {
+async function runChaptersStep(progress: TranslateProgressTracker, engine: AnalyzeEngine, dir: string, langDir: string, language: string, chapterWord: string, glossary: string, targets: PackagedContentRecord[], onUsage: (usage: LlmUsage) => void): Promise<void> {
   progress.start('chapters', `0/${targets.length} chapters`);
   let counter = 1;
   try {
     await runPool(targets, TRANSLATE_WORKERS, async (record) => {
       progress.update('chapters', `${counter++}/${targets.length} chapters`);
-      await translateChapter(engine, dir, langDir, language, glossary, record, onUsage);
+      await translateChapter(engine, dir, langDir, language, chapterWord, glossary, record, onUsage);
     });
     progress.done('chapters', `${targets.length} chapter(s)`);
   } catch (error) {
@@ -156,11 +181,13 @@ async function runChaptersStep(progress: TranslateProgressTracker, engine: Analy
 }
 
 /**
- * Translates the whole-book glossary into a bilingual reference once, then each targeted chapter's
- * title and text reusing it, driven directly by the workflow orchestrator against the activity's
- * exported working directory (`data/workflows/<id>/`). Builds on top of an existing Semantic Analyze
- * run — `extraction/world.json` must already exist. Writes `translation/<language>/glossary.json`
- * and `glossary.md` (original terms/names paired with their translation) and, per chapter,
+ * Translates the selected chapters' glossary into a bilingual reference once, then each targeted
+ * chapter's title and text reusing it, driven directly by the workflow orchestrator against the
+ * activity's exported working directory (`data/workflows/<id>/`). Builds on top of an existing
+ * Semantic Analyze run — every targeted chapter must already have an `extraction/chapter-NNNN.json`.
+ * Writes `translation/<language>/glossary.<activityId>.json` and `glossary.<activityId>.md`
+ * (original terms/names paired with their translation, scoped to this run's selected chapters and
+ * this activity, since different Translate activities can target the same language) and, per chapter,
  * `translation/<language>/chapters/chapter-NNNN.txt` (translated body, with every original-language
  * name or term rendered in its translated form) and `chapter-NNNN.title.txt` (translated title). Both
  * steps are idempotent — an existing output file is left alone — so a re-run only fills in gaps: for
@@ -179,6 +206,7 @@ export async function runWorkflowTranslate(workflow: AppWorkflow, activity: AppW
   const extractionDir = path.join(dir, 'extraction');
   const { engine, language, chapters } = activity.translateConfig!;
   const languageName = LANGUAGE_NAME[language];
+  const chapterWord = CHAPTER_WORD[language];
   const langDir = path.join(dir, 'translation', language);
   fs.mkdirSync(path.join(langDir, 'chapters'), { recursive: true });
 
@@ -193,9 +221,9 @@ export async function runWorkflowTranslate(workflow: AppWorkflow, activity: AppW
   const progress = createTranslateProgress(workflow.id, activity.id);
   const usage = createUsageAccumulator();
 
-  await runGlossaryStep(progress, engine, extractionDir, langDir, languageName, usage.add);
-  const glossary = fs.readFileSync(glossaryFile(langDir), 'utf8');
-  await runChaptersStep(progress, engine, dir, langDir, languageName, glossary, targets, usage.add);
+  await runGlossaryStep(progress, engine, extractionDir, langDir, activity.id, languageName, targets, usage.add);
+  const glossary = fs.readFileSync(glossaryFile(langDir, activity.id), 'utf8');
+  await runChaptersStep(progress, engine, dir, langDir, languageName, chapterWord, glossary, targets, usage.add);
 
   logger.info(`Workflow ${workflow.id} translate finished — ${targets.length} chapter(s) into ${languageName}`);
   logger.info(`Workflow ${workflow.id} translate token usage — input: ${usage.total.inputTokens} (${usage.total.cachedInputTokens} cached), output: ${usage.total.outputTokens} (${usage.total.reasoningOutputTokens} reasoning)`);

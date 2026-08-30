@@ -80,7 +80,7 @@ function defaultChapters(): ChapterSelection {
 export function defaultConfigFor(type: AppWorkflowActivityType): AppWorkflowActivityConfig {
   switch (type) {
     case AppWorkflowActivityType.Analyze:
-      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, resolveConflicts: false, generateSummary: true };
+      return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex };
     case AppWorkflowActivityType.Translate:
       return { chapters: defaultChapters(), engine: AnalyzeEngine.Codex, language: ContentLanguage.Vietnamese };
     case AppWorkflowActivityType.Profiles:
@@ -152,14 +152,6 @@ export function withEngine(activity: AppWorkflowActivity, engine: AnalyzeEngine)
   if (activity.type === AppWorkflowActivityType.Analyze) return { ...activity.analyzeConfig!, engine };
   if (activity.type === AppWorkflowActivityType.Translate) return { ...activity.translateConfig!, engine };
   return configOf(activity);
-}
-
-export function withResolveConflicts(activity: AppWorkflowActivity, resolveConflicts: boolean): AppWorkflowActivityConfig {
-  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, resolveConflicts } : configOf(activity);
-}
-
-export function withGenerateSummary(activity: AppWorkflowActivity, generateSummary: boolean): AppWorkflowActivityConfig {
-  return activity.type === AppWorkflowActivityType.Analyze ? { ...activity.analyzeConfig!, generateSummary } : configOf(activity);
 }
 
 export function withVoice(activity: AppWorkflowActivity, voice: string): AppWorkflowActivityConfig {

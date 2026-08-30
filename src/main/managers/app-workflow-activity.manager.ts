@@ -168,7 +168,7 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
 
     getTranslateOutput: (workflowId, id) => {
       const activity = needActivity(workflowId, id);
-      return activity.type === AppWorkflowActivityType.Translate ? readTranslateOutput(workflowId, activity.translateConfig!.language) : null;
+      return activity.type === AppWorkflowActivityType.Translate ? readTranslateOutput(workflowId, activity.id, activity.translateConfig!.language) : null;
     },
 
     getTranslateChapters: (workflowId, id, offset, limit) => {

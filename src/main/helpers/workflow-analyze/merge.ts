@@ -1,15 +1,4 @@
-import { runLlmPrint, type LlmUsage } from '../llm-cli';
-import type { AnalyzeEngine } from '../../../shared/app-workflow-activity';
 import type { AppearanceEntry, ChapterExtraction, CharacterEntry, GlossaryEntry, WorldBible, WorldCharacterEntry } from './types';
-
-const SUMMARY_TIMEOUT_MS = 300_000;
-
-function summaryPrompt(chapterSummaries: string[]): string {
-  const numbered = chapterSummaries.map((summary, i) => `${i + 1}. ${summary}`).join('\n');
-  return `Here are a novel's per-chapter summaries, in reading order, in their original language:\n\n${numbered}\n\n
-    Write one cohesive summary of the whole story, in the same language as the chapter summaries.
-    Do not translate, do not over 500 words. Return only the summary text, no preamble.`;
-}
 
 function mergeGlossary(glossary: GlossaryEntry[], seen: Set<string>, entries: GlossaryEntry[]): void {
   for (const entry of entries) {
@@ -65,23 +54,16 @@ function mergeTimeline(timeline: WorldBible['timeline'], scenes: ChapterExtracti
   timeline.push(...scenes);
 }
 
-/** Merges every chapter extraction into one world bible, including — unless `generateSummary` is `false` — the single LLM call that synthesizes a cohesive story summary from the per-chapter ones. */
-export async function mergeWorld(engine: AnalyzeEngine, chapters: ChapterExtraction[], generateSummary: boolean, onUsage?: (usage: LlmUsage) => void): Promise<WorldBible> {
-  const world: WorldBible = { overview: { summary: '', glossary: [] }, characters: [], timeline: [] };
+/** Merges a set of chapter extractions into one world bible — glossary/characters/timeline unioned across chapters. Pure and cheap, so callers compute it on demand from whichever chapters they care about rather than persisting a combined file. */
+export function mergeWorld(chapters: ChapterExtraction[]): WorldBible {
+  const world: WorldBible = { glossary: [], characters: [], timeline: [] };
   const termSeen = new Set<string>();
   const nameIndex = new Map<string, number>();
-  const chapterSummaries: string[] = [];
 
   for (const chapter of chapters) {
-    chapterSummaries.push(chapter.overview.summary);
-    mergeGlossary(world.overview.glossary, termSeen, chapter.overview.glossary);
+    mergeGlossary(world.glossary, termSeen, chapter.glossary);
     mergeCharacters(world.characters, nameIndex, chapter.characters);
     mergeTimeline(world.timeline, chapter.timeline);
-  }
-
-  if (generateSummary && chapterSummaries.length > 0) {
-    const summary = await runLlmPrint(engine, summaryPrompt(chapterSummaries), { timeoutMs: SUMMARY_TIMEOUT_MS, onUsage });
-    world.overview.summary = String(summary).trim();
   }
 
   return world;

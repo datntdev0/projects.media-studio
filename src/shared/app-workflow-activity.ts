@@ -38,9 +38,6 @@ export enum AnalyzeEngine {
 export interface AnalyzeConfig {
   chapters: ChapterSelection;
   engine: AnalyzeEngine;
-  resolveConflicts: boolean;
-  /** When `false`, the merge step skips the LLM call that writes `world.json`'s `overview.summary`. */
-  generateSummary: boolean;
 }
 
 export interface TranslateConfig {
@@ -146,11 +143,9 @@ export interface AnalyzeOutputTimelineGroup {
  * `getAnalyzeCharacters`/`getAnalyzeGlossary`/`getAnalyzeTimeline` rather than embedded here.
  */
 export interface AnalyzeOutput {
-  summary: string;
   characterCount: number;
   glossaryCount: number;
   chaptersCovered: number;
-  conflictsResolved: number;
   timelineGroupCount: number;
 }
 
