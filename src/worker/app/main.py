@@ -9,8 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 from . import config  # noqa: F401  (loaded first: sets HF_HOME before vieneu is imported)
 from . import images, logs
 from .browser import browser
-from .export import start_export_generation
-from .models import Chapter, ChapterContent, ExportJob, ExportRequest, FetchOptions, Health, Novel, SpeechJob, SpeechRequest
+from .export import start_combine_generation, start_export_generation
+from .models import Chapter, ChapterContent, CombineRequest, ExportJob, ExportRequest, FetchOptions, Health, Novel, SpeechJob, SpeechRequest
 from .parsers import CRAWLERS
 from .speech import start_speech_generation
 from .tts import tts_engine
@@ -223,3 +223,18 @@ async def create_export(request: ExportRequest) -> ExportJob:
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return ExportJob(id=export_id, output_file=output_file)
+
+
+@app.post("/export/combine", response_model=ExportJob)
+async def create_combine(request: CombineRequest) -> ExportJob:
+    """Schedule `chapterVideoFiles` — already-exported chapter clips — to be concatenated via
+    stream copy into one final video, and return immediately with the job's id and expected
+    output file name.
+
+    Idempotent and asynchronous like /export. 400s if a chapter clip doesn't exist.
+    """
+    try:
+        combine_id, output_file = await start_combine_generation(request)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return ExportJob(id=combine_id, output_file=output_file)

@@ -4,8 +4,22 @@ import { getAppWorkflowExportDir } from '../paths';
 import { chapterId, loadPackagedContents, type PackagedContentRecord } from '../workflow-pipeline';
 import { AppLibraryContentType } from '../../../shared/app-library-content';
 import { EXPORT_VIDEO_OUTPUT_PROTOCOL, type ExportVideoConfig, type ExportVideoOutput, type ExportVideoOutputChapter, type PipelineOutputPage } from '../../../shared/app-workflow-activity';
+import { EXPORT_VIDEO_LANGUAGE } from '../../../shared/workflow-activity-format';
 
 const CHAPTER_ID_RE = /^chapter-\d{4}$/;
+
+function translatedTitleFile(workflowDir: string, idx: number): string {
+  return path.join(workflowDir, 'translation', EXPORT_VIDEO_LANGUAGE, 'chapters', `${chapterId(idx)}.title.txt`);
+}
+
+/** An exported chapter's title in the narration's own language — the translated title (written by the Translate activity) when the chapter was narrated from translated text, otherwise the chapter's original title. Mirrors `narratedTitle` in workflow-tts/output.ts. */
+function exportedTitle(workflowDir: string, record: PackagedContentRecord): string {
+  if (record.language === EXPORT_VIDEO_LANGUAGE) {
+    return record.title;
+  }
+  const titleFile = translatedTitleFile(workflowDir, record.idx);
+  return fs.existsSync(titleFile) ? fs.readFileSync(titleFile, 'utf8').trim() : record.title;
+}
 
 export function activityDir(workflowId: string, activityId: string): string {
   return path.join(getAppWorkflowExportDir(workflowId), 'exports', activityId);
@@ -93,7 +107,7 @@ export function readExportVideoChapters(workflowId: string, activityId: string, 
     return {
       chapterId: chapterId(idx),
       idx,
-      title: record?.title ?? `Chapter ${idx}`,
+      title: record ? exportedTitle(workflowDir, record) : `Chapter ${idx}`,
       durationSec: readDurationSec(path.join(dir, `${chapterId(idx)}.srt`)),
       videoUrl: `${EXPORT_VIDEO_OUTPUT_PROTOCOL}://output/${encodeURIComponent(workflowId)}/${encodeURIComponent(activityId)}/chapters/${chapterId(idx)}.mp4`,
     };

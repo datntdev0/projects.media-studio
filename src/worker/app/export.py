@@ -19,7 +19,7 @@ from ffmpeg import Error as FFmpegError
 from PIL import Image
 
 from .config import settings
-from .models import ExportRequest
+from .models import CombineRequest, ExportRequest
 from .srt import parse_srt, write_srt
 
 logger = logging.getLogger(__name__)
@@ -114,6 +114,21 @@ async def _concat_wavs(parts: list[Path], dst: Path) -> None:
     try:
         stream = ffmpeg.input(str(list_file), format="concat", safe=0)
         await asyncio.to_thread(_run_ffmpeg, ffmpeg.output(stream, str(dst), c="copy", format="wav"))
+    finally:
+        list_file.unlink(missing_ok=True)
+
+
+async def _concat_videos(parts: list[Path], dst: Path) -> None:
+    """Concatenate already-muxed chapter clips via the concat demuxer + stream copy — they all
+    share the same codec/resolution/fps (same image, same encoder settings), so no re-encode is
+    needed, just a container-level splice.
+    """
+    list_file = dst.with_suffix(".txt")
+    list_file.write_text("\n".join(f"file '{part.resolve().as_posix()}'" for part in parts), encoding="utf-8")
+    try:
+        stream = ffmpeg.input(str(list_file), format="concat", safe=0)
+        # dst is a ".mp4.tmp" path so ffmpeg can't guess the muxer from the extension; say so explicitly.
+        await asyncio.to_thread(_run_ffmpeg, ffmpeg.output(stream, str(dst), c="copy", format="mp4"))
     finally:
         list_file.unlink(missing_ok=True)
 
@@ -266,6 +281,70 @@ async def _run_export(request: ExportRequest, export_id: str, image_path: Path, 
         logger.info("export generation complete: %s", mp4_path.name)
     except Exception as exc:  # noqa: BLE001 - reported to the polling caller via the error file, not raised
         logger.exception("export generation failed for %s", export_id)
+        detail = exc.stderr.decode(errors="replace") if isinstance(exc, FFmpegError) and exc.stderr else str(exc)
+        error_path.write_text(detail, encoding="utf-8")
+        tmp_mp4.unlink(missing_ok=True)
+        tmp_srt.unlink(missing_ok=True)
+
+
+def _combine_payload_id(request: CombineRequest) -> str:
+    minified = json.dumps(request.model_dump(), separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(minified.encode("utf-8")).hexdigest()
+
+
+async def start_combine_generation(request: CombineRequest) -> tuple[str, str]:
+    """Schedules the chapter-clip concat in the background and returns (id, outputFile)
+    immediately — same polling contract as `start_export_generation`. Raises `ValueError` up
+    front if a referenced chapter clip doesn't exist.
+    """
+    combine_id = _combine_payload_id(request)
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    mp4_path = EXPORT_DIR / f"{combine_id}.mp4"
+    srt_path = EXPORT_DIR / f"{combine_id}.srt"
+    output_file = mp4_path.name
+
+    if mp4_path.exists() and srt_path.exists():
+        logger.info("reusing cached combine %s for %d chapter(s)", combine_id, len(request.chapter_video_files))
+        return combine_id, output_file
+
+    video_paths = [settings.app_dir_path / file for file in request.chapter_video_files]
+    for video_path in video_paths:
+        if not video_path.exists():
+            raise ValueError(f"Chapter clip {video_path.name} not found")
+
+    if combine_id in _in_flight:
+        logger.info("combine %s is already generating — not starting a second run", combine_id)
+        return combine_id, output_file
+
+    error_path = EXPORT_DIR / f"{combine_id}.error"
+    error_path.unlink(missing_ok=True)
+    _in_flight.add(combine_id)
+
+    task = asyncio.create_task(_run_combine(video_paths, combine_id, mp4_path, srt_path, error_path))
+    _pending_tasks.add(task)
+    task.add_done_callback(lambda t: (_pending_tasks.discard(t), _in_flight.discard(combine_id)))
+
+    return combine_id, output_file
+
+
+async def _run_combine(video_paths: list[Path], combine_id: str, mp4_path: Path, srt_path: Path, error_path: Path) -> None:
+    """Concatenates the chapter clips via stream copy and merges their matching per-chapter srts
+    (same base name, `.srt` alongside each `.mp4`). Renames into place srt first then mp4, same
+    as `_run_export`, so a poller never sees a partial file.
+    """
+    logger.info("generating combine %s for %d chapter(s)", combine_id, len(video_paths))
+    tmp_mp4 = mp4_path.with_suffix(".mp4.tmp")
+    tmp_srt = srt_path.with_suffix(".srt.tmp")
+    try:
+        srt_paths = [video_path.with_suffix(".srt") for video_path in video_paths]
+        _merge_srts(srt_paths, tmp_srt)
+        await _concat_videos(video_paths, tmp_mp4)
+
+        os.replace(tmp_srt, srt_path)
+        os.replace(tmp_mp4, mp4_path)
+        logger.info("combine generation complete: %s", mp4_path.name)
+    except Exception as exc:  # noqa: BLE001 - reported to the polling caller via the error file, not raised
+        logger.exception("combine generation failed for %s", combine_id)
         detail = exc.stderr.decode(errors="replace") if isinstance(exc, FFmpegError) and exc.stderr else str(exc)
         error_path.write_text(detail, encoding="utf-8")
         tmp_mp4.unlink(missing_ok=True)

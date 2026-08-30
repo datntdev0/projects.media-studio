@@ -110,3 +110,14 @@ class ExportJob(CamelModel):
 
     id: str
     output_file: str
+
+
+class CombineRequest(CamelModel):
+    """Concatenates already-exported chapter clips (see /export) into one final video via
+    stream copy — every clip already shares the same codec/resolution/fps (same image, same
+    encoder settings), so no re-encode is needed. Each entry of `chapter_video_files` is a
+    chapter's `.mp4`, relative to the worker's app dir, in the order to concatenate; its matching
+    `.srt` (same base name, alongside it) is merged the same way.
+    """
+
+    chapter_video_files: list[str] = Field(min_length=1)

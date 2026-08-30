@@ -29,24 +29,27 @@ interface ExportJob {
   outputFile: string;
 }
 
-// A combine call re-concatenates every selected chapter's narration and re-encodes the video, so
-// the wait bound scales with how many chapters are being muxed together rather than a flat cap.
+// A per-chapter export call muxes a static image + narration into a fresh video, so its wait
+// bound is generous per chapter muxed. A combine call is just a stream-copy concat of clips
+// already on disk — no re-encode — so it gets its own, much tighter bound.
 const EXPORT_WAIT_FLOOR_MS = 120_000;
 const EXPORT_WAIT_PER_CHAPTER_MS = 120_000;
+const COMBINE_WAIT_FLOOR_MS = 30_000;
+const COMBINE_WAIT_PER_CHAPTER_MS = 5_000;
 const EXPORT_POLL_INTERVAL_MS = 5_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Kicks off the mux/concat and gets back its job id + expected output file name immediately — the worker runs it in the background rather than holding the request open (see src/worker/app/export.py). */
-async function requestExportJob(workflowId: string, chapterRange: string[], imageFile: string, soundWave: boolean): Promise<ExportJob> {
+/** Posts a job request to the worker and gets back its job id + expected output file name immediately — the worker runs it in the background rather than holding the request open (see src/worker/app/export.py). */
+async function postExportJob(endpoint: string, body: unknown): Promise<ExportJob> {
   let response: Response;
   try {
-    response = await fetch(`${config.scraper.baseUrl}/export`, {
+    response = await fetch(`${config.scraper.baseUrl}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflowId, chapterRange, imageFile, soundWave }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     throw new Error(`Worker export request failed: ${errorMessage(error)}`);
@@ -59,12 +62,12 @@ async function requestExportJob(workflowId: string, chapterRange: string[], imag
 }
 
 /** Polls the worker's shared export directory for the job's `<id>.mp4` (done, with `<id>.srt` already alongside it) or `<id>.error` (failed). */
-async function awaitExportJob(outputFile: string, chapterCount: number): Promise<WorkerExport> {
+async function awaitExportJob(outputFile: string, chapterCount: number, waitFloorMs: number, waitPerChapterMs: number): Promise<WorkerExport> {
   const exportDir = path.join(getWorkerDataDir(), 'export');
   const id = outputFile.replace(/\.mp4$/, '');
   const videoPath = path.join(exportDir, outputFile);
   const errorPath = path.join(exportDir, `${id}.error`);
-  const deadline = Date.now() + Math.max(EXPORT_WAIT_FLOOR_MS, chapterCount * EXPORT_WAIT_PER_CHAPTER_MS);
+  const deadline = Date.now() + Math.max(waitFloorMs, chapterCount * waitPerChapterMs);
 
   while (!fs.existsSync(videoPath)) {
     if (fs.existsSync(errorPath)) {
@@ -80,8 +83,14 @@ async function awaitExportJob(outputFile: string, chapterCount: number): Promise
 }
 
 async function requestChapterExport(workflowId: string, chapterIds: string[], imageFile: string, soundWave: boolean): Promise<WorkerExport> {
-  const job = await requestExportJob(workflowId, chapterIds, imageFile, soundWave);
-  return awaitExportJob(job.outputFile, chapterIds.length);
+  const job = await postExportJob('/export', { workflowId, chapterRange: chapterIds, imageFile, soundWave });
+  return awaitExportJob(job.outputFile, chapterIds.length, EXPORT_WAIT_FLOOR_MS, EXPORT_WAIT_PER_CHAPTER_MS);
+}
+
+/** Concatenates already-exported chapter clips (paths relative to the shared worker data dir) into one final video via stream copy — no re-encode. */
+async function requestCombineExport(chapterVideoFiles: string[]): Promise<WorkerExport> {
+  const job = await postExportJob('/export/combine', { chapterVideoFiles });
+  return awaitExportJob(job.outputFile, chapterVideoFiles.length, COMBINE_WAIT_FLOOR_MS, COMBINE_WAIT_PER_CHAPTER_MS);
 }
 
 /** Copies the worker's generated mp4+srt — at the `videoPath`/`srtPath` it reported, relative to the shared data dir — into their target slot in the workflow's export dir. */
@@ -130,10 +139,10 @@ async function runChaptersStep(progress: ReturnType<typeof createExportVideoProg
 
 /**
  * Combines every chapter clip exported so far (not just this run's targets — the accumulated,
- * resumable coverage) into one final video, re-concatenating their source narration rather than
- * re-encoding the already-muxed clips. Left alone if a final video already exists.
+ * resumable coverage) into one final video by concatenating the already-muxed clips via stream
+ * copy — no re-encode. Left alone if a final video already exists.
  */
-async function runCombineStep(progress: ReturnType<typeof createExportVideoProgress>, workflowId: string, activityId: string, videoChaptersDirPath: string, imageFile: string, soundWave: boolean): Promise<void> {
+async function runCombineStep(progress: ReturnType<typeof createExportVideoProgress>, workflowId: string, activityId: string, videoChaptersDirPath: string): Promise<void> {
   const finalVideo = finalVideoFile(workflowId, activityId);
   if (fs.existsSync(finalVideo)) {
     progress.done('combine', 'already combined');
@@ -148,8 +157,9 @@ async function runCombineStep(progress: ReturnType<typeof createExportVideoProgr
 
   progress.start('combine', `${indices.length} chapter(s)`);
   try {
-    const chapterIds = indices.map(chapterId);
-    const exported = await requestChapterExport(workflowId, chapterIds, imageFile, soundWave);
+    const sharedDir = getWorkerDataDir();
+    const chapterVideoFiles = indices.map((idx) => path.relative(sharedDir, chapterVideoFile(videoChaptersDirPath, idx)).split(path.sep).join('/'));
+    const exported = await requestCombineExport(chapterVideoFiles);
     collectExportFiles(exported, finalVideo, finalSrtFile(workflowId, activityId));
     progress.done('combine', `${indices.length} chapter(s)`);
   } catch (error) {
@@ -162,9 +172,9 @@ async function runCombineStep(progress: ReturnType<typeof createExportVideoProgr
  * Exports each targeted chapter through the worker's `/export` endpoint (see src/worker/app/export.py)
  * into its own clip under `exports/<activityId>/chapters/chapter-NNNN.mp4` — resumable, an
  * existing chapter clip is left alone — then combines every clip exported so far into one final
- * video at `exports/<activityId>/final.mp4`, muxed against the activity's uploaded image with
- * a unified srt. Driven directly by the workflow orchestrator against the activity's exported
- * working directory (`data/workflows/<id>/`).
+ * video at `exports/<activityId>/final.mp4` via the worker's `/export/combine` endpoint, a
+ * stream-copy concat with a unified srt (no re-encode). Driven directly by the workflow
+ * orchestrator against the activity's exported working directory (`data/workflows/<id>/`).
  */
 export async function runWorkflowExportVideo(workflow: AppWorkflow, activity: AppWorkflowActivity): Promise<void> {
   const dir = getAppWorkflowExportDir(workflow.id);
@@ -192,7 +202,7 @@ export async function runWorkflowExportVideo(workflow: AppWorkflow, activity: Ap
 
   const progress = createExportVideoProgress(workflow.id, activity.id);
   await runChaptersStep(progress, workflow.id, ttsChaptersDirPath, videoChaptersDirPath, workerImageFile, soundWave, targets);
-  await runCombineStep(progress, workflow.id, activity.id, videoChaptersDirPath, workerImageFile, soundWave);
+  await runCombineStep(progress, workflow.id, activity.id, videoChaptersDirPath);
 
   logger.info(`Workflow ${workflow.id} export video finished for activity ${activity.id}`);
 }
