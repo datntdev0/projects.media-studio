@@ -148,8 +148,6 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   const [tab, setTab] = useState<'general' | 'input' | 'output'>('general');
   const [name, setName] = useState(activity.name);
   const [description, setDescription] = useState(activity.description);
-  const [retry, setRetry] = useState(activity.retry);
-  const [delay, setDelay] = useState(activity.delay);
   const [analyzeOutput, setAnalyzeOutput] = useState<AnalyzeOutput | null | undefined>(undefined);
   const [translateOutput, setTranslateOutput] = useState<TranslateOutput | null | undefined>(undefined);
   const [ttsOutput, setTtsOutput] = useState<TtsOutput | null | undefined>(undefined);
@@ -162,8 +160,6 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
     setTab('general');
     setName(activity.name);
     setDescription(activity.description);
-    setRetry(activity.retry);
-    setDelay(activity.delay);
     setAnalyzeOutput(undefined);
     setTranslateOutput(undefined);
     setTtsOutput(undefined);
@@ -246,7 +242,7 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
   };
 
   return (
-    <div style={{ width: 420, flex: 'none', paddingLeft: '10.2px', borderLeft: '1px solid var(--color-divider)', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--color-bg)' }}>
+    <div style={{ width: 560, flex: 'none', paddingLeft: '10.2px', borderLeft: '1px solid var(--color-divider)', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--color-bg)' }}>
       <div style={{ flex: 'none', padding: '13.6px 0 0 0', borderBottom: '1px solid var(--color-divider)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <span style={{ width: 30, height: 30, flex: 'none', background: 'var(--color-accent-900)', color: 'var(--color-bg)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-heading)', fontSize: 12 }}>
@@ -318,40 +314,6 @@ export function WorkflowActivityInspector({ workflowId, activity, activities, co
                 Disabled — the orchestrator skips this activity when the workflow runs, and moves on to its dependents.
               </div>
             )}
-
-            <div style={{ display: 'flex', gap: 13.6, marginBottom: 13.6 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="activity-retry">Retry times</label>
-                <input
-                  className="input"
-                  id="activity-retry"
-                  type="number"
-                  min={0}
-                  value={retry}
-                  onChange={(e) => setRetry(Number(e.target.value))}
-                  onBlur={() => retry !== activity.retry && onUpdate(activity.id, { retry })}
-                />
-              </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="activity-delay">Retry delay</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <input
-                    className="input"
-                    id="activity-delay"
-                    type="number"
-                    min={0}
-                    value={delay}
-                    onChange={(e) => setDelay(Number(e.target.value))}
-                    onBlur={() => delay !== activity.delay && onUpdate(activity.id, { delay })}
-                    style={{ flex: 1 }}
-                  />
-                  <span className="text-muted" style={{ fontSize: 12 }}>sec</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.45, marginBottom: 20.4 }}>
-              A failed attempt waits {delay}s, then retries up to {retry} times before the activity is marked failed and the run stops.
-            </div>
 
             <div className="card-kicker">Dependencies</div>
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -8,7 +8,7 @@ import { TTS_OUTPUT_PROTOCOL, type PipelineOutputPage, type TtsConfig, type TtsO
 const CHAPTER_ID_RE = /^chapter-\d{4}$/;
 
 function chaptersDir(workflowId: string, config: TtsConfig): string {
-  return path.join(getAppWorkflowExportDir(workflowId), 'tts', config.language, 'chapters');
+  return path.join(getAppWorkflowExportDir(workflowId), 'audios', config.language, 'chapters');
 }
 
 function translatedTitleFile(workflowDir: string, language: string, idx: number): string {

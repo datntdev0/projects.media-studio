@@ -21,7 +21,7 @@ interface WorkerExport {
 }
 
 function ttsChaptersDir(dir: string): string {
-  return path.join(dir, 'tts', EXPORT_VIDEO_LANGUAGE, 'chapters');
+  return path.join(dir, 'audios', EXPORT_VIDEO_LANGUAGE, 'chapters');
 }
 
 interface ExportJob {
@@ -160,9 +160,9 @@ async function runCombineStep(progress: ReturnType<typeof createExportVideoProgr
 
 /**
  * Exports each targeted chapter through the worker's `/export` endpoint (see src/worker/app/export.py)
- * into its own clip under `export-video/<activityId>/chapters/chapter-NNNN.mp4` — resumable, an
+ * into its own clip under `exports/<activityId>/chapters/chapter-NNNN.mp4` — resumable, an
  * existing chapter clip is left alone — then combines every clip exported so far into one final
- * video at `export-video/<activityId>/final.mp4`, muxed against the activity's uploaded image with
+ * video at `exports/<activityId>/final.mp4`, muxed against the activity's uploaded image with
  * a unified srt. Driven directly by the workflow orchestrator against the activity's exported
  * working directory (`data/workflows/<id>/`).
  */

@@ -10,8 +10,6 @@ interface AppWorkflowActivityRow {
   description: string;
   x: number;
   y: number;
-  retry: number;
-  delay: number;
   enabled: number;
   config: string;
   dependencies: string;
@@ -26,8 +24,6 @@ export interface AppWorkflowActivityDraft {
   description: string;
   x: number;
   y: number;
-  retry: number;
-  delay: number;
   enabled: boolean;
   config: AppWorkflowActivityConfig;
   dependencies: string[];
@@ -45,8 +41,6 @@ function toAppWorkflowActivity(row: AppWorkflowActivityRow): AppWorkflowActivity
     description: row.description,
     x: row.x,
     y: row.y,
-    retry: row.retry,
-    delay: row.delay,
     enabled: row.enabled === 1,
     analyzeConfig: type === AppWorkflowActivityType.Analyze ? config : null,
     translateConfig: type === AppWorkflowActivityType.Translate ? config : null,
@@ -75,8 +69,8 @@ export function createAppWorkflowActivity(db: Db, workflowId: string, draft: App
   const now = Date.now();
 
   db.prepare(
-    `INSERT INTO app_workflow_activities (id, workflow_id, type, name, description, x, y, retry, delay, enabled, config, dependencies, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO app_workflow_activities (id, workflow_id, type, name, description, x, y, enabled, config, dependencies, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     workflowId,
@@ -85,8 +79,6 @@ export function createAppWorkflowActivity(db: Db, workflowId: string, draft: App
     draft.description,
     draft.x,
     draft.y,
-    draft.retry,
-    draft.delay,
     draft.enabled ? 1 : 0,
     JSON.stringify(draft.config),
     JSON.stringify(draft.dependencies),
@@ -99,15 +91,13 @@ export function createAppWorkflowActivity(db: Db, workflowId: string, draft: App
 
 export function updateAppWorkflowActivity(db: Db, workflowId: string, id: string, draft: AppWorkflowActivityDraft): AppWorkflowActivity {
   db.prepare(
-    `UPDATE app_workflow_activities SET name = ?, description = ?, x = ?, y = ?, retry = ?, delay = ?, enabled = ?, config = ?, dependencies = ?, updated_at = ?
+    `UPDATE app_workflow_activities SET name = ?, description = ?, x = ?, y = ?, enabled = ?, config = ?, dependencies = ?, updated_at = ?
      WHERE workflow_id = ? AND id = ?`,
   ).run(
     draft.name,
     draft.description,
     draft.x,
     draft.y,
-    draft.retry,
-    draft.delay,
     draft.enabled ? 1 : 0,
     JSON.stringify(draft.config),
     JSON.stringify(draft.dependencies),

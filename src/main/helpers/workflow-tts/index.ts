@@ -11,7 +11,6 @@ import { PACES, VOICES } from '../../../shared/workflow-activity-format';
 export { readTtsOutput, readTtsChapters, readTtsChapterSrt } from './output';
 
 const logger = createLogger('workflow-tts');
-const TTS_WORKERS = 2;
 
 interface WorkerSpeech {
   wavPath: string;
@@ -19,7 +18,7 @@ interface WorkerSpeech {
 }
 
 function chaptersDir(dir: string, language: string): string {
-  return path.join(dir, 'tts', language, 'chapters');
+  return path.join(dir, 'audios', language, 'chapters');
 }
 
 function wavFile(chaptersDirPath: string, idx: number): string {
@@ -148,7 +147,7 @@ async function runChaptersStep(progress: ReturnType<typeof createTtsProgress>, d
   progress.start('chapters', `0/${targets.length} chapters`);
   let counter = 1;
   try {
-    await runPool(targets, TTS_WORKERS, async (record) => {
+    await runPool(targets, 1, async (record) => {
       progress.update('chapters', `${counter++}/${targets.length} chapters`);
       await narrateChapter(dir, chaptersDirPath, language, voice, pace, record);
     });
@@ -162,7 +161,7 @@ async function runChaptersStep(progress: ReturnType<typeof createTtsProgress>, d
 /**
  * Narrates each targeted chapter through the worker's `/speech` endpoint (see src/worker/app/speech.py),
  * one line of text at a time so the returned srt times every line individually, then collects the
- * result into this chapter's slot under `tts/<language>/chapters/chapter-NNNN.wav` and `.srt`. Driven
+ * result into this chapter's slot under `audios/<language>/chapters/chapter-NNNN.wav` and `.srt`. Driven
  * directly by the workflow orchestrator against the activity's exported working directory
  * (`data/workflows/<id>/`). Idempotent like the other pipelines — an existing chapter wav is left
  * alone, so a re-run only narrates what's still missing. Each step's progress is persisted (for the

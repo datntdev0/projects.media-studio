@@ -58,6 +58,15 @@ function progressPct(job: ScrapingJob): number {
   return Math.round(((job.completed + job.failed) / job.total) * 100);
 }
 
+/** Chapters/minute since the job was queued — `null` before there's enough elapsed time to mean anything. */
+function velocityFor(job: ScrapingJob): string | null {
+  if (!job.queuedAt || job.completed + job.failed === 0) return null;
+  const elapsedMs = (job.completedAt ?? Date.now()) - job.queuedAt;
+  if (elapsedMs < 1000) return null;
+  const perMinute = (job.completed + job.failed) / (elapsedMs / 60_000);
+  return `${perMinute.toFixed(1)} ch/min`;
+}
+
 function metaFor(job: ScrapingJob): string {
   const parts = [job.crawler, `${job.total} chapters`];
   if (job.skipped) parts.push(`${job.skipped} skipped`);
@@ -199,6 +208,7 @@ export function ScrapingsScreen() {
                     <div style={{ height: 4, background: 'var(--color-accent)', width: `${progressPct(job)}%` }} />
                   </div>
                   <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', width: 130, textAlign: 'right' }}>{job.completed} / {job.total} chapters</span>
+                  {velocityFor(job) && <span className="text-muted" style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>{velocityFor(job)}</span>}
                 </div>
               </div>
             );
@@ -215,6 +225,7 @@ export function ScrapingsScreen() {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontFamily: 'var(--font-heading)', fontSize: 32, lineHeight: 1 }}>{selected.completed}</span>
                 <span className="text-muted" style={{ fontSize: 13 }}>of {selected.total} · {progressPct(selected)}%</span>
+                {velocityFor(selected) && <span className="text-muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{velocityFor(selected)}</span>}
               </div>
               <div style={{ marginTop: 8, height: 6, background: 'color-mix(in srgb, var(--color-text) 12%, transparent)' }}>
                 <div style={{ height: 6, background: 'var(--color-accent)', width: `${progressPct(selected)}%` }} />

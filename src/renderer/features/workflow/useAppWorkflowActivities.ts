@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AppWorkflowActivity, CreateAppWorkflowActivityInput, UpdateAppWorkflowActivityInput } from '../../../shared/app-workflow-activity';
 import { buildConfigFields, configOf } from './workflowActivityFormat';
 
-const DEFAULT_RETRY = 3;
-const DEFAULT_DELAY = 30;
-
 export interface AppWorkflowActivitiesState {
   items: AppWorkflowActivity[];
   loading: boolean;
@@ -38,8 +35,6 @@ function activityEquals(a: AppWorkflowActivity, b: AppWorkflowActivity): boolean
     a.description === b.description &&
     a.x === b.x &&
     a.y === b.y &&
-    a.retry === b.retry &&
-    a.delay === b.delay &&
     a.enabled === b.enabled &&
     sameIds(a.dependencies, b.dependencies) &&
     JSON.stringify(configOf(a)) === JSON.stringify(configOf(b))
@@ -87,8 +82,6 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
         description: input.description ?? '',
         x: input.x,
         y: input.y,
-        retry: input.retry ?? DEFAULT_RETRY,
-        delay: input.delay ?? DEFAULT_DELAY,
         enabled: input.enabled ?? true,
         dependencies: input.dependencies ?? [],
         createdAt: now,
@@ -113,8 +106,6 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           description: input.description ?? item.description,
           x: input.x ?? item.x,
           y: input.y ?? item.y,
-          retry: input.retry ?? item.retry,
-          delay: input.delay ?? item.delay,
           enabled: input.enabled ?? item.enabled,
           dependencies: input.dependencies ?? item.dependencies,
         };
@@ -153,8 +144,6 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           description: draft.description,
           x: draft.x,
           y: draft.y,
-          retry: draft.retry,
-          delay: draft.delay,
           enabled: draft.enabled,
           config: configOf(draft),
         });
@@ -173,8 +162,6 @@ export function useAppWorkflowActivities(workflowId: string): AppWorkflowActivit
           description: draft.description,
           x: draft.x,
           y: draft.y,
-          retry: draft.retry,
-          delay: draft.delay,
           enabled: draft.enabled,
           config: configOf(draft),
           dependencies,

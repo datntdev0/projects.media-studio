@@ -26,7 +26,7 @@ export function registerTtsOutputProtocolHandler(): void {
   protocol.handle(TTS_OUTPUT_PROTOCOL, async (request) => {
     // Chromium collapses a host-less URL's path into the host, so these URLs use a throwaway host and keep `/<workflowId>/<language>/<file>` in the path.
     const [workflowId, language, fileName] = decodeURIComponent(new URL(request.url).pathname).split('/').filter(Boolean);
-    const body = await fs.readFile(path.join(getAppWorkflowExportDir(workflowId), 'tts', language, 'chapters', fileName));
+    const body = await fs.readFile(path.join(getAppWorkflowExportDir(workflowId), 'audios', language, 'chapters', fileName));
 
     const range = request.headers.get('Range');
     const parsed = range ? parseRange(range, body.length) : null;

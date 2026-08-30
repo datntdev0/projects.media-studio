@@ -27,7 +27,7 @@ export function registerExportVideoOutputProtocolHandler(): void {
   protocol.handle(EXPORT_VIDEO_OUTPUT_PROTOCOL, async (request) => {
     // Chromium collapses a host-less URL's path into the host, so these URLs use a throwaway host and keep `/<workflowId>/<activityId>/<...rest>` in the path.
     const [workflowId, activityId, ...rest] = decodeURIComponent(new URL(request.url).pathname).split('/').filter(Boolean);
-    const body = await fs.readFile(path.join(getAppWorkflowExportDir(workflowId), 'export-video', activityId, ...rest));
+    const body = await fs.readFile(path.join(getAppWorkflowExportDir(workflowId), 'exports', activityId, ...rest));
 
     const range = request.headers.get('Range');
     const parsed = range ? parseRange(range, body.length) : null;

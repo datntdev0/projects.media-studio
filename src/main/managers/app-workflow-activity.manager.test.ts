@@ -28,13 +28,13 @@ describe('app workflow activity manager', () => {
     expect(() => manager.create('missing', profilesInput())).toThrow(/not found/);
   });
 
-  it('create() persists the activity with default retry/delay/enabled', () => {
+  it('create() persists the activity with default enabled', () => {
     const workflow = seedWorkflow(db);
     const manager = createAppWorkflowActivityManager(db);
 
     const activity = manager.create(workflow.id, profilesInput());
 
-    expect(activity).toMatchObject({ workflowId: workflow.id, name: 'Profiles', retry: 3, delay: 30, enabled: true, dependencies: [] });
+    expect(activity).toMatchObject({ workflowId: workflow.id, name: 'Profiles', enabled: true, dependencies: [] });
     expect(activity.profilesConfig).toEqual({ style: 'noir' });
     expect(manager.list(workflow.id)).toEqual([activity]);
   });

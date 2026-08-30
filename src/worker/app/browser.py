@@ -25,6 +25,11 @@ DEFAULTS = FetchOptions()
 # clean shutdown leaves these behind, which would wedge every later launch.
 PROFILE_LOCKS = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
+# Cloudflare only clears for a headful browser, but nothing says that browser has to be on
+# screen — moving its window off the visible desktop keeps it headful without popping up in
+# front of the user. Has no effect when headless, so it's safe to pass unconditionally.
+HIDDEN_WINDOW_FLAGS = ["--window-position=-32000,-32000"]
+
 
 def _clear_profile_locks(profile: Path) -> None:
     for name in PROFILE_LOCKS:
@@ -78,6 +83,7 @@ class BrowserManager:
                 "timeout": DEFAULTS.timeout_ms,
                 "max_pages": settings.scraper.max_pages,
                 "user_data_dir": str(profile),
+                "extra_flags": HIDDEN_WINDOW_FLAGS,
             }
             session = AsyncStealthySession(**options)
             await session.start()
@@ -139,6 +145,7 @@ class BrowserManager:
                 solve_cloudflare=options.solve,
                 timeout=options.timeout_ms,
                 max_pages=1,
+                extra_flags=HIDDEN_WINDOW_FLAGS,
             )
             await session.start()
             try:

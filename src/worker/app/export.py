@@ -120,7 +120,7 @@ async def _concat_wavs(parts: list[Path], dst: Path) -> None:
 
 def _chapter_files(workflow_id: str, chapter_id: str) -> tuple[Path, Path]:
     """A chapter's already-narrated wav+srt, written by the Tts activity's `/speech` pipeline — Export Video only ever narrates from Vietnamese (the `ContentLanguage.Vietnamese` code, "vi", not the English word — this must match the folder name the Node side's `EXPORT_VIDEO_LANGUAGE` resolves to)."""
-    chapters_dir = settings.app_dir_path / "workflows" / workflow_id / "tts" / "vi" / "chapters"
+    chapters_dir = settings.app_dir_path / "workflows" / workflow_id / "audios" / "vi" / "chapters"
     return chapters_dir / f"{chapter_id}.wav", chapters_dir / f"{chapter_id}.srt"
 
 

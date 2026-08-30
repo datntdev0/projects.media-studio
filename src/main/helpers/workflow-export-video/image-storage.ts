@@ -13,7 +13,7 @@ const IMAGE_EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
 
 /** Where a workflow's uploaded export-video source images live — keyed by a random file name rather than the owning activity's id, since an activity picked on the canvas has no id yet until the workflow is saved. */
 export function exportVideoImagesDir(workflowId: string): string {
-  return path.join(getAppWorkflowExportDir(workflowId), 'export-video', 'images');
+  return path.join(getAppWorkflowExportDir(workflowId), 'exports', 'images');
 }
 
 /** Writes an uploaded image into the workflow's working directory and returns the `app-export-video-image://` URL its `imageFile` config can be set to. */

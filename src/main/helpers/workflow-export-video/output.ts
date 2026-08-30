@@ -8,7 +8,7 @@ import { EXPORT_VIDEO_OUTPUT_PROTOCOL, type ExportVideoConfig, type ExportVideoO
 const CHAPTER_ID_RE = /^chapter-\d{4}$/;
 
 export function activityDir(workflowId: string, activityId: string): string {
-  return path.join(getAppWorkflowExportDir(workflowId), 'export-video', activityId);
+  return path.join(getAppWorkflowExportDir(workflowId), 'exports', activityId);
 }
 
 export function chaptersDir(workflowId: string, activityId: string): string {

@@ -57,9 +57,6 @@ export interface AppWorkflowActivityManager {
   uploadExportVideoImage(workflowId: string, fileName: string, contentType: string, data: Buffer): string;
 }
 
-const DEFAULT_RETRY = 3;
-const DEFAULT_DELAY = 30;
-
 function configOf(activity: AppWorkflowActivity): AppWorkflowActivityConfig {
   return (activity.analyzeConfig ?? activity.translateConfig ?? activity.profilesConfig ?? activity.storyboardConfig ?? activity.ttsConfig ?? activity.exportVideoConfig)!;
 }
@@ -98,8 +95,6 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
         description: input.description ?? '',
         x: input.x,
         y: input.y,
-        retry: input.retry ?? DEFAULT_RETRY,
-        delay: input.delay ?? DEFAULT_DELAY,
         enabled: input.enabled ?? true,
         config: input.config,
         dependencies: input.dependencies ? needDependencies(workflowId, input.dependencies) : [],
@@ -117,8 +112,6 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
         description: input.description ?? current.description,
         x: input.x ?? current.x,
         y: input.y ?? current.y,
-        retry: input.retry ?? current.retry,
-        delay: input.delay ?? current.delay,
         enabled: input.enabled ?? current.enabled,
         config: input.config ?? configOf(current),
         dependencies: input.dependencies ? needDependencies(workflowId, input.dependencies, id) : current.dependencies,
@@ -139,8 +132,6 @@ export function createAppWorkflowActivityManager(db: Db): AppWorkflowActivityMan
           description: activity.description,
           x: activity.x,
           y: activity.y,
-          retry: activity.retry,
-          delay: activity.delay,
           enabled: activity.enabled,
           config: configOf(activity),
           dependencies: activity.dependencies.filter((dependsOnId) => dependsOnId !== id),
