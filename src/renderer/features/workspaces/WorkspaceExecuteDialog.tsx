@@ -2,20 +2,21 @@ import { useState } from 'react';
 import { CalendarIcon, CloseIcon, PlayIcon } from '@/components/icons';
 import type { AppLibrary } from '@/shared/app-library';
 import { WorkspaceStatus, WorkspaceStepKey, type AppWorkspace } from '@/shared/app-workspace';
+import { WorkspaceRunMode, validateRunInput, type SubmitWorkspaceRunInput } from '@/shared/app-workspace-run';
 import { STEP_NAME, orderLabelOf } from './workspaceFormat';
-import { ExecutionMode, RETRY_DELAY_OPTIONS, RETRY_OPTIONS, StepStartMode, defaultScheduleStart, retryLabelOf, type ExecutionStepPlan, type WorkspaceExecutionRequest } from './workspaceExecution';
+import { RETRY_DELAY_OPTIONS, RETRY_OPTIONS, StepStartMode, defaultStepStart, missingStartTimeOf, retryLabelOf, toRunInput, type ExecutionStepPlan } from './workspaceExecution';
 
 interface WorkspaceExecuteDialogProps {
   workspace: AppWorkspace;
   /** The novel the range is counted against — its chapter count bounds the range. */
   novel: AppLibrary | undefined;
   onClose(): void;
-  onSubmit(request: WorkspaceExecutionRequest): void;
+  onSubmit(input: SubmitWorkspaceRunInput): Promise<unknown>;
 }
 
 const MODE_CARDS = [
-  { mode: ExecutionMode.Immediate, Icon: PlayIcon, title: 'Immediately', hint: 'Starts now. Each step begins as soon as the previous one completes.' },
-  { mode: ExecutionMode.Scheduled, Icon: CalendarIcon, title: 'Scheduled', hint: 'Pick a start time for the workspace, and optionally per step.' },
+  { mode: WorkspaceRunMode.Immediate, Icon: PlayIcon, title: 'Immediately', hint: 'Starts now. Each step begins as soon as the previous one completes.' },
+  { mode: WorkspaceRunMode.Scheduled, Icon: CalendarIcon, title: 'Scheduled', hint: 'Book a start time per step. The first step is what the run waits on.' },
 ];
 
 function immediateNoteOf(workspace: AppWorkspace): string {
@@ -35,37 +36,56 @@ function initialPlans(workspace: AppWorkspace): ExecutionStepPlan[] {
   }));
 }
 
-/** Why the request cannot be submitted yet, or undefined when it can. */
-function validate(mode: ExecutionMode, from: number, to: number, total: number, plans: ExecutionStepPlan[]): string | undefined {
-  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from) return 'The chapter range needs a start and an end, with the end at or after the start.';
-  if (total > 0 && to > total) return `The novel has ${total} chapters — the range cannot end past it.`;
-  const enabled = plans.filter((plan) => plan.enabled);
-  if (enabled.length === 0) return 'Pick at least one step to run.';
-  if (mode === ExecutionMode.Immediate) return undefined;
-  if (enabled.some((plan) => plan.startMode === StepStartMode.AtTime && plan.startAt === '')) return 'A step set to start at a time needs that time.';
-  return undefined;
+/** A booked run needs an anchor, so the first step it covers starts on the clock. */
+function anchorFirstStep(plans: ExecutionStepPlan[]): ExecutionStepPlan[] {
+  const first = plans.find((plan) => plan.enabled);
+  if (!first || first.startMode === StepStartMode.AtTime) return plans;
+  return plans.map((plan) => (plan === first ? { ...plan, startMode: StepStartMode.AtTime, startAt: plan.startAt || defaultStepStart(undefined) } : plan));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: WorkspaceExecuteDialogProps) {
   const total = novel?.novelMetadata?.discoveredCount ?? 0;
-  const [mode, setMode] = useState<ExecutionMode>(ExecutionMode.Immediate);
+  const [mode, setMode] = useState<WorkspaceRunMode>(WorkspaceRunMode.Immediate);
   const [from, setFrom] = useState('1');
   const [to, setTo] = useState(String(total === 0 ? 1 : total));
-  const [startAt, setStartAt] = useState(defaultScheduleStart());
   const [plans, setPlans] = useState<ExecutionStepPlan[]>(() => initialPlans(workspace));
+  const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
 
-  const scheduled = mode === ExecutionMode.Scheduled;
-  const fromNo = Number(from);
-  const toNo = Number(to);
-  const error = validate(mode, fromNo, toNo, total, plans);
-  const inRange = error === undefined ? toNo - fromNo + 1 : 0;
+  const scheduled = mode === WorkspaceRunMode.Scheduled;
+  const input = toRunInput(workspace.id, mode, from, to, plans);
+  const error = missingStartTimeOf(mode, plans) ?? validateRunInput(input, total, Date.now());
+  const inRange = error === undefined ? input.toChapter - input.fromChapter + 1 : 0;
 
   const patchPlan = (key: WorkspaceStepKey, patch: Partial<ExecutionStepPlan>) =>
     setPlans((current) => current.map((plan) => (plan.key === key ? { ...plan, ...patch } : plan)));
 
-  const handleSubmit = () => {
+  const selectMode = (next: WorkspaceRunMode) => {
+    setMode(next);
+    if (next === WorkspaceRunMode.Scheduled) setPlans(anchorFirstStep);
+  };
+
+  /** The time a step's picker opens on — staggered after the last step booked ahead of it. */
+  const startAtDefaultFor = (plan: ExecutionStepPlan): string => {
+    const booked = plans.slice(0, plans.indexOf(plan)).filter((candidate) => candidate.enabled && candidate.startAt !== '');
+    return defaultStepStart(booked.at(-1)?.startAt);
+  };
+
+  const handleSubmit = async () => {
     if (error) return;
-    onSubmit({ mode, fromChapter: fromNo, toChapter: toNo, startAt: scheduled ? startAt : '', steps: plans });
+    setSubmitting(true);
+    setFailure(undefined);
+    try {
+      await onSubmit(input);
+      onClose();
+    } catch (err) {
+      setFailure(errorMessage(err));
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -89,7 +109,7 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
                 className="blueprint"
                 style={{ padding: 13.6, display: 'block', cursor: 'pointer', background: mode === cardMode ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : 'transparent' }}
               >
-                <input type="radio" name="execmode" style={{ position: 'absolute', opacity: 0 }} checked={mode === cardMode} onChange={() => setMode(cardMode)} />
+                <input type="radio" name="execmode" style={{ position: 'absolute', opacity: 0 }} checked={mode === cardMode} onChange={() => selectMode(cardMode)} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Icon />
                   <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{title}</span>
@@ -113,10 +133,6 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
 
           {scheduled ? (
             <>
-              <div className="field" style={{ marginBottom: 17, maxWidth: 280 }}>
-                <label>Workspace start</label>
-                <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-              </div>
               <div className="field" style={{ marginBottom: 6 }}><label>Steps in this run</label></div>
               <table className="table" style={{ marginBottom: 13.6 }}>
                 <thead>
@@ -149,7 +165,10 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
                             style={{ fontSize: 12.5, width: '100%' }}
                             value={plan.startMode}
                             disabled={!plan.enabled}
-                            onChange={(e) => patchPlan(plan.key, { startMode: e.target.value as StepStartMode })}
+                            onChange={(e) => {
+                              const startMode = e.target.value as StepStartMode;
+                              patchPlan(plan.key, { startMode, startAt: startMode === StepStartMode.AtTime ? plan.startAt || startAtDefaultFor(plan) : plan.startAt });
+                            }}
                           >
                             <option value={StepStartMode.AfterPrevious}>Immediately after previous</option>
                             <option value={StepStartMode.AtTime}>At a set time…</option>
@@ -197,7 +216,7 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
                 </tbody>
               </table>
               <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
-                A step with no set time starts as soon as the previous step completes. A step with a set time waits for both the time and the previous step. Retries apply per sub-step — a chapter or a part.
+                The first step in the run needs a set time — it is what the run waits on. A later step with no set time starts as soon as the step ahead of it completes; one with a set time waits for both. Retries apply per sub-step — a chapter or a part.
               </div>
             </>
           ) : (
@@ -206,12 +225,12 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6.8, padding: '13.6px 20.4px', borderTop: '1px solid var(--color-divider)' }}>
-          <span className="text-muted" style={{ fontSize: 12, color: error ? '#8a2f2f' : undefined }}>
-            {error ?? (scheduled ? 'The schedule can be edited or cancelled until the run starts.' : 'Steps run in order; a step starts when the previous one completes.')}
+          <span className="text-muted" style={{ fontSize: 12, color: error || failure ? '#8a2f2f' : undefined }}>
+            {failure ?? error ?? (scheduled ? 'A booked run can be cancelled from the run log until it starts.' : 'Steps run in order; a step starts when the previous one completes.')}
           </span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6.8 }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={error !== undefined}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={error !== undefined || submitting}>
               {scheduled ? 'Schedule execution' : 'Start now'}
             </button>
           </div>

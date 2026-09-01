@@ -1,5 +1,7 @@
 import { AudioNovelIcon, VideoRecapIcon } from '@/components/icons';
-import { StepAvailability, WORKSPACE_PRESET_STEPS, WorkspacePreset, WorkspaceStatus, WorkspaceStepKey, WorkspaceStepState, type AppWorkspace, type WorkspaceStep } from '@/shared/app-workspace';
+import { formatDate } from '@/features/library/libraryFormat';
+import { StepAvailability, WORKSPACE_PRESET_STEPS, WORKSPACE_STEP_NAME, WORKSPACE_STEP_UNIT, WorkspacePreset, WorkspaceStatus, WorkspaceStepKey, WorkspaceStepState, WorkspaceStepUnit, type AppWorkspace, type WorkspaceStep, type WorkspaceStepCounts, type WorkspaceStepProgress } from '@/shared/app-workspace';
+import { WorkspaceRunMode, WorkspaceRunStatus, type AppWorkspaceRun, type WorkspaceRunStep } from '@/shared/app-workspace-run';
 
 export interface WorkspacePresetMeta {
   preset: WorkspacePreset;
@@ -27,13 +29,8 @@ export const PRESETS: WorkspacePresetMeta[] = [
   },
 ];
 
-export const STEP_NAME: Record<WorkspaceStepKey, string> = {
-  [WorkspaceStepKey.SemanticAnalysis]: 'Semantic Analysis',
-  [WorkspaceStepKey.SemanticTranslate]: 'Semantic Translate',
-  [WorkspaceStepKey.NarrationSpeech]: 'Narration Speech',
-  [WorkspaceStepKey.FrameIllustration]: 'Frame Illustration',
-  [WorkspaceStepKey.Export]: 'Export',
-};
+/** The shared step names, re-exported so a screen has one import for step copy. */
+export const STEP_NAME = WORKSPACE_STEP_NAME;
 
 export const STATUS_LABEL: Record<WorkspaceStatus, string> = {
   [WorkspaceStatus.Draft]: 'Draft',
@@ -68,9 +65,13 @@ export function orderLabelOf(idx: number): string {
   return String(idx).padStart(2, '0');
 }
 
-export function progressPctOf(step: WorkspaceStep): number {
-  if (step.state === WorkspaceStepState.Done) return 100;
-  if (step.totalCount === 0) return 0;
+/**
+ * How far a step has got, measured over its own counts — a step done over part of
+ * the novel reads as part of the way. With nothing to count, a finished step is
+ * the only thing that can read as complete.
+ */
+export function progressPctOf(step: WorkspaceStepProgress): number {
+  if (step.totalCount === 0) return step.state === WorkspaceStepState.Done ? 100 : 0;
   return Math.round((step.doneCount / step.totalCount) * 100);
 }
 
@@ -81,14 +82,15 @@ export function progressLabelOf(workspace: AppWorkspace): string {
   return `${done}/${workspace.steps.length} steps · ${STEP_NAME[running.key]} ${progressPctOf(running)}%`;
 }
 
-/** What one sub-step of a step covers — the unit its counts are in. */
-export const STEP_UNIT: Record<WorkspaceStepKey, string> = {
-  [WorkspaceStepKey.SemanticAnalysis]: 'Sub-step: a chapter',
-  [WorkspaceStepKey.SemanticTranslate]: 'Sub-step: a chapter',
-  [WorkspaceStepKey.NarrationSpeech]: 'Sub-step: a chapter',
-  [WorkspaceStepKey.FrameIllustration]: 'Coming soon',
-  [WorkspaceStepKey.Export]: 'Sub-step: an exporting part',
+const UNIT_LABEL: Record<WorkspaceStepUnit, string> = {
+  [WorkspaceStepUnit.Chapter]: 'Sub-step: a chapter',
+  [WorkspaceStepUnit.Part]: 'Sub-step: an exporting part',
 };
+
+/** What one sub-step of a step covers. Frame Illustration has no unit yet — it is not released. */
+export function stepUnitLabelOf(key: WorkspaceStepKey): string {
+  return key === WorkspaceStepKey.FrameIllustration ? 'Coming soon' : UNIT_LABEL[WORKSPACE_STEP_UNIT[key]];
+}
 
 export const STEP_NOTE: Record<WorkspaceStepKey, string> = {
   [WorkspaceStepKey.SemanticAnalysis]: 'An LLM extracts characters, timelines and glossary per chapter, merged into global metadata.',
@@ -128,10 +130,10 @@ export interface WorkspaceStepView {
   pct: number;
 }
 
-export function stepCountLabelOf(step: WorkspaceStep): string {
-  if (step.totalCount === 0) return 'not scoped yet';
-  const counted = `${step.doneCount} / ${step.totalCount}`;
-  return step.failedCount === 0 ? counted : `${counted} · ${step.failedCount} failed`;
+export function stepCountLabelOf(counts: WorkspaceStepCounts): string {
+  if (counts.totalCount === 0) return 'not scoped yet';
+  const counted = `${counts.doneCount} / ${counts.totalCount}`;
+  return counts.failedCount === 0 ? counted : `${counted} · ${counts.failedCount} failed`;
 }
 
 export function stepTooltipOf(step: WorkspaceStep): string {
@@ -162,14 +164,14 @@ export function stepSoonNoteOf(view: WorkspaceStepView): string {
 }
 
 /** The strip above the step content: what the workspace is doing right now. */
-export interface WorkspaceActivity {
+export interface WorkspaceActivityStrip {
   title: string;
   detail: string;
   dotColor: string;
   pulsing: boolean;
 }
 
-export function activityOf(workspace: AppWorkspace): WorkspaceActivity {
+export function activityStripOf(workspace: AppWorkspace): WorkspaceActivityStrip {
   const muted = 'color-mix(in srgb, var(--color-text) 45%, transparent)';
   const active = workspace.steps.find((step) => step.state === WorkspaceStepState.Running);
   const failed = workspace.steps.find((step) => step.state === WorkspaceStepState.Failed);
@@ -196,4 +198,95 @@ export function activityOf(workspace: AppWorkspace): WorkspaceActivity {
     default:
       return { title: 'Not executed yet', detail: 'This workspace has never run — its steps are scoped on the first execution.', dotColor: muted, pulsing: false };
   }
+}
+
+export const RUN_MODE_LABEL: Record<WorkspaceRunMode, string> = {
+  [WorkspaceRunMode.Immediate]: 'Immediate',
+  [WorkspaceRunMode.Scheduled]: 'Scheduled',
+};
+
+export const RUN_STATUS_LABEL: Record<WorkspaceRunStatus, string> = {
+  [WorkspaceRunStatus.Queued]: 'Queued',
+  [WorkspaceRunStatus.Scheduled]: 'Scheduled',
+  [WorkspaceRunStatus.Running]: 'Running',
+  [WorkspaceRunStatus.Completed]: 'Completed',
+  [WorkspaceRunStatus.Failed]: 'Failed',
+  [WorkspaceRunStatus.Cancelled]: 'Cancelled',
+};
+
+export const RUN_STATUS_TAG_CLASS: Record<WorkspaceRunStatus, string> = {
+  [WorkspaceRunStatus.Queued]: 'tag-neutral',
+  [WorkspaceRunStatus.Scheduled]: 'tag-neutral',
+  [WorkspaceRunStatus.Running]: 'tag-primary',
+  [WorkspaceRunStatus.Completed]: 'tag-accent',
+  [WorkspaceRunStatus.Failed]: 'tag-outline',
+  [WorkspaceRunStatus.Cancelled]: 'tag-neutral',
+};
+
+/** The run's own line under its title: the chapters it covers and when it ran. */
+export function runRangeLabelOf(run: AppWorkspaceRun): string {
+  const when = run.startedAt === null ? `booked ${formatDate(run.createdAt)}` : `started ${formatDate(run.startedAt)}`;
+  const ended = run.endedAt === null ? '' : ` → ${formatDate(run.endedAt)}`;
+  return `Ch. ${run.fromChapter}–${run.toChapter} · ${when}${ended}`;
+}
+
+/** One line of the overview's recent-activity feed. */
+export interface WorkspaceActivityEntry {
+  id: string;
+  at: number;
+  /** The step the line belongs to, or "Run" for the execution itself. */
+  label: string;
+  tagClass: string;
+  message: string;
+}
+
+function subStepSuffix(step: WorkspaceRunStep): string {
+  return step.totalCount === 0 ? '' : ` · ${stepCountLabelOf(step)} sub-steps`;
+}
+
+/**
+ * The newest things that happened across a workspace's runs, newest first. Ties
+ * are broken the other way round from insertion, so a step starting reads above
+ * the execution that opened it in the same millisecond.
+ */
+export function recentActivitiesOf(runs: AppWorkspaceRun[], limit = 6): WorkspaceActivityEntry[] {
+  const lines: { order: number; entry: WorkspaceActivityEntry }[] = [];
+  const add = (entry: WorkspaceActivityEntry) => lines.push({ order: lines.length, entry });
+
+  for (const run of runs) {
+    const label = `Execution #${run.seq}`;
+    const range = `ch. ${run.fromChapter}–${run.toChapter}`;
+
+    add({
+      id: `${run.id}:opened`,
+      at: run.createdAt,
+      label: 'Run',
+      tagClass: 'tag-neutral',
+      message: run.mode === WorkspaceRunMode.Immediate ? `${label} submitted · ${range}` : `${label} booked · ${range}`,
+    });
+
+    if (run.endedAt !== null) {
+      add({ id: `${run.id}:ended`, at: run.endedAt, label: 'Run', tagClass: RUN_STATUS_TAG_CLASS[run.status], message: `${label} ${RUN_STATUS_LABEL[run.status].toLowerCase()}` });
+    }
+
+    for (const step of run.steps) {
+      if (step.startedAt !== null) {
+        add({ id: `${run.id}:${step.stepKey}:started`, at: step.startedAt, label: STEP_NAME[step.stepKey], tagClass: 'tag-primary', message: `Started${subStepSuffix(step)}` });
+      }
+      if (step.endedAt !== null) {
+        add({
+          id: `${run.id}:${step.stepKey}:ended`,
+          at: step.endedAt,
+          label: STEP_NAME[step.stepKey],
+          tagClass: STEP_STATE_TAG_CLASS[step.state],
+          message: `${STEP_STATE_LABEL[step.state]}${subStepSuffix(step)}${step.error ? ` · ${step.error}` : ''}`,
+        });
+      }
+    }
+  }
+
+  return lines
+    .sort((left, right) => right.entry.at - left.entry.at || right.order - left.order)
+    .slice(0, limit)
+    .map((line) => line.entry);
 }

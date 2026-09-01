@@ -1,37 +1,23 @@
+import { WorkspaceRunMode, type SubmitWorkspaceActivityInput, type SubmitWorkspaceRunInput } from '@/shared/app-workspace-run';
 import type { WorkspaceStepKey } from '@/shared/app-workspace';
 
-// What the execute dialog produces. Nothing submits it to the main process yet —
-// the runner does not exist — so these types stay in the renderer for now.
-
-export enum ExecutionMode {
-  Immediate = 'immediate',
-  Scheduled = 'scheduled',
-}
+// The execute dialog's own form state, and how it turns into the request main takes.
+// A scheduled run carries no start time of its own — each step brings its own.
 
 export enum StepStartMode {
+  /** Runs as soon as the step ahead of it completes. */
   AfterPrevious = 'after-previous',
   AtTime = 'at-time',
 }
 
-/** How one step of the pipeline takes part in this execution. */
 export interface ExecutionStepPlan {
   key: WorkspaceStepKey;
   enabled: boolean;
   startMode: StepStartMode;
   /** A `datetime-local` value in the user's own timezone — only read with StepStartMode.AtTime. */
   startAt: string;
-  /** Attempts per sub-step after the first failure, 0 for none. */
   retries: number;
   retryDelayMinutes: number;
-}
-
-export interface WorkspaceExecutionRequest {
-  mode: ExecutionMode;
-  fromChapter: number;
-  toChapter: number;
-  /** When the workspace itself starts — only read with ExecutionMode.Scheduled. */
-  startAt: string;
-  steps: ExecutionStepPlan[];
 }
 
 export const RETRY_OPTIONS = [3, 2, 1, 0];
@@ -47,17 +33,36 @@ export function toDateTimeInputValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** The default schedule the dialog opens with — tomorrow at 02:00, the quiet hours a long run wants. */
-export function defaultScheduleStart(now: Date = new Date()): string {
-  const start = new Date(now);
+/** The time a step's picker opens on — the quiet hours a long run wants, `hoursApart` after the step ahead of it. */
+export function defaultStepStart(previous: string | undefined, hoursApart = 2): string {
+  if (previous) return toDateTimeInputValue(new Date(new Date(previous).getTime() + hoursApart * 3_600_000));
+  const start = new Date();
   start.setDate(start.getDate() + 1);
   start.setHours(2, 0, 0, 0);
   return toDateTimeInputValue(start);
 }
 
-/** One line summarising a submitted request, for the notice the detail screen shows. */
-export function describeRequest(request: WorkspaceExecutionRequest): string {
-  const when = request.mode === ExecutionMode.Immediate ? 'start now' : `scheduled ${request.startAt.replace('T', ' ')}`;
-  const steps = request.steps.filter((plan) => plan.enabled).length;
-  return `${when} · ch. ${request.fromChapter}–${request.toChapter} · ${steps} step${steps === 1 ? '' : 's'}`;
+function startAtOf(plan: ExecutionStepPlan, mode: WorkspaceRunMode): number | null {
+  if (mode === WorkspaceRunMode.Immediate || plan.startMode === StepStartMode.AfterPrevious) return null;
+  const parsed = new Date(plan.startAt).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/** The form as main takes it: the included steps only, each with the start time it booked. */
+export function toRunInput(workspaceId: string, mode: WorkspaceRunMode, from: string, to: string, plans: ExecutionStepPlan[]): SubmitWorkspaceRunInput {
+  const steps: SubmitWorkspaceActivityInput[] = plans
+    .filter((plan) => plan.enabled)
+    .map((plan) => ({ stepKey: plan.key, startAt: startAtOf(plan, mode), retries: plan.retries, retryDelayMinutes: plan.retryDelayMinutes }));
+
+  return { workspaceId, mode, fromChapter: Number(from), toChapter: Number(to), steps };
+}
+
+/**
+ * Why the form cannot be submitted yet, beyond what `validateRunInput` covers —
+ * a step asked to start at a time the picker has not been given.
+ */
+export function missingStartTimeOf(mode: WorkspaceRunMode, plans: ExecutionStepPlan[]): string | undefined {
+  if (mode === WorkspaceRunMode.Immediate) return undefined;
+  const missing = plans.some((plan) => plan.enabled && plan.startMode === StepStartMode.AtTime && plan.startAt === '');
+  return missing ? 'A step set to start at a time needs that time.' : undefined;
 }

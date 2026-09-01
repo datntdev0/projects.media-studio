@@ -1,6 +1,6 @@
 import type { Container } from '@/main/container';
+import { registerAppWorkspaceRunHandler } from './handlers/app-workspace-run.handler';
 
-/** Subscribes every queue handler, before anything can publish onto the bus. */
-export function registerQueueHandlers(_container: Container): void {
-  // Handlers are added here as features start using the queue.
+export function registerQueueHandlers(container: Container): void {
+  registerAppWorkspaceRunHandler(container);
 }

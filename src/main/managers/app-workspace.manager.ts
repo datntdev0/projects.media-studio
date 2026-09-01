@@ -1,5 +1,6 @@
 import type { Db } from '@/main/database/client';
 import { createAppWorkspace, deleteAppWorkspace, deleteAppWorkspaceStepsByWorkspaceId, getAppWorkspace, listAppWorkspaces, updateAppWorkspace } from '@/main/database/repositories/app-workspace.repo';
+import { deleteAppWorkspaceRunsByWorkspaceId } from '@/main/database/repositories/app-workspace-run.repo';
 import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
 import { AppLibraryType } from '@/shared/app-library';
 import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type ListAppWorkspacesFilter, type UpdateAppWorkspaceInput, type WorkspaceStep } from '@/shared/app-workspace';
@@ -85,6 +86,7 @@ export function createAppWorkspaceManager(db: Db): AppWorkspaceManager {
 
     remove: (id) => {
       need(id);
+      deleteAppWorkspaceRunsByWorkspaceId(db, id);
       deleteAppWorkspaceStepsByWorkspaceId(db, id);
       deleteAppWorkspace(db, id);
     },

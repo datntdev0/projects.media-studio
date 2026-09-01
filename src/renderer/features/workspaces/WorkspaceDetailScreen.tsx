@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { DetailHeader } from '@/components/DetailHeader';
-import { ClockIcon, CloseIcon, PlayIcon } from '@/components/icons';
+import { ClockIcon, PlayIcon } from '@/components/icons';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import type { AppLibrary } from '@/shared/app-library';
 import type { AppWorkspace } from '@/shared/app-workspace';
-import { STATUS_LABEL, STATUS_TAG_CLASS, activityOf, presetMetaOf, stepViewsOf } from './workspaceFormat';
-import { describeRequest } from './workspaceExecution';
+import { isRunActive, type AppWorkspaceRun } from '@/shared/app-workspace-run';
+import { STATUS_LABEL, STATUS_TAG_CLASS, activityStripOf, presetMetaOf, stepViewsOf } from './workspaceFormat';
+import { useWorkspaceRuns } from './useWorkspaceRuns';
 import { WorkspaceStepper, type WorkspaceTab } from './WorkspaceStepper';
 import { WorkspaceOverview } from './WorkspaceOverview';
 import { WorkspaceStepSoon } from './WorkspaceStepSoon';
@@ -15,15 +17,20 @@ interface WorkspaceDetailScreenProps {
   workspace: AppWorkspace;
   novel: AppLibrary | undefined;
   onBack(): void;
+  /** A run moves the workspace's own status and step counts — call this to reload it. */
+  onRunChange(): void;
 }
 
-export function WorkspaceDetailScreen({ workspace, novel, onBack }: WorkspaceDetailScreenProps) {
+export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }: WorkspaceDetailScreenProps) {
   const [tab, setTab] = useState<WorkspaceTab>('overview');
   const [executeOpen, setExecuteOpen] = useState(false);
-  const [notice, setNotice] = useState<string | undefined>(undefined);
+  const [confirmCancel, setConfirmCancel] = useState<AppWorkspaceRun | undefined>(undefined);
+  const { runs, loading, error, submit, cancel } = useWorkspaceRuns(workspace.id, onRunChange);
+
   const views = stepViewsOf(workspace);
-  const activity = activityOf(workspace);
+  const strip = activityStripOf(workspace);
   const activeView = views.find((view) => view.key === tab);
+  const activeRun = runs.find(isRunActive);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 13.6 }}>
@@ -36,8 +43,16 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack }: WorkspaceDet
           <button type="button" className="btn btn-secondary" style={{ gap: 6, fontSize: 13 }} onClick={() => setTab('log')}>
             <ClockIcon width={15} height={15} />
             Run log
+            {runs.length > 0 && <span className="tag tag-neutral" style={{ fontSize: 10, padding: '1px 6px' }}>{runs.length}</span>}
           </button>
-          <button type="button" className="btn btn-primary" style={{ gap: 6 }} onClick={() => setExecuteOpen(true)}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ gap: 6 }}
+            onClick={() => setExecuteOpen(true)}
+            disabled={activeRun !== undefined}
+            title={activeRun ? 'A run is already in flight — cancel it from the run log first.' : undefined}
+          >
             <PlayIcon width={15} height={15} />
             Execute…
           </button>
@@ -48,39 +63,35 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack }: WorkspaceDet
         <WorkspaceStepper workspace={workspace} views={views} tab={tab} onSelect={setTab} />
 
         <div className="activity-strip">
-          <span className="activity-dot" data-pulsing={activity.pulsing} style={{ background: activity.dotColor }} />
+          <span className="activity-dot" data-pulsing={strip.pulsing} style={{ background: strip.dotColor }} />
           <span>
-            <b style={{ fontFamily: 'var(--font-heading)' }}>{activity.title}</b> — {activity.detail}
+            <b style={{ fontFamily: 'var(--font-heading)' }}>{strip.title}</b> — {strip.detail}
           </span>
+          {tab !== 'log' && runs.length > 0 && (
+            <button type="button" className="btn btn-secondary" style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 10px' }} onClick={() => setTab('log')}>View log</button>
+          )}
         </div>
 
-        {notice && (
-          <div className="activity-strip" style={{ background: 'color-mix(in srgb, var(--color-text) 4%, transparent)' }}>
-            <span>{notice}</span>
-            <button type="button" className="btn btn-secondary btn-icon" onClick={() => setNotice(undefined)} style={{ marginLeft: 'auto', borderColor: 'transparent', width: 24, height: 24 }} aria-label="Dismiss">
-              <CloseIcon width={14} height={14} />
-            </button>
-          </div>
-        )}
-
         {tab === 'log' ? (
-          <WorkspaceRunLog workspace={workspace} />
+          <WorkspaceRunLog runs={runs} loading={loading} error={error} onCancel={setConfirmCancel} />
         ) : activeView ? (
           <WorkspaceStepSoon view={activeView} />
         ) : (
-          <WorkspaceOverview workspace={workspace} novel={novel} views={views} onOpenStep={setTab} />
+          <WorkspaceOverview workspace={workspace} novel={novel} views={views} runs={runs} onOpenStep={setTab} onOpenLog={() => setTab('log')} />
         )}
       </div>
 
       {executeOpen && (
-        <WorkspaceExecuteDialog
-          workspace={workspace}
-          novel={novel}
-          onClose={() => setExecuteOpen(false)}
-          onSubmit={(request) => {
-            // Nothing runs it yet — the request is only echoed back so the form can be exercised.
-            setNotice(`Execution requested — ${describeRequest(request)}. Nothing started: the runner is not wired up yet.`);
-            setExecuteOpen(false);
+        <WorkspaceExecuteDialog workspace={workspace} novel={novel} onClose={() => setExecuteOpen(false)} onSubmit={submit} />
+      )}
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Cancel execution"
+          message={`Cancel execution #${confirmCancel.seq}? Steps that have not finished are marked skipped.`}
+          onCancel={() => setConfirmCancel(undefined)}
+          onConfirm={() => {
+            cancel(confirmCancel.id);
+            setConfirmCancel(undefined);
           }}
         />
       )}

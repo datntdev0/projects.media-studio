@@ -25,7 +25,7 @@ function matchesQuery(workspace: AppWorkspace, novelTitle: string, query: string
 }
 
 export function WorkspacesScreen() {
-  const { items, totalCount, loading, error, filter, setFilter, create, update, remove } = useAppWorkspaces();
+  const { items, totalCount, loading, error, filter, setFilter, create, update, remove, refresh } = useAppWorkspaces();
   const { items: libraries } = useAppLibraries();
   const [query, setQuery] = useState('');
   const [dialogItem, setDialogItem] = useState<AppWorkspace | 'new' | undefined>(undefined);
@@ -63,7 +63,7 @@ export function WorkspacesScreen() {
   );
 
   if (activeWorkspace) {
-    return <WorkspaceDetailScreen workspace={activeWorkspace} novel={novelOf(activeWorkspace)} onBack={() => setActiveId(undefined)} />;
+    return <WorkspaceDetailScreen workspace={activeWorkspace} novel={novelOf(activeWorkspace)} onBack={() => setActiveId(undefined)} onRunChange={refresh} />;
   }
 
   return (

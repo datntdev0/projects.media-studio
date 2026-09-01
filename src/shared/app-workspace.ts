@@ -32,6 +32,29 @@ export enum WorkspaceStatus {
   Failed = 'failed',
 }
 
+/** The step's display name — used by the UI and by the run validation messages main sends back. */
+export const WORKSPACE_STEP_NAME: Record<WorkspaceStepKey, string> = {
+  [WorkspaceStepKey.SemanticAnalysis]: 'Semantic Analysis',
+  [WorkspaceStepKey.SemanticTranslate]: 'Semantic Translate',
+  [WorkspaceStepKey.NarrationSpeech]: 'Narration Speech',
+  [WorkspaceStepKey.FrameIllustration]: 'Frame Illustration',
+  [WorkspaceStepKey.Export]: 'Export',
+};
+
+/** What a step counts one of — a run scopes the chapter-counted steps from its chapter range. */
+export enum WorkspaceStepUnit {
+  Chapter = 'chapter',
+  Part = 'part',
+}
+
+export const WORKSPACE_STEP_UNIT: Record<WorkspaceStepKey, WorkspaceStepUnit> = {
+  [WorkspaceStepKey.SemanticAnalysis]: WorkspaceStepUnit.Chapter,
+  [WorkspaceStepKey.SemanticTranslate]: WorkspaceStepUnit.Chapter,
+  [WorkspaceStepKey.NarrationSpeech]: WorkspaceStepUnit.Chapter,
+  [WorkspaceStepKey.FrameIllustration]: WorkspaceStepUnit.Chapter,
+  [WorkspaceStepKey.Export]: WorkspaceStepUnit.Part,
+};
+
 /** Whether a step can be turned off at creation time — after that the pipeline is fixed. */
 export enum StepAvailability {
   Required = 'required',
@@ -42,7 +65,6 @@ export enum StepAvailability {
 /** A step as the preset defines it, before any workspace exists. */
 export interface WorkspaceStepDefinition {
   key: WorkspaceStepKey;
-  /** Position in the preset, kept even when an earlier step is left off. */
   idx: number;
   availability: StepAvailability;
 }
@@ -72,13 +94,20 @@ export function plannedStepsOf(preset: WorkspacePreset, translateEnabled: boolea
  * step's own unit — chapters for analysis, translation and narration, parts for
  * export — and `totalCount` stays 0 until a run scopes the step.
  */
-export interface WorkspaceStep {
-  key: WorkspaceStepKey;
-  idx: number;
-  state: WorkspaceStepState;
+export interface WorkspaceStepCounts {
   doneCount: number;
   failedCount: number;
   totalCount: number;
+}
+
+/** Counted progress plus the state it was counted in — a workspace's step, or a run's. */
+export interface WorkspaceStepProgress extends WorkspaceStepCounts {
+  state: WorkspaceStepState;
+}
+
+export interface WorkspaceStep extends WorkspaceStepProgress {
+  key: WorkspaceStepKey;
+  idx: number;
 }
 
 export interface AppWorkspace {
@@ -86,10 +115,8 @@ export interface AppWorkspace {
   name: string;
   description: string;
   preset: WorkspacePreset;
-  /** The library novel this workspace runs over — the novel itself stays in the library. */
   libraryId: string;
   status: WorkspaceStatus;
-  /** In `idx` order, and only the steps the preset actually runs. */
   steps: WorkspaceStep[];
   lastRunAt: number | null;
   createdAt: number;
@@ -111,6 +138,14 @@ export interface AppWorkspaceDraft {
 export interface AppWorkspaceEdit {
   name: string;
   description: string;
+}
+
+/** A step's run-driven fields — its key and position belong to the preset. */
+export interface WorkspaceStepEdit {
+  state: WorkspaceStepState;
+  doneCount: number;
+  failedCount: number;
+  totalCount: number;
 }
 
 /** What a caller asks for when adding a workspace — the manager builds the steps and the status. */

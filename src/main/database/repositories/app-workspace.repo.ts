@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '@/main/database/client';
-import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepKey, WorkspaceStepState } from '@/shared/app-workspace';
+import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepEdit, WorkspaceStepKey, WorkspaceStepState } from '@/shared/app-workspace';
 
 interface AppWorkspaceRow {
   id: string;
@@ -124,6 +124,24 @@ export function createAppWorkspace(db: Db, draft: AppWorkspaceDraft): AppWorkspa
 export function updateAppWorkspace(db: Db, id: string, edit: AppWorkspaceEdit): AppWorkspace {
   db.prepare('UPDATE app_workspaces SET name = ?, description = ?, updated_at = ? WHERE id = ?').run(edit.name, edit.description, Date.now(), id);
   return getAppWorkspace(db, id)!;
+}
+
+/** The run-driven fields, which the listing's own edit never touches. */
+export function updateAppWorkspaceRunState(db: Db, id: string, status: WorkspaceStatus, lastRunAt: number | null): AppWorkspace {
+  db.prepare('UPDATE app_workspaces SET status = ?, last_run_at = ?, updated_at = ? WHERE id = ?').run(status, lastRunAt, Date.now(), id);
+  return getAppWorkspace(db, id)!;
+}
+
+export function updateAppWorkspaceStep(db: Db, workspaceId: string, stepKey: WorkspaceStepKey, edit: WorkspaceStepEdit): void {
+  db.prepare('UPDATE app_workspace_steps SET state = ?, done_count = ?, failed_count = ?, total_count = ?, updated_at = ? WHERE workspace_id = ? AND step_key = ?').run(
+    edit.state,
+    edit.doneCount,
+    edit.failedCount,
+    edit.totalCount,
+    Date.now(),
+    workspaceId,
+    stepKey,
+  );
 }
 
 export function deleteAppWorkspaceStepsByWorkspaceId(db: Db, workspaceId: string): void {
