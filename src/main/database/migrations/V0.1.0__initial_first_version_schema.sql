@@ -23,7 +23,6 @@ CREATE TABLE app_libraries (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   type TEXT NOT NULL,
-  status TEXT NOT NULL,
   cover_url TEXT,
   metadata TEXT,
   created_at INTEGER NOT NULL,

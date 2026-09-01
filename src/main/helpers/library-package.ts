@@ -8,8 +8,8 @@ import { imageMediaType, writeCoverFile } from './cover-storage';
 import { createAppLibrary, getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
 import { recount } from '../managers/app-library-content.manager';
-import { deriveIdleLibraryStatus, initialMetadata, setLibraryStatus } from '../managers/app-library.manager';
-import { AppLibraryStatus, AppLibraryType } from '../../shared/app-library';
+import { initialMetadata } from '../managers/app-library.manager';
+import { AppLibraryType } from '../../shared/app-library';
 import { AppLibraryContentType } from '../../shared/app-library-content';
 import {
   LIBRARY_PACKAGE_CHAPTERS_DIR,
@@ -220,7 +220,6 @@ export function importLibraryPackage(db: Db, data: Buffer): string {
   const created = createAppLibrary(db, {
     title: item.title,
     type: item.type,
-    status: AppLibraryStatus.Draft,
     coverUrl: item.cover ? importCover(zip, item.cover) : null,
     ...initialMetadata({ title: item.title, type: item.type, novel: item.novel ?? undefined }),
   });
@@ -237,11 +236,6 @@ export function importLibraryPackage(db: Db, data: Buffer): string {
   }
 
   recount(db, created.id);
-
-  const stored = getAppLibrary(db, created.id);
-  if (stored) {
-    setLibraryStatus(db, created.id, deriveIdleLibraryStatus(stored));
-  }
 
   return created.id;
 }

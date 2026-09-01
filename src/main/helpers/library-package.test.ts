@@ -6,7 +6,7 @@ import { seedLibrary } from '../database/test-fixtures';
 import { getAppLibrary } from '../database/repositories/app-library.repo';
 import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
 import type { Db } from '../database/client';
-import { AppLibraryStatus, AppLibraryType, NovelStatus } from '../../shared/app-library';
+import { AppLibraryType, NovelStatus } from '../../shared/app-library';
 import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage } from '../../shared/app-library-content';
 import { LIBRARY_PACKAGE_MANIFEST, LIBRARY_PACKAGE_SCHEMA, type LibraryPackageManifest } from '../../shared/app-library-package';
 
@@ -234,23 +234,13 @@ describe('importLibraryPackage', () => {
     ]);
   });
 
-  it('settles the new item as ready once it carries downloaded chapters', () => {
-    const source = seedLibrary(db, AppLibraryType.Novel);
-    seedChapter(source.id, 1, 'One', 'body');
-
-    const imported = getAppLibrary(db, importLibraryPackage(db, buildLibraryPackage(db, source.id).data))!;
-
-    expect(imported.status).toBe(AppLibraryStatus.Ready);
-  });
-
-  it('keeps a body-less chapter as a placeholder, leaving the item a draft', () => {
+  it('keeps a body-less chapter as a placeholder, counted but not downloaded', () => {
     const source = seedLibrary(db, AppLibraryType.Novel);
     seedChapter(source.id, 1, 'Not fetched yet', '');
 
     const imported = getAppLibrary(db, importLibraryPackage(db, buildLibraryPackage(db, source.id).data))!;
     const [chapter] = listAppLibraryContents(db, imported.id);
 
-    expect(imported.status).toBe(AppLibraryStatus.Draft);
     expect(imported.novelMetadata).toMatchObject({ discoveredCount: 1, downloadedCount: 0 });
     expect(chapter.textContent?.body).toBe('');
   });

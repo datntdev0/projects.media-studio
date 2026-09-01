@@ -12,7 +12,6 @@ import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from
 import { deleteLibraryContentDir } from '../helpers/content-storage';
 import { deleteAppLibraryContentsByLibraryId } from '../database/repositories/app-library-content.repo';
 import {
-  AppLibraryStatus,
   AppLibraryType,
   type AppLibrary,
   type AppLibraryDraft,
@@ -36,22 +35,6 @@ const EMPTY_COUNTERS: AppLibraryMetadataBase = { discoveredCount: 0, downloadedC
 export function stripStamps(item: AppLibrary): AppLibraryDraft {
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = item;
   return draft;
-}
-
-/**
- * What an item's status should read from its counters alone — `Ready` once anything has
- * been downloaded, `Draft` otherwise.
- */
-export function deriveIdleLibraryStatus(item: AppLibrary): AppLibraryStatus {
-  const metadata = item.novelMetadata ?? item.imageMetadata ?? item.videoMetadata;
-  return metadata && metadata.downloadedCount > 0 ? AppLibraryStatus.Ready : AppLibraryStatus.Draft;
-}
-
-/** Sets an item's status directly, bypassing the restricted set a caller may write — for code that settles an item wholesale, such as an import. */
-export function setLibraryStatus(db: Db, id: string, status: AppLibraryStatus): void {
-  const item = getAppLibrary(db, id);
-  if (!item || item.status === status) return;
-  updateAppLibrary(db, id, { ...stripStamps(item), status });
 }
 
 /** Builds the type-specific metadata block a freshly created item starts with. Exported so an imported package starts from the same zeroed counters. */
@@ -88,7 +71,6 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
       createAppLibrary(db, {
         title: input.title,
         type: input.type,
-        status: AppLibraryStatus.Draft,
         coverUrl: input.coverUrl ?? null,
         ...initialMetadata(input),
       }),

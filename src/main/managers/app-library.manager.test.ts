@@ -4,7 +4,7 @@ import { createTestDb } from '../database/test-db';
 import { createAppLibraryContent } from '../database/repositories/app-library-content.repo';
 import type { Db } from '../database/client';
 import { AppLibraryContentStatus, AppLibraryContentType } from '../../shared/app-library-content';
-import { AppLibraryStatus, AppLibraryType, NovelStatus, type CreateAppLibraryInput } from '../../shared/app-library';
+import { AppLibraryType, NovelStatus, type CreateAppLibraryInput } from '../../shared/app-library';
 
 vi.mock('../helpers/cover-storage', () => ({
   COVER_EXTENSION_BY_CONTENT_TYPE: { 'image/png': 'png' },
@@ -31,7 +31,6 @@ describe('app library manager', () => {
     const created = manager.create(NOVEL_INPUT);
 
     expect(created.id).toBeTruthy();
-    expect(created.status).toBe(AppLibraryStatus.Draft);
     expect(created.novelMetadata).toMatchObject({ discoveredCount: 0, downloadedCount: 0, author: 'Author' });
     expect(manager.get(created.id)).toEqual(created);
   });

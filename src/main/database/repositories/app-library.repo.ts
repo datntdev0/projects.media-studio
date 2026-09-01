@@ -1,18 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../client';
-import type {
-  AppLibrary,
-  AppLibraryDraft,
-  AppLibraryStatus,
-  AppLibraryType,
-  ListAppLibrariesFilter,
-} from '../../../shared/app-library';
+import type { AppLibrary, AppLibraryDraft, AppLibraryType, ListAppLibrariesFilter } from '../../../shared/app-library';
 
 interface AppLibraryRow {
   id: string;
   title: string;
   type: string;
-  status: string;
   cover_url: string | null;
   metadata: string | null;
   created_at: number;
@@ -37,7 +30,6 @@ function toAppLibrary(row: AppLibraryRow): AppLibrary {
     id: row.id,
     title: row.title,
     type: row.type as AppLibraryType,
-    status: row.status as AppLibraryStatus,
     coverUrl: row.cover_url,
     novelMetadata: row.type === 'novel' ? metadata : null,
     imageMetadata: row.type === 'image' ? metadata : null,
@@ -61,11 +53,6 @@ export function listAppLibraries(db: Db, filter: ListAppLibrariesFilter = {}): A
     params.push(filter.type);
   }
 
-  if (filter.status) {
-    clauses.push('status = ?');
-    params.push(filter.status);
-  }
-
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const rows = db.prepare(`SELECT * FROM app_libraries ${where} ORDER BY updated_at DESC`).all(...params) as unknown as AppLibraryRow[];
 
@@ -78,13 +65,12 @@ export function createAppLibrary(db: Db, draft: AppLibraryDraft): AppLibrary {
   const metadata = metadataOf(draft);
 
   db.prepare(
-    `INSERT INTO app_libraries (id, title, type, status, cover_url, metadata, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO app_libraries (id, title, type, cover_url, metadata, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     draft.title,
     draft.type,
-    draft.status,
     draft.coverUrl,
     metadata ? JSON.stringify(metadata) : null,
     now,
@@ -99,12 +85,11 @@ export function updateAppLibrary(db: Db, id: string, draft: AppLibraryDraft): Ap
 
   db.prepare(
     `UPDATE app_libraries
-     SET title = ?, type = ?, status = ?, cover_url = ?, metadata = ?, updated_at = ?
+     SET title = ?, type = ?, cover_url = ?, metadata = ?, updated_at = ?
      WHERE id = ?`,
   ).run(
     draft.title,
     draft.type,
-    draft.status,
     draft.coverUrl,
     metadata ? JSON.stringify(metadata) : null,
     Date.now(),

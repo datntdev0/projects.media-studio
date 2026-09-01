@@ -1,4 +1,4 @@
-import { AppLibraryStatus, AppLibraryType, type AppLibrary, type AppLibraryMetadataBase } from '../../../shared/app-library';
+import { AppLibraryType, NovelStatus, type AppLibrary, type AppLibraryMetadataBase } from '../../../shared/app-library';
 
 export const TYPE_LABEL: Record<AppLibraryType, string> = {
   [AppLibraryType.Novel]: 'Novel',
@@ -6,9 +6,17 @@ export const TYPE_LABEL: Record<AppLibraryType, string> = {
   [AppLibraryType.Video]: 'Videos',
 };
 
-export const STATUS_TAG_CLASS: Record<AppLibraryStatus, string> = {
-  [AppLibraryStatus.Draft]: 'tag-neutral',
-  [AppLibraryStatus.Ready]: 'tag-primary',
+/** The source work's publication state — a novel-only field, so an image or video set has none to show. */
+export const NOVEL_STATUS_LABEL: Record<NovelStatus, string> = {
+  [NovelStatus.Ongoing]: 'Ongoing',
+  [NovelStatus.Complete]: 'Complete',
+  [NovelStatus.Hiatus]: 'Hiatus',
+};
+
+export const NOVEL_STATUS_TAG_CLASS: Record<NovelStatus, string> = {
+  [NovelStatus.Ongoing]: 'tag-accent',
+  [NovelStatus.Complete]: 'tag-primary',
+  [NovelStatus.Hiatus]: 'tag-neutral',
 };
 
 export function metadataOf(item: AppLibrary): AppLibraryMetadataBase | null {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useResizablePanel } from '../../components/useResizablePanel';
 import type { AppLibrary } from '../../../shared/app-library';
 import { ContentLanguage } from '../../../shared/app-library-content';
-import { STATUS_TAG_CLASS, formatDate } from './libraryFormat';
+import { formatDate } from './libraryFormat';
 import { DetailHeader } from './DetailHeader';
 import { ChapterTable } from './ChapterTable';
 import { ChapterReader } from './ChapterReader';
@@ -73,12 +73,10 @@ export function NovelDetailScreen({ item, onBack, onEdit, onDelete, onContentCha
           <div className="text-muted" style={{ fontSize: 13, marginBottom: 10.2 }}>{novel?.author || 'No author recorded'}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 13.6 }}>
             {novel?.genres.map((genre) => (
-              <span key={genre} className="tag tag-neutral">{genre}</span>
+              <span key={genre} className="tag tag-outline">{genre}</span>
             ))}
           </div>
           <dl style={{ margin: 0, fontSize: 13, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 13.6px' }}>
-            <dt className="text-muted">Status</dt>
-            <dd style={{ margin: 0 }}><span className={`tag ${STATUS_TAG_CLASS[item.status]}`}>{item.status}</span></dd>
             <dt className="text-muted">Chapters</dt>
             <dd style={{ margin: 0 }}>{novel ? `${novel.downloadedCount < novel.discoveredCount ? `${novel.downloadedCount} / ${novel.discoveredCount}` : novel.downloadedCount} ch.` : '—'}</dd>
             <dt className="text-muted">Language</dt>

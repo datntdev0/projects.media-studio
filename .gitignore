@@ -1,12 +1,9 @@
+.mockup/
 .venv/
 __pycache__/
 *.pyc
-output/
-mockup/
 *.wav
 *.srt
-# ...except the bundled TTS voice-sample assets, which are committed on purpose.
-!src/main/assets/tts-voice-samples/*.wav
 
 # Logs
 logs

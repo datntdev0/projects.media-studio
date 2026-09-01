@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DownloadIcon, EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '../../components/icons';
-import { AppLibraryStatus, AppLibraryType, type AppLibrary } from '../../../shared/app-library';
+import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAppLibraries } from './useAppLibraries';
 import { LibraryFormDialog } from './LibraryFormDialog';
 import { LibraryDetailScreen } from './LibraryDetailScreen';
-import { STATUS_TAG_CLASS, TYPE_LABEL, contentLabelOf, formatDate, progressPctOf, summaryOf } from './libraryFormat';
+import { NOVEL_STATUS_LABEL, NOVEL_STATUS_TAG_CLASS, TYPE_LABEL, contentLabelOf, formatDate, progressPctOf, summaryOf } from './libraryFormat';
 
 type ViewMode = 'table' | 'grid';
 
@@ -135,20 +135,6 @@ export function LibraryScreen() {
           <input className="input" style={{ paddingLeft: 29 }} placeholder="Filter by title, author, source..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
 
-        <select
-          className="input"
-          style={{ width: 130 }}
-          value={filter.status ?? ''}
-          onChange={(e) => setFilter({ ...filter, status: (e.target.value || undefined) as AppLibraryStatus | undefined })}
-        >
-          <option value="">Any status</option>
-          {Object.values(AppLibraryStatus).map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10.2 }}>
           <span className="text-muted" style={{ fontSize: 12 }}>
             {visibleItems.length} item{visibleItems.length === 1 ? '' : 's'}
@@ -209,10 +195,10 @@ export function LibraryScreen() {
         <table className="table">
           <thead>
             <tr>
-              <th style={{ width: '46%' }}>Item</th>
-              <th style={{ width: '11%' }}>Type</th>
-              <th style={{ width: '15%' }}>Content</th>
+              <th style={{ width: '44%' }}>Item</th>
+              <th style={{ width: '10%' }}>Type</th>
               <th style={{ width: '12%' }}>Status</th>
+              <th style={{ width: '16%' }}>Content</th>
               <th style={{ width: '11%' }}>Updated</th>
               <th></th>
             </tr>
@@ -240,9 +226,15 @@ export function LibraryScreen() {
                 <td>
                   <span className="tag tag-outline">{TYPE_LABEL[item.type]}</span>
                 </td>
-                <td style={{ fontSize: 13 }}>{contentLabelOf(item)}</td>
                 <td>
-                  <span className={`tag ${STATUS_TAG_CLASS[item.status]}`}>{item.status}</span>
+                  {item.novelMetadata ? (
+                    <span className={`tag ${NOVEL_STATUS_TAG_CLASS[item.novelMetadata.status]}`}>{NOVEL_STATUS_LABEL[item.novelMetadata.status]}</span>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: 13 }}>—</span>
+                  )}
+                </td>
+                <td style={{ fontSize: 13 }}>
+                  {contentLabelOf(item)}
                   <div className="progress-track">
                     <div className="progress-fill" style={{ width: `${progressPctOf(item)}%` }} />
                   </div>
@@ -284,9 +276,6 @@ export function LibraryScreen() {
                 </div>
                 <div className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {summaryOf(item)}
-                </div>
-                <div>
-                  <span className={`tag ${STATUS_TAG_CLASS[item.status]}`}>{item.status}</span>
                 </div>
                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, color: 'color-mix(in srgb, var(--color-text) 55%, transparent)' }}>
                   <span>{contentLabelOf(item)}</span>

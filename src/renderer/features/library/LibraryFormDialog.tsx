@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { BookIcon, CheckIcon, EditIcon, ImageSetIcon, UploadIcon, VideoSetIcon } from '../../components/icons';
 import { AppLibraryType, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '../../../shared/app-library';
 import type { LibraryPackagePreview } from '../../../shared/app-library-package';
+import { CHAPTER_LANG_NAME, CHAPTER_LANGS, resolveSourceLang } from './chapter';
+import { NOVEL_STATUS_LABEL } from './libraryFormat';
 import { CoverPicker } from './CoverPicker';
 
 interface LibraryFormDialogProps {
@@ -58,7 +60,8 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
   const [novelStatus, setNovelStatus] = useState<NovelStatus>(item?.novelMetadata?.status ?? NovelStatus.Ongoing);
   const [novelAuthor, setNovelAuthor] = useState(item?.novelMetadata?.author ?? '');
-  const [novelLanguage, setNovelLanguage] = useState(item?.novelMetadata?.language ?? '');
+  // An existing item may hold free text like "Chinese" — matched back to a code so the dropdown can show it.
+  const [novelLanguage, setNovelLanguage] = useState<string>(resolveSourceLang(item?.novelMetadata?.language ?? '') ?? '');
   const [novelGenres, setNovelGenres] = useState(item?.novelMetadata?.genres.join(', ') ?? '');
   const [novelDescription, setNovelDescription] = useState(item?.novelMetadata?.description ?? '');
 
@@ -76,7 +79,7 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
   const isImport = !isEdit && createMode === 'import';
   const lastStep = isImport ? 3 : 2;
 
-  const showShape = isEdit || step === 1;
+  const showShape = !isEdit && step === 1;
   const showUpload = isImport && step === 2;
   const showDetails = isEdit || (!isImport && step === 2);
   const showReview = isImport && step === 3;
@@ -166,7 +169,7 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
   const backLabel = isEdit || step === 1 ? 'Cancel' : 'Back';
   const nextLabel = isEdit ? 'Save changes' : step < lastStep ? 'Continue' : isImport ? 'Import item' : 'Create item';
 
-  const typeLocked = isEdit || isImport;
+  const typeLocked = isImport;
 
   return (
     <div className="dialog-backdrop">
@@ -202,27 +205,25 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
                 )}
               </div>
 
-              {!isEdit && (
-                <div className="field">
-                  <label>How is the content sourced?</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13.6 }}>
-                    {CREATE_MODE_OPTIONS.map(({ mode, Icon, title: optTitle, hint }) => (
-                      <label
-                        key={mode}
-                        className="blueprint"
-                        style={{ padding: 13.6, cursor: 'pointer', display: 'block', background: createMode === mode ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
-                      >
-                        <input type="radio" name="cmode" style={{ position: 'absolute', opacity: 0 }} checked={createMode === mode} onChange={() => setCreateMode(mode)} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Icon width={17} height={17} />
-                          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{optTitle}</span>
-                        </div>
-                        <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{hint}</div>
-                      </label>
-                    ))}
-                  </div>
+              <div className="field">
+                <label>How is the content sourced?</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13.6 }}>
+                  {CREATE_MODE_OPTIONS.map(({ mode, Icon, title: optTitle, hint }) => (
+                    <label
+                      key={mode}
+                      className="blueprint"
+                      style={{ padding: 13.6, cursor: 'pointer', display: 'block', background: createMode === mode ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
+                    >
+                      <input type="radio" name="cmode" style={{ position: 'absolute', opacity: 0 }} checked={createMode === mode} onChange={() => setCreateMode(mode)} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Icon width={17} height={17} />
+                        <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{optTitle}</span>
+                      </div>
+                      <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{hint}</div>
+                    </label>
+                  ))}
                 </div>
-              )}
+              </div>
             </>
           )}
 
@@ -279,22 +280,27 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
 
                 {isNovel && (
                   <>
-                    <div className="field">
-                      <label>Author</label>
-                      <input className="input" value={novelAuthor} onChange={(e) => setNovelAuthor(e.target.value)} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 13.6 }}>
-                      <div className="field" style={{ flex: 1 }}>
-                        <label>Novel status</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 13.6 }}>
+                      <div className="field">
+                        <label>Author</label>
+                        <input className="input" value={novelAuthor} onChange={(e) => setNovelAuthor(e.target.value)} />
+                      </div>
+                      <div className="field">
+                        <label>Status</label>
                         <select className="input" value={novelStatus} onChange={(e) => setNovelStatus(e.target.value as NovelStatus)}>
-                          <option value={NovelStatus.Ongoing}>Ongoing</option>
-                          <option value={NovelStatus.Complete}>Complete</option>
-                          <option value={NovelStatus.Hiatus}>Hiatus</option>
+                          {Object.values(NovelStatus).map((status) => (
+                            <option key={status} value={status}>{NOVEL_STATUS_LABEL[status]}</option>
+                          ))}
                         </select>
                       </div>
-                      <div className="field" style={{ flex: 1 }}>
+                      <div className="field">
                         <label>Language</label>
-                        <input className="input" value={novelLanguage} onChange={(e) => setNovelLanguage(e.target.value)} placeholder="en" />
+                        <select className="input" value={novelLanguage} onChange={(e) => setNovelLanguage(e.target.value)}>
+                          <option value="">Choose…</option>
+                          {CHAPTER_LANGS.map((lang) => (
+                            <option key={lang} value={lang}>{`${CHAPTER_LANG_NAME[lang]} (${lang})`}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                     <div className="field">
@@ -303,7 +309,7 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport 
                     </div>
                     <div className="field">
                       <label>Description</label>
-                      <textarea className="input" style={{ minHeight: 70 }} value={novelDescription} onChange={(e) => setNovelDescription(e.target.value)} />
+                      <textarea className="input" rows={10} value={novelDescription} onChange={(e) => setNovelDescription(e.target.value)} />
                     </div>
                   </>
                 )}

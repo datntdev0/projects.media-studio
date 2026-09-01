@@ -5,16 +5,30 @@ import { registerCoverProtocolHandler } from './helpers/protocols/cover.protocol
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
 import { createMainWindow } from './windows/main-window';
+import { closeLogger, getLogFilePath, logger } from './helpers/logger';
+import { getAppBaseDir } from './helpers/paths';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
 
+function logStartup(): void {
+  logger.info(`Starting ${app.getName()} v${app.getVersion()} (packaged: ${app.isPackaged})`);
+  logger.info(`Electron ${process.versions.electron}, Node ${process.versions.node}, ${process.platform}-${process.arch}`);
+  logger.info(`Base dir: ${getAppBaseDir()}`);
+  logger.info(`Log file: ${getLogFilePath()}`);
+}
+
+process.on('uncaughtException', (error) => logger.error('Uncaught exception', error));
+process.on('unhandledRejection', (reason) => logger.error('Unhandled rejection', reason));
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  logStartup();
+
   registerCoverProtocolHandler();
 
   const container = createContainer();
@@ -25,6 +39,8 @@ app.whenReady().then(() => {
   registerIpcHandlers(container);
 
   createMainWindow();
+
+  logger.info('Startup complete');
 });
 
 // Quit when all windows are closed.
@@ -33,5 +49,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  logger.info('Shutting down');
   closeContainer();
+  closeLogger();
 });

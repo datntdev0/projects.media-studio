@@ -11,7 +11,7 @@ interface ChapterReaderProps {
 
 export function ChapterReader({ chapters, activeId, onSelect, onSave }: ChapterReaderProps) {
   const chapter = chapters.find((c) => c.id === activeId) ?? chapters[0];
-  const listPanel = useResizablePanel({ defaultWidth: 250, minWidth: 250, maxWidth: 480 });
+  const listPanel = useResizablePanel({ defaultWidth: 360, minWidth: 280, maxWidth: 480 });
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(chapter.title);
   const [draftBody, setDraftBody] = useState(chapter.sourceBody);

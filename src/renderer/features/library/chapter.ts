@@ -9,8 +9,8 @@ import { ContentLanguage, AppLibraryContentStatus, AppLibraryContentType, type A
 
 export type ChapterLang = ContentLanguage;
 
-/** The languages a chapter may be stored in. Only `resolveSourceLang` reads this now that nothing offers a choice of language. */
-const CHAPTER_LANGS: ChapterLang[] = [ContentLanguage.Chinese, ContentLanguage.Vietnamese, ContentLanguage.English];
+/** The languages a chapter may be stored in — also the options the metadata form offers. */
+export const CHAPTER_LANGS: ChapterLang[] = [ContentLanguage.Chinese, ContentLanguage.Vietnamese, ContentLanguage.English];
 
 export const CHAPTER_LANG_NAME: Record<ChapterLang, string> = {
   [ContentLanguage.Chinese]: 'Chinese',

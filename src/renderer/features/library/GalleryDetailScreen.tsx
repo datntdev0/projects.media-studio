@@ -1,6 +1,6 @@
 import { UploadIcon } from '../../components/icons';
 import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
-import { STATUS_TAG_CLASS, contentLabelOf, contentUnitOf, formatBytes, formatDate } from './libraryFormat';
+import { contentLabelOf, contentUnitOf, formatBytes, formatDate } from './libraryFormat';
 import { DetailHeader } from './DetailHeader';
 
 interface GalleryDetailScreenProps {
@@ -24,7 +24,6 @@ export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryD
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: '0 0 4px' }}>{item.title}</h3>
-          <span className={`tag ${STATUS_TAG_CLASS[item.status]}`}>{item.status}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 27.2, marginTop: 13.6, fontSize: 13 }}>
             <div>
               <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Assets</div>

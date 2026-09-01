@@ -11,11 +11,6 @@ export enum AppLibraryType {
   Video = 'video',
 }
 
-export enum AppLibraryStatus {
-  Draft = 'draft',
-  Ready = 'ready',
-}
-
 export enum NovelStatus {
   Ongoing = 'ongoing',
   Complete = 'complete',
@@ -51,7 +46,6 @@ export interface AppLibrary {
   id: string;
   title: string;
   type: AppLibraryType;
-  status: AppLibraryStatus;
   coverUrl: string | null;
   novelMetadata: NovelMetadata | null;
   imageMetadata: ImageSetMetadata | null;
@@ -63,16 +57,15 @@ export interface AppLibrary {
 /** What a caller hands over to create or fully replace an item — the id and the dates are the repository's to stamp. */
 export type AppLibraryDraft = Omit<AppLibrary, 'id' | 'createdAt' | 'updatedAt'>;
 
-/** What the repository itself narrows a listing by: two columns, equality only. */
+/** What the repository itself narrows a listing by: one column, equality only. */
 export interface ListAppLibrariesFilter {
   type?: AppLibraryType;
-  status?: AppLibraryStatus;
 }
 
 /** The descriptive fields a novel carries beyond the counters every item type has. */
 export type NovelDetails = Omit<NovelMetadata, keyof AppLibraryMetadataBase>;
 
-/** What a caller asks for when adding an item — the manager fills in status and counters. */
+/** What a caller asks for when adding an item — the manager fills in the counters. */
 export interface CreateAppLibraryInput {
   title: string;
   type: AppLibraryType;
