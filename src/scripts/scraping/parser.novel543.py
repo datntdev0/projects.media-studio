@@ -1,10 +1,14 @@
-"""novel543.com: metadata from the og:* meta tags, chapters from the /dir page."""
+"""novel543.com: metadata from the og:* meta tags, the synopsis from `.intro`, chapters from the /dir page."""
 
 import re
 from urllib.parse import urljoin, urlparse
 
 BASE_URL = "https://www.novel543.com"
 HOSTS = {"novel543.com", "www.novel543.com"}
+
+# What this site publishes in, as one of the languages a library's content rows carry
+# (see ContentLanguage in src/shared/app-library-content.ts).
+DEFAULT_LANGUAGE = "zh"
 
 # meta name/property -> field on the Novel model
 META_FIELDS = {
@@ -21,6 +25,12 @@ META_FIELDS = {
 }
 
 _BOOK_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Where the synopsis is on the book page. Not every book carries an og:description meta
+# tag — plenty omit it outright — while this element is always rendered, so it is the
+# primary source and the meta tag only a fallback. Matched on the class alone: the site
+# renders it as `<div class="intro is-hidden-mobile">`, and the extra classes vary.
+_INTRO_SELECTOR = ".intro"
 
 # What the site appends to a split chapter's heading: `(1/2)`, in either width of
 # bracket. Anchored, because a heading may legitimately end in a bracketed number.
@@ -80,6 +90,20 @@ def read_meta(page) -> dict[str, str]:
     return found
 
 
+def parse_description(page) -> str | None:
+    """The synopsis as the page itself shows it, or None where the element is missing.
+
+    Lines are stripped and blank ones dropped, so the HTML's own indentation does not
+    survive into the text while a synopsis written as several paragraphs still does.
+    """
+    nodes = page.css(_INTRO_SELECTOR)
+    if not nodes:
+        return None
+
+    lines = (line.strip() for line in nodes[0].get_all_text(strip=True).splitlines())
+    return "\n".join(line for line in lines if line) or None
+
+
 def parse_metadata(page, book_url: str, book_id: str) -> dict:
     meta = read_meta(page)
     data: dict = {"id": book_id, "url": book_url}
@@ -90,6 +114,12 @@ def parse_metadata(page, book_url: str, book_id: str) -> dict:
     if not data.get("title"):
         heading = page.css("h1")
         data["title"] = heading[0].get_all_text(strip=True) if heading else None
+
+    # Overrides whatever og:description held, which is often nothing at all.
+    description = parse_description(page)
+    if description:
+        data["description"] = description
+
     for field in ("cover_url", "latest_chapter_url", "read_url"):
         if data.get(field):
             data[field] = urljoin(book_url, data[field])

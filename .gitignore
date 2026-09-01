@@ -105,10 +105,5 @@ out/
 /test-results/
 /playwright-report/
 
-# App's local SQLite data (see src/main/db/client.ts) — stored next to
-# wherever the app runs from, so it lands here in dev
-/data/
-
-# Worker's own runtime data (browser profile, generated speech files, cached TTS
-# model weights) — see src/worker/config.json's appDir
-/src/worker/data/
+# App's local data
+data/
