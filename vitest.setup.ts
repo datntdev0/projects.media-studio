@@ -1,4 +1,12 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { vi } from 'vitest';
+
+// A chapter's text is written to a real file now (see helpers/content-storage.ts), so point the
+// app data dir at a disposable directory per run. Without this, tests would write into — and
+// delete from — the project's own `data/` folder alongside whatever the app has stored there.
+process.env.APP_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'media-studio-test-'));
 
 // `createTestDb()` opens a real `node:sqlite` database, which logs Node's one-time "experimental
 // feature" notice per test file — expected here, so it's silenced rather than left to clutter every

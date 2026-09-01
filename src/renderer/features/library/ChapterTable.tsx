@@ -1,21 +1,17 @@
 import { useMemo, useState } from 'react';
-import { PlusIcon, TranslateIcon, TrashIcon } from '../../components/icons';
+import { PlusIcon, TrashIcon } from '../../components/icons';
 import { formatDate } from './libraryFormat';
-import { CHAPTER_LANG_NAME, CHAPTER_LANGS, CHAPTER_STATUS_LABEL, CHAPTER_STATUS_TAG_CLASS, countWords, hasTranslation, type ChapterLang, type ChapterRow } from './chapter';
+import { CHAPTER_STATUS_LABEL, CHAPTER_STATUS_TAG_CLASS, countWords, type ChapterRow } from './chapter';
 
 interface ChapterTableProps {
   chapters: ChapterRow[];
-  lang: ChapterLang;
-  sourceLang: ChapterLang | undefined;
-  onLangChange(lang: ChapterLang): void;
   onOpen(id: string): void;
   onDelete(chapter: ChapterRow): void;
   onDeleteMany(chapters: ChapterRow[]): void;
-  onScrape(): void;
   onAddChapter(): void;
 }
 
-export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen, onDelete, onDeleteMany, onScrape, onAddChapter }: ChapterTableProps) {
+export function ChapterTable({ chapters, onOpen, onDelete, onDeleteMany, onAddChapter }: ChapterTableProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -25,7 +21,6 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
     return chapters.filter((c) => c.title.toLowerCase().includes(needle));
   }, [chapters, query]);
 
-  const translated = lang !== sourceLang;
   const selectedCount = selected.size;
 
   const toggleOne = (id: string) => {
@@ -47,16 +42,6 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
       <div style={{ height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 10.2, borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
         <h5 style={{ margin: 0 }}>Chapters</h5>
         <span className="tag tag-neutral">{chapters.length}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 10 }}>
-          <TranslateIcon width={15} height={15} style={{ color: 'var(--color-accent)' }} />
-          <select className="input" style={{ width: 200, fontSize: 13 }} value={lang} onChange={(e) => onLangChange(e.target.value as ChapterLang)}>
-            {CHAPTER_LANGS.map((code) => (
-              <option key={code} value={code}>
-                {code === sourceLang ? `${CHAPTER_LANG_NAME[code]} · source` : CHAPTER_LANG_NAME[code]}
-              </option>
-            ))}
-          </select>
-        </div>
         <div style={{ width: 180 }}>
           <input className="input" placeholder="Find chapter..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
@@ -64,11 +49,9 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
           {selectedCount > 0 && (
             <>
               <span className="text-muted" style={{ fontSize: 12 }}>{selectedCount} selected</span>
-              <button type="button" className="btn btn-primary" style={{ fontSize: 13 }} onClick={onScrape}>Scrape selected</button>
               <button type="button" className="btn btn-secondary" style={{ fontSize: 13, color: '#8a2f2f' }} onClick={handleDeleteSelected}>Delete selected</button>
             </>
           )}
-          <button type="button" className="btn btn-secondary" disabled title="Scraping arrives with the job runner." style={{ fontSize: 13 }}>Retry failed</button>
           <button type="button" className="btn btn-secondary" onClick={onAddChapter} style={{ gap: 6, fontSize: 13 }}>
             <PlusIcon width={14} height={14} />
             Add chapter
@@ -79,7 +62,7 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {chapters.length === 0 ? (
           <div className="blueprint" style={{ margin: 20.4, padding: 34, textAlign: 'center' }}>
-            <div className="text-muted">No chapters recorded yet — scraping content or adding one manually gets it started.</div>
+            <div className="text-muted">No chapters recorded yet — importing a package or adding one manually gets it started.</div>
           </div>
         ) : (
           <table className="table">
@@ -88,7 +71,6 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
                 <th style={{ width: 38 }}></th>
                 <th style={{ width: 64 }}>No.</th>
                 <th>Title</th>
-                {translated && <th style={{ width: 128 }}>{CHAPTER_LANG_NAME[lang]}</th>}
                 <th style={{ width: 96 }}>Words</th>
                 <th style={{ width: 112 }}>Status</th>
                 <th style={{ width: 112 }}>Updated</th>
@@ -108,13 +90,6 @@ export function ChapterTable({ chapters, lang, sourceLang, onLangChange, onOpen,
                   </td>
                   <td className="text-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{chapter.no}</td>
                   <td style={{ fontSize: 14 }}>{chapter.title}</td>
-                  {translated && (
-                    <td>
-                      <span className={`tag ${hasTranslation(chapter, lang) ? 'tag-accent' : 'tag-neutral'}`}>
-                        {hasTranslation(chapter, lang) ? 'Translated' : 'Not translated'}
-                      </span>
-                    </td>
-                  )}
                   <td className="text-muted" style={{ fontSize: 13 }}>{countWords(chapter.sourceBody) || '—'}</td>
                   <td>
                     <span className={`tag ${CHAPTER_STATUS_TAG_CLASS[chapter.status]}`}>{CHAPTER_STATUS_LABEL[chapter.status]}</span>

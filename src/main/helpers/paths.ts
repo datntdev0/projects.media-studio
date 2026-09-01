@@ -17,27 +17,15 @@ export function getAppBaseDir(): string {
   return path.join(root, config.appDir);
 }
 
-/** Where scraped binary assets (e.g. cover images) are cached on disk, keyed by file name. */
-export function getAppCoverDir(): string {
-  return path.join(getAppBaseDir(), 'data', 'covers');
+/** The `data` root every stored asset hangs off — covers, and the per-item chapter files. */
+export function getAppDataDir(): string {
+  return path.join(getAppBaseDir(), 'data');
 }
 
-/** Where a workflow's one-off export of its library — chapters, cover, manifest — lives on disk, keyed by workflow id. */
-export function getAppWorkflowExportDir(workflowId: string): string {
-  return path.join(getAppBaseDir(), 'data', 'workflows', workflowId);
+/** Where scraped binary assets (e.g. cover images) are cached on disk, keyed by file name. */
+export function getAppCoverDir(): string {
+  return path.join(getAppDataDir(), 'covers');
 }
 
 /** Custom scheme the renderer loads cover images through — a raw file path is not a URL a browser will load. */
 export const COVER_PROTOCOL = 'app-cover';
-
-/** Where the bundled TTS voice-sample clips live — packaged as an extraResource (see forge.config.ts). */
-export function getTtsVoiceSamplesDir(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'tts-voice-samples')
-    : path.join(app.getAppPath(), 'src/main/assets/tts-voice-samples');
-}
-
-/** The `data` folder both this app and the worker (see src/worker/app/config.py's `appDir`) are configured to share by default — e.g. the worker's `/speech` response returns wav/srt paths relative to this root. */
-export function getWorkerDataDir(): string {
-  return path.join(getAppBaseDir(), 'data');
-}

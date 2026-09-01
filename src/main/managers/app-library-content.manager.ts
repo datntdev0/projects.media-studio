@@ -13,16 +13,14 @@ export interface AppLibraryContentManager {
   remove(libraryId: string, id: string): void;
 }
 
-/** Only these two are writable directly — `discovered`/`inprogress`/`failed` are for scraping/job code to set. */
+/** Only these two are writable through the manager — `discovered`/`failed` are written by an import, straight through the repository. */
 const WRITABLE_STATUSES = new Set([AppLibraryContentStatus.Pending, AppLibraryContentStatus.Completed]);
 
-function contentBlockKey(type: AppLibraryContentType): 'textContent' | 'audioContent' | 'imageContent' | 'videoContent' {
+function contentBlockKey(type: AppLibraryContentType): 'textContent' | 'imageContent' | 'videoContent' {
   switch (type) {
     case AppLibraryContentType.Original:
     case AppLibraryContentType.Translation:
       return 'textContent';
-    case AppLibraryContentType.Audio:
-      return 'audioContent';
     case AppLibraryContentType.Image:
       return 'imageContent';
     case AppLibraryContentType.Video:
@@ -40,7 +38,7 @@ function validate(libraryType: AppLibraryType, input: CreateAppLibraryContentInp
   }
 
   const expectedKey = contentBlockKey(input.type);
-  const blockKeys = ['textContent', 'audioContent', 'imageContent', 'videoContent'] as const;
+  const blockKeys = ['textContent', 'imageContent', 'videoContent'] as const;
   const present = blockKeys.filter((key) => input[key] != null);
 
   if (present.length !== 1 || present[0] !== expectedKey) {

@@ -14,7 +14,7 @@ function originalInput(overrides: Partial<CreateAppLibraryContentInput> = {}): C
     idx: 1,
     type: AppLibraryContentType.Original,
     status: AppLibraryContentStatus.Pending,
-    textContent: { contentUrl: null, body: 'Once upon a time.', language: ContentLanguage.English, title: 'Chapter 1' },
+    textContent: { body: 'Once upon a time.', language: ContentLanguage.English, title: 'Chapter 1' },
     ...overrides,
   };
 }
@@ -27,7 +27,7 @@ describe('app library content manager', () => {
   it('create() rejects content types not allowed on the library item', () => {
     const libraryId = seedLibrary(db, AppLibraryType.Novel).id;
     const manager = createAppLibraryContentManager(db);
-    const input: CreateAppLibraryContentInput = { idx: 1, type: AppLibraryContentType.Image, status: AppLibraryContentStatus.Pending, imageContent: { contentUrl: null, filename: 'a.png', filesize: 1, dimensions: '1x1' } };
+    const input: CreateAppLibraryContentInput = { idx: 1, type: AppLibraryContentType.Image, status: AppLibraryContentStatus.Pending, imageContent: { filename: 'a.png', filesize: 1, dimensions: '1x1' } };
 
     expect(() => manager.create(libraryId, input)).toThrow(/cannot hold 'image' content/);
   });
@@ -50,7 +50,7 @@ describe('app library content manager', () => {
     const libraryId = seedLibrary(db, AppLibraryType.Novel).id;
     const manager = createAppLibraryContentManager(db);
 
-    expect(() => manager.create(libraryId, originalInput({ textContent: { contentUrl: null, body: 'text', language: ContentLanguage.English, title: '  ' } }))).toThrow(/requires a title/);
+    expect(() => manager.create(libraryId, originalInput({ textContent: { body: 'text', language: ContentLanguage.English, title: '  ' } }))).toThrow(/requires a title/);
   });
 
   it('create() throws for a library item that does not exist', () => {
@@ -88,7 +88,7 @@ describe('app library content manager', () => {
       idx,
       type: AppLibraryContentType.Video,
       status: AppLibraryContentStatus.Completed,
-      videoContent: { contentUrl: null, filename: `v${idx}.mp4`, filesize, dimensions: '1920x1080', duration },
+      videoContent: { filename: `v${idx}.mp4`, filesize, dimensions: '1920x1080', duration },
     });
 
     manager.create(libraryId, videoInput(1, 100, 10));
@@ -154,7 +154,7 @@ describe('app library content manager', () => {
     const libraryId = seedLibrary(db, AppLibraryType.Novel).id;
     const manager = createAppLibraryContentManager(db);
     manager.create(libraryId, originalInput({ idx: 1, status: AppLibraryContentStatus.Pending }));
-    manager.create(libraryId, originalInput({ idx: 2, status: AppLibraryContentStatus.Completed, textContent: { contentUrl: null, body: 'x', language: ContentLanguage.Chinese, title: 'Ch2' } }));
+    manager.create(libraryId, originalInput({ idx: 2, status: AppLibraryContentStatus.Completed, textContent: { body: 'x', language: ContentLanguage.Chinese, title: 'Ch2' } }));
 
     expect(manager.list(libraryId)).toHaveLength(2);
     expect(manager.list(libraryId, { status: AppLibraryContentStatus.Completed })).toHaveLength(1);

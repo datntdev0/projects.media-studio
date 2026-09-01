@@ -1,5 +1,5 @@
-import { RefreshIcon, UploadIcon } from '../../components/icons';
-import { AppLibraryType, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
+import { UploadIcon } from '../../components/icons';
+import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
 import { STATUS_TAG_CLASS, contentLabelOf, contentUnitOf, formatBytes, formatDate } from './libraryFormat';
 import { DetailHeader } from './DetailHeader';
 
@@ -11,7 +11,6 @@ interface GalleryDetailScreenProps {
 }
 
 export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryDetailScreenProps) {
-  const isCrawler = item.sourceMode === LibrarySourceMode.Crawler;
   const metadata = item.imageMetadata ?? item.videoMetadata;
   const size = metadata ? formatBytes(metadata.downloadedSize) : '—';
 
@@ -32,14 +31,6 @@ export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryD
               {contentLabelOf(item)}
             </div>
             <div>
-              <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Mode</div>
-              {isCrawler ? 'Crawler' : 'Manual upload'}
-            </div>
-            <div>
-              <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Crawler</div>
-              {isCrawler ? item.sourceName : '—'}
-            </div>
-            <div>
               <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Size</div>
               {size}
             </div>
@@ -52,10 +43,6 @@ export function GalleryDetailScreen({ item, onBack, onEdit, onDelete }: GalleryD
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6.8 }}>
           <button type="button" className="btn btn-secondary" onClick={onEdit} style={{ fontSize: 13 }}>Edit metadata</button>
           <button type="button" className="btn btn-ghost" onClick={onDelete} style={{ fontSize: 13, color: '#8a2f2f' }}>Delete item</button>
-          <button type="button" className="btn btn-secondary" disabled title="Scraping arrives with the job runner." style={{ gap: 6, fontSize: 13 }}>
-            <RefreshIcon width={15} height={15} />
-            Discover new links
-          </button>
           <button type="button" className="btn btn-primary" onClick={() => {}} style={{ gap: 6 }}>
             <UploadIcon width={15} height={15} />
             Upload

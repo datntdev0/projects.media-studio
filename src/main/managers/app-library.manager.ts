@@ -9,6 +9,7 @@ import {
   updateAppLibrary,
 } from '../database/repositories/app-library.repo';
 import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from '../helpers/cover-storage';
+import { deleteLibraryContentDir } from '../helpers/content-storage';
 import { deleteAppLibraryContentsByLibraryId } from '../database/repositories/app-library-content.repo';
 import {
   AppLibraryStatus,
@@ -38,24 +39,23 @@ export function stripStamps(item: AppLibrary): AppLibraryDraft {
 }
 
 /**
- * What an item's status should read when nothing is actively scraping it — `Ready`
- * once anything has been downloaded, `Draft` otherwise. `Scraping` and `Failed` are
- * set directly by job code (see `setLibraryStatus`) for the states this can't derive.
+ * What an item's status should read from its counters alone — `Ready` once anything has
+ * been downloaded, `Draft` otherwise.
  */
 export function deriveIdleLibraryStatus(item: AppLibrary): AppLibraryStatus {
   const metadata = item.novelMetadata ?? item.imageMetadata ?? item.videoMetadata;
   return metadata && metadata.downloadedCount > 0 ? AppLibraryStatus.Ready : AppLibraryStatus.Draft;
 }
 
-/** Sets an item's status directly — for scraping/job code only, same reasoning as `AppLibraryContentStatus`'s restricted values. */
+/** Sets an item's status directly, bypassing the restricted set a caller may write — for code that settles an item wholesale, such as an import. */
 export function setLibraryStatus(db: Db, id: string, status: AppLibraryStatus): void {
   const item = getAppLibrary(db, id);
   if (!item || item.status === status) return;
   updateAppLibrary(db, id, { ...stripStamps(item), status });
 }
 
-/** Builds the type-specific metadata block a freshly created item starts with. */
-function initialMetadata(input: CreateAppLibraryInput): Pick<AppLibraryDraft, 'novelMetadata' | 'imageMetadata' | 'videoMetadata'> {
+/** Builds the type-specific metadata block a freshly created item starts with. Exported so an imported package starts from the same zeroed counters. */
+export function initialMetadata(input: CreateAppLibraryInput): Pick<AppLibraryDraft, 'novelMetadata' | 'imageMetadata' | 'videoMetadata'> {
   switch (input.type) {
     case AppLibraryType.Novel: {
       if (!input.novel) {
@@ -89,9 +89,6 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
         title: input.title,
         type: input.type,
         status: AppLibraryStatus.Draft,
-        sourceMode: input.sourceMode,
-        sourceName: input.sourceName,
-        sourceUrl: input.sourceUrl ?? null,
         coverUrl: input.coverUrl ?? null,
         ...initialMetadata(input),
       }),
@@ -101,9 +98,6 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
       const draft = stripStamps(current);
 
       if (input.title !== undefined) draft.title = input.title;
-      if (input.sourceMode !== undefined) draft.sourceMode = input.sourceMode;
-      if (input.sourceName !== undefined) draft.sourceName = input.sourceName;
-      if (input.sourceUrl !== undefined) draft.sourceUrl = input.sourceUrl;
       if (input.coverUrl !== undefined) draft.coverUrl = input.coverUrl;
       if (input.novel && draft.novelMetadata) draft.novelMetadata = { ...draft.novelMetadata, ...input.novel };
 
@@ -113,7 +107,9 @@ export function createAppLibraryManager(db: Db): AppLibraryManager {
     },
 
     remove: (id) => {
-      deleteCoverFile(need(id).coverUrl);
+      const item = need(id);
+      deleteCoverFile(item.coverUrl);
+      deleteLibraryContentDir(item.type, id);
       deleteAppLibraryContentsByLibraryId(db, id);
       deleteAppLibrary(db, id);
     },

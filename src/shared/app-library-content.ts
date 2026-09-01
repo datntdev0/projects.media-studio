@@ -4,9 +4,9 @@
 // (see backend/src/library/entities/library-content.entity.ts there), same
 // reasoning as shared/app-library.ts. Two differences, both because this app
 // is a local, single-user desktop app rather than a cloud service:
-//  - text content stores its body inline (`body`) instead of pointing at a
-//    blob in cloud storage — there is no blob store here. `contentUrl` is
-//    kept in the shape (always null today) purely for parity.
+//  - a chapter's text lives in a `.txt` file on disk rather than a blob in
+//    cloud storage; `contentPath` records where, and `body` is read from and
+//    written back to that file so callers still see the text inline.
 //  - listing has no cursor pagination — a local item's content count is
 //    small enough to always return the full, filtered list.
 
@@ -15,16 +15,14 @@ import { AppLibraryType } from './app-library';
 export enum AppLibraryContentType {
   Original = 'original',
   Translation = 'translation',
-  Audio = 'audio',
   Image = 'image',
   Video = 'video',
 }
 
-/** `Discovered`/`InProgress`/`Failed` are set by scraping/job code only — a caller may only write `Pending` or `Completed`. */
+/** `Discovered`/`Failed` come in with an imported package — a caller may only write `Pending` or `Completed`. */
 export enum AppLibraryContentStatus {
   Discovered = 'discovered',
   Pending = 'pending',
-  InProgress = 'inprogress',
   Completed = 'completed',
   Failed = 'failed',
 }
@@ -36,43 +34,35 @@ export enum ContentLanguage {
 }
 
 export interface TextContentBlock {
-  contentUrl: string | null;
+  /** The chapter's text. Stored in the file `contentPath` names, not in the database row. */
   body: string;
   language: ContentLanguage;
   title: string;
 }
 
-export interface AudioContentBlock {
-  contentUrl: string | null;
-  language: ContentLanguage;
-  subtitleUrl: string | null;
-}
-
 export interface ImageContentBlock {
-  contentUrl: string | null;
   filename: string;
   filesize: number;
   dimensions: string;
 }
 
 export interface VideoContentBlock {
-  contentUrl: string | null;
   filename: string;
   filesize: number;
   dimensions: string;
   duration: number;
 }
 
-/** One content row belonging to a library item. Exactly one of the four blocks is set, matching `type`. */
+/** One content row belonging to a library item. Exactly one of the three blocks is set, matching `type`. */
 export interface AppLibraryContent {
   id: string;
   libraryId: string;
   idx: number;
   type: AppLibraryContentType;
   status: AppLibraryContentStatus;
-  sourceUrl: string | null;
+  /** Where this row's payload lives, relative to the app data directory. Null until something has been written. Set by the repository, never by a caller. */
+  contentPath: string | null;
   textContent: TextContentBlock | null;
-  audioContent: AudioContentBlock | null;
   imageContent: ImageContentBlock | null;
   videoContent: VideoContentBlock | null;
   createdAt: number;
@@ -84,9 +74,7 @@ export interface CreateAppLibraryContentInput {
   idx: number;
   type: AppLibraryContentType;
   status: AppLibraryContentStatus;
-  sourceUrl?: string | null;
   textContent?: TextContentBlock | null;
-  audioContent?: AudioContentBlock | null;
   imageContent?: ImageContentBlock | null;
   videoContent?: VideoContentBlock | null;
 }

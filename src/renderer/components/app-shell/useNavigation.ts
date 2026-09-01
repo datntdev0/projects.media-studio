@@ -2,9 +2,7 @@ import { useCallback, useState } from 'react';
 
 export type PageKey =
   | 'dashboard'
-  | 'workflow'
   | 'library'
-  | 'scrapings'
   | 'settings';
 
 export interface NavigationState {

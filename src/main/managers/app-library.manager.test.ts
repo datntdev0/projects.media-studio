@@ -4,7 +4,7 @@ import { createTestDb } from '../database/test-db';
 import { createAppLibraryContent } from '../database/repositories/app-library-content.repo';
 import type { Db } from '../database/client';
 import { AppLibraryContentStatus, AppLibraryContentType } from '../../shared/app-library-content';
-import { AppLibraryStatus, AppLibraryType, LibrarySourceMode, NovelStatus, type CreateAppLibraryInput } from '../../shared/app-library';
+import { AppLibraryStatus, AppLibraryType, NovelStatus, type CreateAppLibraryInput } from '../../shared/app-library';
 
 vi.mock('../helpers/cover-storage', () => ({
   COVER_EXTENSION_BY_CONTENT_TYPE: { 'image/png': 'png' },
@@ -15,8 +15,6 @@ vi.mock('../helpers/cover-storage', () => ({
 const NOVEL_INPUT: CreateAppLibraryInput = {
   title: 'My Novel',
   type: AppLibraryType.Novel,
-  sourceMode: LibrarySourceMode.Manual,
-  sourceName: 'manual',
   novel: { status: NovelStatus.Ongoing, author: 'Author', language: 'en', genres: [], description: '' },
 };
 
@@ -40,14 +38,14 @@ describe('app library manager', () => {
 
   it('create() rejects a novel without novel details, without touching the database', () => {
     const manager = createAppLibraryManager(db);
-    expect(() => manager.create({ title: 'x', type: AppLibraryType.Novel, sourceMode: LibrarySourceMode.Manual, sourceName: 'manual' })).toThrow(/Novel items require/);
+    expect(() => manager.create({ title: 'x', type: AppLibraryType.Novel })).toThrow(/Novel items require/);
     expect(manager.list()).toHaveLength(0);
   });
 
   it('list() filters by type', () => {
     const manager = createAppLibraryManager(db);
     manager.create(NOVEL_INPUT);
-    manager.create({ title: 'My Images', type: AppLibraryType.Image, sourceMode: LibrarySourceMode.Manual, sourceName: 'manual' });
+    manager.create({ title: 'My Images', type: AppLibraryType.Image });
 
     expect(manager.list()).toHaveLength(2);
     expect(manager.list({ type: AppLibraryType.Novel })).toHaveLength(1);
@@ -61,7 +59,6 @@ describe('app library manager', () => {
     const updated = manager.update(created.id, { title: 'New Title' });
 
     expect(updated.title).toBe('New Title');
-    expect(updated.sourceName).toBe(created.sourceName);
     expect(updated.novelMetadata).toEqual(created.novelMetadata);
     expect(manager.get(created.id)?.title).toBe('New Title');
   });

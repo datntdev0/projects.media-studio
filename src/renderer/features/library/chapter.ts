@@ -9,7 +9,8 @@ import { ContentLanguage, AppLibraryContentStatus, AppLibraryContentType, type A
 
 export type ChapterLang = ContentLanguage;
 
-export const CHAPTER_LANGS: ChapterLang[] = [ContentLanguage.Chinese, ContentLanguage.Vietnamese, ContentLanguage.English];
+/** The languages a chapter may be stored in. Only `resolveSourceLang` reads this now that nothing offers a choice of language. */
+const CHAPTER_LANGS: ChapterLang[] = [ContentLanguage.Chinese, ContentLanguage.Vietnamese, ContentLanguage.English];
 
 export const CHAPTER_LANG_NAME: Record<ChapterLang, string> = {
   [ContentLanguage.Chinese]: 'Chinese',
@@ -26,7 +27,6 @@ export function resolveSourceLang(language: string): ChapterLang | undefined {
 export const CHAPTER_STATUS_LABEL: Record<AppLibraryContentStatus, string> = {
   [AppLibraryContentStatus.Discovered]: 'Discovered',
   [AppLibraryContentStatus.Pending]: 'Pending',
-  [AppLibraryContentStatus.InProgress]: 'Scraping',
   [AppLibraryContentStatus.Completed]: 'Completed',
   [AppLibraryContentStatus.Failed]: 'Failed',
 };
@@ -34,7 +34,6 @@ export const CHAPTER_STATUS_LABEL: Record<AppLibraryContentStatus, string> = {
 export const CHAPTER_STATUS_TAG_CLASS: Record<AppLibraryContentStatus, string> = {
   [AppLibraryContentStatus.Discovered]: 'tag-outline',
   [AppLibraryContentStatus.Pending]: 'tag-neutral',
-  [AppLibraryContentStatus.InProgress]: 'tag-accent',
   [AppLibraryContentStatus.Completed]: 'tag-primary',
   [AppLibraryContentStatus.Failed]: 'tag-outline',
 };
@@ -82,13 +81,3 @@ export function buildChapterRows(contents: AppLibraryContent[], lang: ChapterLan
 }
 
 export { countWords } from '../../../shared/text';
-
-export function bodyFor(chapter: ChapterRow, lang: ChapterLang): string {
-  if (lang === chapter.sourceLanguage) return chapter.sourceBody;
-  return chapter.translationBody ?? chapter.sourceBody;
-}
-
-export function hasTranslation(chapter: ChapterRow, lang: ChapterLang): boolean {
-  if (lang === chapter.sourceLanguage) return true;
-  return chapter.translationBody !== undefined;
-}

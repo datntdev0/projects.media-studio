@@ -11,16 +11,9 @@ export enum AppLibraryType {
   Video = 'video',
 }
 
-export enum LibrarySourceMode {
-  Manual = 'manual',
-  Crawler = 'crawler',
-}
-
 export enum AppLibraryStatus {
   Draft = 'draft',
-  Scraping = 'scraping',
   Ready = 'ready',
-  Failed = 'failed',
 }
 
 export enum NovelStatus {
@@ -59,9 +52,6 @@ export interface AppLibrary {
   title: string;
   type: AppLibraryType;
   status: AppLibraryStatus;
-  sourceMode: LibrarySourceMode;
-  sourceName: string;
-  sourceUrl: string | null;
   coverUrl: string | null;
   novelMetadata: NovelMetadata | null;
   imageMetadata: ImageSetMetadata | null;
@@ -73,11 +63,10 @@ export interface AppLibrary {
 /** What a caller hands over to create or fully replace an item — the id and the dates are the repository's to stamp. */
 export type AppLibraryDraft = Omit<AppLibrary, 'id' | 'createdAt' | 'updatedAt'>;
 
-/** What the repository itself narrows a listing by: three columns, equality only. */
+/** What the repository itself narrows a listing by: two columns, equality only. */
 export interface ListAppLibrariesFilter {
   type?: AppLibraryType;
   status?: AppLibraryStatus;
-  sourceMode?: LibrarySourceMode;
 }
 
 /** The descriptive fields a novel carries beyond the counters every item type has. */
@@ -87,9 +76,6 @@ export type NovelDetails = Omit<NovelMetadata, keyof AppLibraryMetadataBase>;
 export interface CreateAppLibraryInput {
   title: string;
   type: AppLibraryType;
-  sourceMode: LibrarySourceMode;
-  sourceName: string;
-  sourceUrl?: string | null;
   coverUrl?: string | null;
   /** Required when `type` is `Novel`, ignored otherwise. */
   novel?: NovelDetails;

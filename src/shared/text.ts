@@ -1,6 +1,6 @@
 // Plain text helpers — no Node/DOM APIs — shared by main and renderer, since a
 // chapter's word count is computed both when the app itself saves an edit
-// (renderer) and when a scraping job saves fetched content (main).
+// (renderer) and when an imported package brings its chapters in (main).
 
 // CJK ideographs (plus the compatibility and extension-A blocks) — a script with
 // no spaces between words, so a whitespace split would undercount it wildly. Each

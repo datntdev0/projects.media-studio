@@ -1,24 +1,20 @@
 import { useEffect, useState } from 'react';
-import { TranslateIcon } from '../../components/icons';
 import { useResizablePanel } from '../../components/useResizablePanel';
-import { bodyFor, CHAPTER_LANG_NAME, CHAPTER_LANGS, countWords, hasTranslation, type ChapterLang, type ChapterRow } from './chapter';
+import { countWords, type ChapterRow } from './chapter';
 
 interface ChapterReaderProps {
   chapters: ChapterRow[];
   activeId: string;
   onSelect(id: string): void;
-  lang: ChapterLang;
-  sourceLang: ChapterLang | undefined;
-  onLangChange(lang: ChapterLang): void;
   onSave(chapter: ChapterRow, title: string, body: string): void;
 }
 
-export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, onLangChange, onSave }: ChapterReaderProps) {
+export function ChapterReader({ chapters, activeId, onSelect, onSave }: ChapterReaderProps) {
   const chapter = chapters.find((c) => c.id === activeId) ?? chapters[0];
   const listPanel = useResizablePanel({ defaultWidth: 250, minWidth: 250, maxWidth: 480 });
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(chapter.title);
-  const [draftBody, setDraftBody] = useState(bodyFor(chapter, lang));
+  const [draftBody, setDraftBody] = useState(chapter.sourceBody);
 
   useEffect(() => {
     setEditing(false);
@@ -26,12 +22,10 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
 
   useEffect(() => {
     setDraftTitle(chapter.title);
-    setDraftBody(bodyFor(chapter, lang));
-  }, [chapter, lang, editing]);
+    setDraftBody(chapter.sourceBody);
+  }, [chapter, editing]);
 
-  const translated = lang !== sourceLang;
-  const missingTranslation = translated && !hasTranslation(chapter, lang);
-  const displayBody = bodyFor(chapter, lang);
+  const displayBody = chapter.sourceBody;
 
   const handleSave = () => {
     onSave(chapter, draftTitle.trim() || chapter.title, draftBody);
@@ -68,16 +62,6 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10.2 }}>
             <span className="text-muted" style={{ fontSize: 12 }}>{countWords(chapter.sourceBody)} words</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <TranslateIcon width={15} height={15} style={{ color: 'var(--color-accent)' }} />
-              <select className="input" style={{ width: 200, fontSize: 13 }} value={lang} onChange={(e) => onLangChange(e.target.value as ChapterLang)}>
-                {CHAPTER_LANGS.map((code) => (
-                  <option key={code} value={code}>
-                    {code === sourceLang ? `${CHAPTER_LANG_NAME[code]} · source` : CHAPTER_LANG_NAME[code]}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div style={{ display: 'flex', border: '1px solid var(--color-divider)' }}>
               <button
                 type="button"
@@ -102,12 +86,6 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '34px 20.4px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 720 }}>
-            {missingTranslation && (
-              <div className="blueprint" style={{ padding: 13.6, marginBottom: 20.4 }}>
-                <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}>No {CHAPTER_LANG_NAME[lang]} translation for this chapter yet</div>
-                <div className="text-muted" style={{ fontSize: 12 }}>Showing the source. Switch to Edit and save to write one.</div>
-              </div>
-            )}
             {!editing ? (
               <div style={{ fontSize: 16, lineHeight: 1.75 }}>
                 {displayBody === '' ? (
@@ -125,13 +103,11 @@ export function ChapterReader({ chapters, activeId, onSelect, lang, sourceLang, 
                   <input className="input" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label>{lang === sourceLang ? 'Content — plain text, one paragraph per line' : `${CHAPTER_LANG_NAME[lang]} translation — plain text, one paragraph per line`}</label>
+                  <label>Content — plain text, one paragraph per line</label>
                   <textarea className="input" style={{ minHeight: 420, fontSize: 15, lineHeight: 1.7 }} value={draftBody} onChange={(e) => setDraftBody(e.target.value)} />
                 </div>
                 <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-                  {lang === sourceLang
-                    ? 'Saving replaces the source content stored for this chapter. Re-crawling this chapter will discard manual changes.'
-                    : `Saving replaces the ${CHAPTER_LANG_NAME[lang]} translation stored for this chapter. The source chapter is left alone.`}
+                  Saving replaces the content stored for this chapter. Re-importing this item's package would discard manual changes.
                 </div>
               </>
             )}

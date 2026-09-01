@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { DiscoverResult } from '../../../shared/app-scraping';
 import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
 import type { ChapterRow } from './chapter';
 
@@ -10,7 +9,6 @@ export interface UseLibraryContentsResult {
   saveChapter(chapter: ChapterRow, lang: ContentLanguage, title: string, body: string): Promise<void>;
   removeChapter(chapter: ChapterRow): Promise<void>;
   removeChapters(chapters: ChapterRow[]): Promise<void>;
-  discoverChapters(): Promise<DiscoverResult>;
 }
 
 export function useLibraryContents(libraryId: string): UseLibraryContentsResult {
@@ -44,9 +42,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
         idx: nextIdx,
         type: AppLibraryContentType.Original,
         status: AppLibraryContentStatus.Pending,
-        sourceUrl: null,
-        textContent: { contentUrl: null, body: '', language: sourceLanguage, title },
-        audioContent: null,
+        textContent: { body: '', language: sourceLanguage, title },
         imageContent: null,
         videoContent: null,
       });
@@ -69,9 +65,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
           idx: chapter.no,
           type: AppLibraryContentType.Original,
           status,
-          sourceUrl: original?.sourceUrl ?? null,
-          textContent: { contentUrl: null, body, language: lang, title },
-          audioContent: null,
+          textContent: { body, language: lang, title },
           imageContent: null,
           videoContent: null,
         });
@@ -81,9 +75,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
             idx: original.idx,
             type: AppLibraryContentType.Original,
             status: original.status,
-            sourceUrl: original.sourceUrl,
             textContent: { ...original.textContent, title },
-            audioContent: null,
             imageContent: null,
             videoContent: null,
           });
@@ -94,9 +86,7 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
           idx: chapter.no,
           type: AppLibraryContentType.Translation,
           status: translationStatus,
-          sourceUrl: null,
-          textContent: { contentUrl: null, body, language: lang, title },
-          audioContent: null,
+          textContent: { body, language: lang, title },
           imageContent: null,
           videoContent: null,
         };
@@ -130,11 +120,5 @@ export function useLibraryContents(libraryId: string): UseLibraryContentsResult 
     [libraryId, contents, refresh],
   );
 
-  const discoverChapters = useCallback(async () => {
-    const result = await window.appScrapingApi.discover(libraryId);
-    if (result.newChapters > 0) refresh();
-    return result;
-  }, [libraryId, refresh]);
-
-  return { contents, loading, addChapter, saveChapter, removeChapter, removeChapters, discoverChapters };
+  return { contents, loading, addChapter, saveChapter, removeChapter, removeChapters };
 }

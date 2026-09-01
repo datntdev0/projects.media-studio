@@ -1,4 +1,4 @@
-import { AppLibraryStatus, AppLibraryType, LibrarySourceMode, type AppLibrary, type AppLibraryMetadataBase } from '../../../shared/app-library';
+import { AppLibraryStatus, AppLibraryType, type AppLibrary, type AppLibraryMetadataBase } from '../../../shared/app-library';
 
 export const TYPE_LABEL: Record<AppLibraryType, string> = {
   [AppLibraryType.Novel]: 'Novel',
@@ -6,16 +6,9 @@ export const TYPE_LABEL: Record<AppLibraryType, string> = {
   [AppLibraryType.Video]: 'Videos',
 };
 
-export const SOURCE_MODE_LABEL: Record<LibrarySourceMode, string> = {
-  [LibrarySourceMode.Manual]: 'Manual',
-  [LibrarySourceMode.Crawler]: 'Crawler',
-};
-
 export const STATUS_TAG_CLASS: Record<AppLibraryStatus, string> = {
   [AppLibraryStatus.Draft]: 'tag-neutral',
-  [AppLibraryStatus.Scraping]: 'tag-accent',
   [AppLibraryStatus.Ready]: 'tag-primary',
-  [AppLibraryStatus.Failed]: 'tag-outline',
 };
 
 export function metadataOf(item: AppLibrary): AppLibraryMetadataBase | null {
@@ -23,8 +16,7 @@ export function metadataOf(item: AppLibrary): AppLibraryMetadataBase | null {
 }
 
 export function summaryOf(item: AppLibrary): string {
-  if (item.novelMetadata) return item.novelMetadata.author;
-  return item.sourceName;
+  return item.novelMetadata?.author ?? contentLabelOf(item);
 }
 
 export function contentUnitOf(item: AppLibrary): string {
