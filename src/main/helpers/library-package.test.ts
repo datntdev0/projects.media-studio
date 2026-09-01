@@ -1,14 +1,14 @@
 import AdmZip from 'adm-zip';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildLibraryPackage, importLibraryPackage, packageSlug, previewLibraryPackage } from './library-package';
-import { createTestDb } from '../database/test-db';
-import { seedLibrary } from '../database/test-fixtures';
-import { getAppLibrary } from '../database/repositories/app-library.repo';
-import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
-import type { Db } from '../database/client';
-import { AppLibraryType, NovelStatus } from '../../shared/app-library';
-import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage } from '../../shared/app-library-content';
-import { LIBRARY_PACKAGE_MANIFEST, LIBRARY_PACKAGE_SCHEMA, type LibraryPackageManifest } from '../../shared/app-library-package';
+import { createTestDb } from '@/main/database/test-db';
+import { seedLibrary } from '@/main/database/test-fixtures';
+import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
+import { createAppLibraryContent, listAppLibraryContents } from '@/main/database/repositories/app-library-content.repo';
+import type { Db } from '@/main/database/client';
+import { AppLibraryType, NovelStatus } from '@/shared/app-library';
+import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage } from '@/shared/app-library-content';
+import { LIBRARY_PACKAGE_MANIFEST, LIBRARY_PACKAGE_SCHEMA, type LibraryPackageManifest } from '@/shared/app-library-package';
 
 let db: Db;
 

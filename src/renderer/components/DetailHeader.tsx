@@ -1,4 +1,4 @@
-import { ArrowLeftIcon } from '../../components/icons';
+import { ArrowLeftIcon } from './icons';
 
 interface DetailHeaderProps {
   backLabel: string;
@@ -6,7 +6,7 @@ interface DetailHeaderProps {
   title: string;
 }
 
-/** Breadcrumb row shared by the novel, gallery, and chapter detail screens. */
+/** Breadcrumb row shared by the library and workspace detail screens. */
 export function DetailHeader({ backLabel, onBack, title }: DetailHeaderProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10.2 }}>

@@ -1,4 +1,4 @@
-import { AppLibraryType, NovelStatus, type AppLibrary, type AppLibraryMetadataBase } from '../../../shared/app-library';
+import { AppLibraryType, NovelStatus, type AppLibrary, type AppLibraryMetadataBase } from '@/shared/app-library';
 
 export const TYPE_LABEL: Record<AppLibraryType, string> = {
   [AppLibraryType.Novel]: 'Novel',

@@ -1,9 +1,9 @@
-import type { Db } from '../database/client';
-import { getAppLibrary, updateAppLibrary } from '../database/repositories/app-library.repo';
-import { createAppLibraryContent, deleteAppLibraryContent, getAppLibraryContent, listAppLibraryContents, updateAppLibraryContent } from '../database/repositories/app-library-content.repo';
+import type { Db } from '@/main/database/client';
+import { getAppLibrary, updateAppLibrary } from '@/main/database/repositories/app-library.repo';
+import { createAppLibraryContent, deleteAppLibraryContent, getAppLibraryContent, listAppLibraryContents, updateAppLibraryContent } from '@/main/database/repositories/app-library-content.repo';
 import { stripStamps } from './app-library.manager';
-import { AppLibraryType } from '../../shared/app-library';
-import { ALLOWED_CONTENT_TYPES, AppLibraryContentStatus, AppLibraryContentType, type CreateAppLibraryContentInput, type AppLibraryContent, type ListAppLibraryContentsFilter, type UpdateAppLibraryContentInput } from '../../shared/app-library-content';
+import { AppLibraryType } from '@/shared/app-library';
+import { ALLOWED_CONTENT_TYPES, AppLibraryContentStatus, AppLibraryContentType, type CreateAppLibraryContentInput, type AppLibraryContent, type ListAppLibraryContentsFilter, type UpdateAppLibraryContentInput } from '@/shared/app-library-content';
 
 export interface AppLibraryContentManager {
   list(libraryId: string, filter?: ListAppLibraryContentsFilter): AppLibraryContent[];

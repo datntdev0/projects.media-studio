@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { Db } from '../client';
-import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepKey, WorkspaceStepState } from '../../../shared/app-workspace';
+import type { Db } from '@/main/database/client';
+import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepKey, WorkspaceStepState } from '@/shared/app-workspace';
 
 interface AppWorkspaceRow {
   id: string;

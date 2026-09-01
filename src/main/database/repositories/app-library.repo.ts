@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { Db } from '../client';
-import type { AppLibrary, AppLibraryDraft, AppLibraryType, ListAppLibrariesFilter } from '../../../shared/app-library';
+import type { Db } from '@/main/database/client';
+import type { AppLibrary, AppLibraryDraft, AppLibraryType, ListAppLibrariesFilter } from '@/shared/app-library';
 
 interface AppLibraryRow {
   id: string;

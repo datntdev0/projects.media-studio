@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { BookIcon, CheckIcon, EditIcon, ImageSetIcon, UploadIcon, VideoSetIcon } from '../../components/icons';
-import { AppLibraryType, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '../../../shared/app-library';
-import type { LibraryPackagePreview } from '../../../shared/app-library-package';
+import { BookIcon, CheckIcon, EditIcon, ImageSetIcon, UploadIcon, VideoSetIcon } from '@/components/icons';
+import { AppLibraryType, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '@/shared/app-library';
+import type { LibraryPackagePreview } from '@/shared/app-library-package';
 import { CHAPTER_LANG_NAME, CHAPTER_LANGS, resolveSourceLang } from './chapter';
 import { NOVEL_STATUS_LABEL } from './libraryFormat';
 import { CoverPicker } from './CoverPicker';

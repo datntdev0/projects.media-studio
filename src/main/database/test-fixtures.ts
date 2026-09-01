@@ -1,6 +1,6 @@
 import type { Db } from './client';
 import { createAppLibrary } from './repositories/app-library.repo';
-import { AppLibraryType, NovelStatus, type AppLibrary, type AppLibraryDraft } from '../../shared/app-library';
+import { AppLibraryType, NovelStatus, type AppLibrary, type AppLibraryDraft } from '@/shared/app-library';
 
 const EMPTY_COUNTERS = { discoveredCount: 0, downloadedCount: 0, discoveredAt: null };
 

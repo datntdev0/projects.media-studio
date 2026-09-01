@@ -266,3 +266,65 @@ a:hover { color: var(--color-accent-900); }
 }
 .chapter-nav-item:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
 .chapter-nav-item[data-active='true'] { background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
+
+/* — workspace detail — */
+.step-tabs {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--color-divider);
+  border-top: 1px solid var(--color-divider);
+  border-left: 1px solid var(--color-divider);
+  overflow-x: auto;
+}
+.step-tab {
+  flex: 1;
+  min-width: 168px;
+  border: none;
+  border-right: 1px solid var(--color-divider);
+  background: none;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  text-align: left;
+  padding: 10.2px 13.6px;
+  cursor: pointer;
+}
+.step-tab.is-overview {
+  flex: none;
+  width: 130px;
+}
+.step-tab:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.step-tab[data-active='true'] { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.step-tab[data-dim='true'] { opacity: 0.55; }
+.step-tab-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+}
+.step-kicker {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.activity-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10.2px;
+  padding: 7px 13.6px;
+  border-right: 1px solid var(--color-divider);
+  border-left: 1px solid var(--color-divider);
+  border-bottom: 1px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  font-size: 13px;
+}
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.activity-dot[data-pulsing='true'] { animation: wspulse 1.4s ease-in-out infinite; }
+@keyframes wspulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useResizablePanel } from '../../components/useResizablePanel';
+import { useResizablePanel } from '@/components/useResizablePanel';
 import { countWords, type ChapterRow } from './chapter';
 
 interface ChapterReaderProps {

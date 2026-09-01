@@ -4,11 +4,11 @@ import {
   LibraryIcon,
   SettingsIcon,
   WorkspacesIcon,
-} from '../icons';
-import { DashboardScreen } from '../../features/dashboard/DashboardScreen';
-import { LibraryScreen } from '../../features/library/LibraryScreen';
-import { WorkspacesScreen } from '../../features/workspaces/WorkspacesScreen';
-import { SettingsScreen } from '../../features/settings/SettingsScreen';
+} from '@/components/icons';
+import { DashboardScreen } from '@/features/dashboard/DashboardScreen';
+import { LibraryScreen } from '@/features/library/LibraryScreen';
+import { WorkspacesScreen } from '@/features/workspaces/WorkspacesScreen';
+import { SettingsScreen } from '@/features/settings/SettingsScreen';
 import type { PageKey } from './useNavigation';
 
 export interface NavItem {

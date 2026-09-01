@@ -1,4 +1,4 @@
-import type { Container } from '../container';
+import type { Container } from '@/main/container';
 import { registerAppInfoHandlers } from './app-info.handlers';
 import { registerAppLibraryHandlers } from './app-library.handlers';
 import { registerAppLibraryPackageHandlers } from './app-library-package.handlers';

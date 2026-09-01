@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAppLibraryContent, deleteAppLibraryContent, getAppLibraryContent, listAppLibraryContents, updateAppLibraryContent } from './app-library-content.repo';
-import { createTestDb } from '../test-db';
-import { seedLibrary } from '../test-fixtures';
-import { getAppDataDir } from '../../helpers/paths';
-import type { Db } from '../client';
-import { AppLibraryType } from '../../../shared/app-library';
-import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage, type CreateAppLibraryContentInput } from '../../../shared/app-library-content';
+import { createTestDb } from '@/main/database/test-db';
+import { seedLibrary } from '@/main/database/test-fixtures';
+import { getAppDataDir } from '@/main/helpers/paths';
+import type { Db } from '@/main/database/client';
+import { AppLibraryType } from '@/shared/app-library';
+import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage, type CreateAppLibraryContentInput } from '@/shared/app-library-content';
 
 let db: Db;
 let libraryId: string;

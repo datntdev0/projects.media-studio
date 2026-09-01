@@ -2,11 +2,11 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { APP_INFO_IPC_CHANNELS, type AppInfoApi } from '../shared/app-info';
-import { APP_LIBRARY_IPC_CHANNELS, type AppLibraryApi } from '../shared/app-library';
-import { APP_LIBRARY_PACKAGE_IPC_CHANNELS, type AppLibraryPackageApi } from '../shared/app-library-package';
-import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '../shared/app-library-content';
-import { APP_WORKSPACE_IPC_CHANNELS, type AppWorkspaceApi } from '../shared/app-workspace';
+import { APP_INFO_IPC_CHANNELS, type AppInfoApi } from '@/shared/app-info';
+import { APP_LIBRARY_IPC_CHANNELS, type AppLibraryApi } from '@/shared/app-library';
+import { APP_LIBRARY_PACKAGE_IPC_CHANNELS, type AppLibraryPackageApi } from '@/shared/app-library-package';
+import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '@/shared/app-library-content';
+import { APP_WORKSPACE_IPC_CHANNELS, type AppWorkspaceApi } from '@/shared/app-workspace';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),

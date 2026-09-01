@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
-import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type CreateAppLibraryContentInput, type ListAppLibraryContentsFilter, type UpdateAppLibraryContentInput } from '../../shared/app-library-content';
-import type { Container } from '../container';
+import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type CreateAppLibraryContentInput, type ListAppLibraryContentsFilter, type UpdateAppLibraryContentInput } from '@/shared/app-library-content';
+import type { Container } from '@/main/container';
 
 export function registerAppLibraryContentHandlers({ manager }: Container): void {
   ipcMain.handle(APP_LIBRARY_CONTENT_IPC_CHANNELS.list, (_event, libraryId: string, filter?: ListAppLibraryContentsFilter) => manager.appLibraryContent.list(libraryId, filter));

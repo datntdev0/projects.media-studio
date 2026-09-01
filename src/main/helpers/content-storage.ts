@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getAppDataDir } from './paths';
-import type { AppLibraryType } from '../../shared/app-library';
-import { AppLibraryContentType, type ContentLanguage } from '../../shared/app-library-content';
+import type { AppLibraryType } from '@/shared/app-library';
+import { AppLibraryContentType, type ContentLanguage } from '@/shared/app-library-content';
 
 // A chapter's text lives in a file rather than a database column, so the database stays small
 // and a body is editable/diffable on disk:

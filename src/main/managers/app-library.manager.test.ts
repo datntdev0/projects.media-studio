@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAppLibraryManager } from './app-library.manager';
-import { createTestDb } from '../database/test-db';
-import { createAppLibraryContent } from '../database/repositories/app-library-content.repo';
-import type { Db } from '../database/client';
-import { AppLibraryContentStatus, AppLibraryContentType } from '../../shared/app-library-content';
-import { AppLibraryType, NovelStatus, type CreateAppLibraryInput } from '../../shared/app-library';
+import { createTestDb } from '@/main/database/test-db';
+import { createAppLibraryContent } from '@/main/database/repositories/app-library-content.repo';
+import type { Db } from '@/main/database/client';
+import { AppLibraryContentStatus, AppLibraryContentType } from '@/shared/app-library-content';
+import { AppLibraryType, NovelStatus, type CreateAppLibraryInput } from '@/shared/app-library';
 
-vi.mock('../helpers/cover-storage', () => ({
+vi.mock('@/main/helpers/cover-storage', () => ({
   COVER_EXTENSION_BY_CONTENT_TYPE: { 'image/png': 'png' },
   writeCoverFile: vi.fn(() => 'app-cover://cover/generated.png'),
   deleteCoverFile: vi.fn(),
@@ -68,7 +68,7 @@ describe('app library manager', () => {
   });
 
   it('update() deletes the old cover file when coverUrl changes', async () => {
-    const { deleteCoverFile } = await import('../helpers/cover-storage');
+    const { deleteCoverFile } = await import('@/main/helpers/cover-storage');
     const manager = createAppLibraryManager(db);
     const created = manager.create({ ...NOVEL_INPUT, coverUrl: 'app-cover://cover/old.jpg' });
 
@@ -78,7 +78,7 @@ describe('app library manager', () => {
   });
 
   it('update() leaves the cover alone when coverUrl is not part of the input', async () => {
-    const { deleteCoverFile } = await import('../helpers/cover-storage');
+    const { deleteCoverFile } = await import('@/main/helpers/cover-storage');
     const manager = createAppLibraryManager(db);
     const created = manager.create({ ...NOVEL_INPUT, coverUrl: 'app-cover://cover/old.jpg' });
 
@@ -105,7 +105,7 @@ describe('app library manager', () => {
   });
 
   it('uploadCover() picks the extension for the given content type', async () => {
-    const { writeCoverFile } = await import('../helpers/cover-storage');
+    const { writeCoverFile } = await import('@/main/helpers/cover-storage');
     const manager = createAppLibraryManager(db);
     const url = manager.uploadCover('picture', 'image/png', Buffer.from('data'));
 

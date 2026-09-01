@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
-import { APP_LIBRARY_IPC_CHANNELS } from '../../shared/app-library';
-import type { Container } from '../container';
+import { APP_LIBRARY_IPC_CHANNELS } from '@/shared/app-library';
+import type { Container } from '@/main/container';
 
 export function registerAppLibraryHandlers({ manager }: Container): void {
   ipcMain.handle(APP_LIBRARY_IPC_CHANNELS.list, (_event, filter) => manager.appLibrary.list(filter));

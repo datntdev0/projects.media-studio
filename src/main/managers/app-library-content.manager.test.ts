@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAppLibraryContentManager } from './app-library-content.manager';
-import { createTestDb } from '../database/test-db';
-import { seedLibrary } from '../database/test-fixtures';
-import { getAppLibrary } from '../database/repositories/app-library.repo';
-import type { Db } from '../database/client';
-import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage, type CreateAppLibraryContentInput } from '../../shared/app-library-content';
-import { AppLibraryType } from '../../shared/app-library';
+import { createTestDb } from '@/main/database/test-db';
+import { seedLibrary } from '@/main/database/test-fixtures';
+import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
+import type { Db } from '@/main/database/client';
+import { AppLibraryContentStatus, AppLibraryContentType, ContentLanguage, type CreateAppLibraryContentInput } from '@/shared/app-library-content';
+import { AppLibraryType } from '@/shared/app-library';
 
 let db: Db;
 

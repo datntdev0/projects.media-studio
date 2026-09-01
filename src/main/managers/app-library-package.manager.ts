@@ -1,6 +1,6 @@
-import type { Db } from '../database/client';
-import { buildLibraryPackage, importLibraryPackage, previewLibraryPackage } from '../helpers/library-package';
-import type { LibraryPackagePreview } from '../../shared/app-library-package';
+import type { Db } from '@/main/database/client';
+import { buildLibraryPackage, importLibraryPackage, previewLibraryPackage } from '@/main/helpers/library-package';
+import type { LibraryPackagePreview } from '@/shared/app-library-package';
 
 export interface AppLibraryPackageManager {
   /** The archive one library item packages into — its bytes, and the name it should be offered under. */

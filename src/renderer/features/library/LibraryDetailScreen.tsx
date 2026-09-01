@@ -1,4 +1,4 @@
-import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
+import { AppLibraryType, type AppLibrary } from '@/shared/app-library';
 import { NovelDetailScreen } from './NovelDetailScreen';
 import { GalleryDetailScreen } from './GalleryDetailScreen';
 

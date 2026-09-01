@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
-import { APP_WORKSPACE_IPC_CHANNELS } from '../../shared/app-workspace';
-import type { Container } from '../container';
+import { APP_WORKSPACE_IPC_CHANNELS } from '@/shared/app-workspace';
+import type { Container } from '@/main/container';
 
 export function registerAppWorkspaceHandlers({ manager }: Container): void {
   ipcMain.handle(APP_WORKSPACE_IPC_CHANNELS.list, (_event, filter) => manager.appWorkspace.list(filter));

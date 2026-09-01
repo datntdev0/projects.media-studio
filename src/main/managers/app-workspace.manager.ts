@@ -1,8 +1,8 @@
-import type { Db } from '../database/client';
-import { createAppWorkspace, deleteAppWorkspace, deleteAppWorkspaceStepsByWorkspaceId, getAppWorkspace, listAppWorkspaces, updateAppWorkspace } from '../database/repositories/app-workspace.repo';
-import { getAppLibrary } from '../database/repositories/app-library.repo';
-import { AppLibraryType } from '../../shared/app-library';
-import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type ListAppWorkspacesFilter, type UpdateAppWorkspaceInput, type WorkspaceStep } from '../../shared/app-workspace';
+import type { Db } from '@/main/database/client';
+import { createAppWorkspace, deleteAppWorkspace, deleteAppWorkspaceStepsByWorkspaceId, getAppWorkspace, listAppWorkspaces, updateAppWorkspace } from '@/main/database/repositories/app-workspace.repo';
+import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
+import { AppLibraryType } from '@/shared/app-library';
+import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type ListAppWorkspacesFilter, type UpdateAppWorkspaceInput, type WorkspaceStep } from '@/shared/app-workspace';
 
 export interface AppWorkspaceManager {
   get(id: string): AppWorkspace | undefined;

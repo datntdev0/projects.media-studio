@@ -1,4 +1,4 @@
-import { MoonIcon, SunIcon } from '../icons';
+import { MoonIcon, SunIcon } from '@/components/icons';
 import type { Theme } from './useTheme';
 
 interface ThemeToggleProps {

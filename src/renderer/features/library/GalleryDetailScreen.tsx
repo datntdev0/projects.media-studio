@@ -1,7 +1,7 @@
-import { UploadIcon } from '../../components/icons';
-import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
+import { UploadIcon } from '@/components/icons';
+import { AppLibraryType, type AppLibrary } from '@/shared/app-library';
 import { contentLabelOf, contentUnitOf, formatBytes, formatDate } from './libraryFormat';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/components/DetailHeader';
 
 interface GalleryDetailScreenProps {
   item: AppLibrary;

@@ -1,16 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { Db } from '../database/client';
+import type { Db } from '@/main/database/client';
 import {
   createAppLibrary,
   deleteAppLibrary,
   getAppLibrary,
   listAppLibraries,
   updateAppLibrary,
-} from '../database/repositories/app-library.repo';
-import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from '../helpers/cover-storage';
-import { deleteLibraryContentDir } from '../helpers/content-storage';
-import { deleteAppLibraryContentsByLibraryId } from '../database/repositories/app-library-content.repo';
+} from '@/main/database/repositories/app-library.repo';
+import { COVER_EXTENSION_BY_CONTENT_TYPE, deleteCoverFile, writeCoverFile } from '@/main/helpers/cover-storage';
+import { deleteLibraryContentDir } from '@/main/helpers/content-storage';
+import { deleteAppLibraryContentsByLibraryId } from '@/main/database/repositories/app-library-content.repo';
 import {
   AppLibraryType,
   type AppLibrary,
@@ -19,7 +19,7 @@ import {
   type CreateAppLibraryInput,
   type ListAppLibrariesFilter,
   type UpdateAppLibraryInput,
-} from '../../shared/app-library';
+} from '@/shared/app-library';
 
 export interface AppLibraryManager {
   get(id: string): AppLibrary | undefined;

@@ -1,4 +1,4 @@
-import { PageSlot } from '../../components/PageSlot';
+import { PageSlot } from '@/components/PageSlot';
 
 export function SettingsScreen() {
   return (

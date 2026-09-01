@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DownloadIcon, EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '../../components/icons';
-import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { DownloadIcon, EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '@/components/icons';
+import { AppLibraryType, type AppLibrary } from '@/shared/app-library';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useAppLibraries } from './useAppLibraries';
 import { LibraryFormDialog } from './LibraryFormDialog';
 import { LibraryDetailScreen } from './LibraryDetailScreen';

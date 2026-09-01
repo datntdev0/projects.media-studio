@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAppWorkspaceManager } from './app-workspace.manager';
 import { createAppLibraryManager } from './app-library.manager';
-import { createTestDb } from '../database/test-db';
-import type { Db } from '../database/client';
-import { AppLibraryType, NovelStatus } from '../../shared/app-library';
-import { WorkspacePreset, WorkspaceStatus, WorkspaceStepKey, WorkspaceStepState, type CreateAppWorkspaceInput } from '../../shared/app-workspace';
+import { createTestDb } from '@/main/database/test-db';
+import type { Db } from '@/main/database/client';
+import { AppLibraryType, NovelStatus } from '@/shared/app-library';
+import { WorkspacePreset, WorkspaceStatus, WorkspaceStepKey, WorkspaceStepState, type CreateAppWorkspaceInput } from '@/shared/app-workspace';
 
-vi.mock('../helpers/cover-storage', () => ({
+vi.mock('@/main/helpers/cover-storage', () => ({
   COVER_EXTENSION_BY_CONTENT_TYPE: { 'image/png': 'png' },
   writeCoverFile: vi.fn(() => 'app-cover://cover/generated.png'),
   deleteCoverFile: vi.fn(),

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { EditIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TrashIcon, WorkspacesIcon } from '../../components/icons';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { AppLibraryType, type AppLibrary } from '../../../shared/app-library';
-import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, type AppWorkspace } from '../../../shared/app-workspace';
-import { formatDate } from '../library/libraryFormat';
-import { useAppLibraries } from '../library/useAppLibraries';
+import { EditIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TrashIcon, WorkspacesIcon } from '@/components/icons';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { AppLibraryType, type AppLibrary } from '@/shared/app-library';
+import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, type AppWorkspace } from '@/shared/app-workspace';
+import { formatDate } from '@/features/library/libraryFormat';
+import { useAppLibraries } from '@/features/library/useAppLibraries';
 import { useAppWorkspaces } from './useAppWorkspaces';
 import { PRESETS, STATUS_LABEL, STATUS_TAG_CLASS, presetMetaOf, progressLabelOf, progressPctOf, stepTooltipOf } from './workspaceFormat';
 import { WorkspaceFormDialog } from './WorkspaceFormDialog';
+import { WorkspaceDetailScreen } from './WorkspaceDetailScreen';
 
 const STEP_STATE_COLOR: Record<WorkspaceStepState, string> = {
   [WorkspaceStepState.Pending]: 'transparent',
@@ -30,6 +31,7 @@ export function WorkspacesScreen() {
   const [dialogItem, setDialogItem] = useState<AppWorkspace | 'new' | undefined>(undefined);
   const [confirmDelete, setConfirmDelete] = useState<AppWorkspace | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  const [activeId, setActiveId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!menuFor) return;
@@ -41,6 +43,7 @@ export function WorkspacesScreen() {
   const novels = useMemo(() => libraries.filter((item) => item.type === AppLibraryType.Novel), [libraries]);
   const novelOf = (workspace: AppWorkspace): AppLibrary | undefined => libraries.find((item) => item.id === workspace.libraryId);
   const visibleItems = useMemo(() => items.filter((workspace) => matchesQuery(workspace, novelOf(workspace)?.title ?? '', query)), [items, libraries, query]);
+  const activeWorkspace = activeId === undefined ? undefined : items.find((workspace) => workspace.id === activeId);
 
   const renderProgress = (workspace: AppWorkspace) => (
     <>
@@ -58,6 +61,10 @@ export function WorkspacesScreen() {
       <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>{progressLabelOf(workspace)}</div>
     </>
   );
+
+  if (activeWorkspace) {
+    return <WorkspaceDetailScreen workspace={activeWorkspace} novel={novelOf(activeWorkspace)} onBack={() => setActiveId(undefined)} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20.4, height: '100%' }}>
@@ -141,7 +148,7 @@ export function WorkspacesScreen() {
             {visibleItems.map((workspace) => {
               const novel = novelOf(workspace);
               return (
-                <tr key={workspace.id}>
+                <tr key={workspace.id} style={{ cursor: 'pointer' }} onClick={() => setActiveId(workspace.id)}>
                   <td>
                     <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{workspace.name}</div>
                     <div className="text-muted" style={{ fontSize: 12 }}>
@@ -175,7 +182,7 @@ export function WorkspacesScreen() {
                       <MoreVerticalIcon width={15} height={15} />
                     </button>
                     {menuFor === workspace.id && (
-                      <div className="blueprint row-menu">
+                      <div className="blueprint row-menu" onClick={(e) => e.stopPropagation()}>
                         <button type="button" className="row-menu-item" onClick={() => setDialogItem(workspace)}>
                           <EditIcon width={14} height={14} />
                           Edit

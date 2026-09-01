@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useResizablePanel } from '../../components/useResizablePanel';
-import type { AppLibrary } from '../../../shared/app-library';
-import { ContentLanguage } from '../../../shared/app-library-content';
+import { useResizablePanel } from '@/components/useResizablePanel';
+import type { AppLibrary } from '@/shared/app-library';
+import { ContentLanguage } from '@/shared/app-library-content';
 import { formatDate } from './libraryFormat';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/components/DetailHeader';
 import { ChapterTable } from './ChapterTable';
 import { ChapterReader } from './ChapterReader';
 import { ChapterFormDialog } from './ChapterFormDialog';

@@ -1,4 +1,4 @@
-import { SearchIcon } from '../icons';
+import { SearchIcon } from '@/components/icons';
 import { NAV_ITEMS } from './navConfig';
 import { ThemeToggle } from './ThemeToggle';
 import { useAppInfo } from './useAppInfo';

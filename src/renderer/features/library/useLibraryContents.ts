@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '../../../shared/app-library-content';
+import { AppLibraryContentStatus, AppLibraryContentType, type ContentLanguage, type AppLibraryContent } from '@/shared/app-library-content';
 import type { ChapterRow } from './chapter';
 
 export interface UseLibraryContentsResult {

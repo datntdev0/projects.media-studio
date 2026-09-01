@@ -1,5 +1,5 @@
-import type { Db } from '../client';
-import type { AppInfo, UpsertAppInfoInput } from '../../../shared/app-info';
+import type { Db } from '@/main/database/client';
+import type { AppInfo, UpsertAppInfoInput } from '@/shared/app-info';
 
 interface AppInfoRow {
   app_name: string;

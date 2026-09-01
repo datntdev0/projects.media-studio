@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { PlusIcon, TrashIcon } from '../../components/icons';
+import { PlusIcon, TrashIcon } from '@/components/icons';
 import { formatDate } from './libraryFormat';
 import { CHAPTER_STATUS_LABEL, CHAPTER_STATUS_TAG_CLASS, countWords, type ChapterRow } from './chapter';
 

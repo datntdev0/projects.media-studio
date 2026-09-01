@@ -1,7 +1,7 @@
 import { net, protocol } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { COVER_PROTOCOL, getAppCoverDir } from '../paths';
+import { COVER_PROTOCOL, getAppCoverDir } from '@/main/helpers/paths';
 
 // Must run before the app is ready, so Chromium treats the scheme as standard and fetchable.
 protocol.registerSchemesAsPrivileged([{ scheme: COVER_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true } }]);

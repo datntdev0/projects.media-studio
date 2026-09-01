@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AppInfo } from '../../../shared/app-info';
+import type { AppInfo } from '@/shared/app-info';
 
 export function useAppInfo(): AppInfo | undefined {
   const [appInfo, setAppInfo] = useState<AppInfo | undefined>(undefined);

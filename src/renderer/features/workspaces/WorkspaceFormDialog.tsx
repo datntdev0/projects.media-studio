@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { IllustrationIcon, TranslateIcon } from '../../components/icons';
-import type { AppLibrary } from '../../../shared/app-library';
-import { StepAvailability, WORKSPACE_PRESET_STEPS, WorkspacePreset, WorkspaceStepKey, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type UpdateAppWorkspaceInput } from '../../../shared/app-workspace';
+import { IllustrationIcon, TranslateIcon } from '@/components/icons';
+import type { AppLibrary } from '@/shared/app-library';
+import { StepAvailability, WORKSPACE_PRESET_STEPS, WorkspacePreset, WorkspaceStepKey, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type UpdateAppWorkspaceInput } from '@/shared/app-workspace';
 import { PRESETS, STEP_NAME, orderLabelOf, presetMetaOf } from './workspaceFormat';
 
 interface WorkspaceFormDialogProps {

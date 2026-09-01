@@ -2,15 +2,15 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
-import type { Db } from '../database/client';
+import type { Db } from '@/main/database/client';
 import { COVER_PROTOCOL, getAppCoverDir } from './paths';
 import { imageMediaType, writeCoverFile } from './cover-storage';
-import { createAppLibrary, getAppLibrary } from '../database/repositories/app-library.repo';
-import { createAppLibraryContent, listAppLibraryContents } from '../database/repositories/app-library-content.repo';
-import { recount } from '../managers/app-library-content.manager';
-import { initialMetadata } from '../managers/app-library.manager';
-import { AppLibraryType } from '../../shared/app-library';
-import { AppLibraryContentType } from '../../shared/app-library-content';
+import { createAppLibrary, getAppLibrary } from '@/main/database/repositories/app-library.repo';
+import { createAppLibraryContent, listAppLibraryContents } from '@/main/database/repositories/app-library-content.repo';
+import { recount } from '@/main/managers/app-library-content.manager';
+import { initialMetadata } from '@/main/managers/app-library.manager';
+import { AppLibraryType } from '@/shared/app-library';
+import { AppLibraryContentType } from '@/shared/app-library-content';
 import {
   LIBRARY_PACKAGE_CHAPTERS_DIR,
   LIBRARY_PACKAGE_MANIFEST,
@@ -18,7 +18,7 @@ import {
   type LibraryPackageChapter,
   type LibraryPackageManifest,
   type LibraryPackagePreview,
-} from '../../shared/app-library-package';
+} from '@/shared/app-library-package';
 
 /** Zero-padded chapter file names, e.g. chapters/chapter-0001.txt. */
 const IDX_WIDTH = 4;

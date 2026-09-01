@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { Db } from '../client';
-import { contentFilePath, deleteContentFile, readContentFile, writeContentFile } from '../../helpers/content-storage';
-import type { AppLibraryType } from '../../../shared/app-library';
-import { AppLibraryContentType, type CreateAppLibraryContentInput, type AppLibraryContent, type AppLibraryContentStatus, type ListAppLibraryContentsFilter } from '../../../shared/app-library-content';
+import type { Db } from '@/main/database/client';
+import { contentFilePath, deleteContentFile, readContentFile, writeContentFile } from '@/main/helpers/content-storage';
+import type { AppLibraryType } from '@/shared/app-library';
+import { AppLibraryContentType, type CreateAppLibraryContentInput, type AppLibraryContent, type AppLibraryContentStatus, type ListAppLibraryContentsFilter } from '@/shared/app-library-content';
 
 interface AppLibraryContentRow {
   id: string;

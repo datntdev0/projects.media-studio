@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig } from 'vite';
 
 // https://vitejs.dev/config
@@ -7,6 +8,14 @@ import { defineConfig } from 'vite';
 // file's basename (`index.js` for both `src/main/index.ts` and
 // `src/preload/index.ts`), which collide. Pin an explicit name here.
 export default defineConfig({
+  // Path aliases, kept in step with `paths` in tsconfig.node.json.
+  resolve: {
+    alias: {
+      '@/main': path.resolve(__dirname, 'src/main'),
+      '@/preload': path.resolve(__dirname, 'src/preload'),
+      '@/shared': path.resolve(__dirname, 'src/shared'),
+    },
+  },
   build: {
     lib: {
       entry: 'src/main/index.ts',

@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getAppBaseDir } from '../helpers/paths';
+import { getAppBaseDir } from '@/main/helpers/paths';
 
 export type Db = DatabaseSync;
 

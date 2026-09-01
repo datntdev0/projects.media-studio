@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import fs from 'node:fs';
-import { APP_LIBRARY_PACKAGE_IPC_CHANNELS } from '../../shared/app-library-package';
-import type { Container } from '../container';
+import { APP_LIBRARY_PACKAGE_IPC_CHANNELS } from '@/shared/app-library-package';
+import type { Container } from '@/main/container';
 
 export function registerAppLibraryPackageHandlers({ manager }: Container): void {
   ipcMain.handle(APP_LIBRARY_PACKAGE_IPC_CHANNELS.exportZip, async (event, libraryId: string) => {

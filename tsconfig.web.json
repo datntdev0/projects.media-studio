@@ -13,7 +13,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/components/*": ["src/renderer/components/*"],
+      "@/features/*": ["src/renderer/features/*"],
+      "@/styles/*": ["src/renderer/styles/*"],
+      "@/shared/*": ["src/shared/*"]
+    }
   },
   "include": ["src/renderer/**/*", "src/shared/**/*", "vite.renderer.config.ts"]
 }

@@ -5,7 +5,7 @@
 // into one `ChapterRow` per `idx`, the shape the UI has always shown — one
 // row with a language switcher — regardless of how many rows actually back it.
 
-import { ContentLanguage, AppLibraryContentStatus, AppLibraryContentType, type AppLibraryContent } from '../../../shared/app-library-content';
+import { ContentLanguage, AppLibraryContentStatus, AppLibraryContentType, type AppLibraryContent } from '@/shared/app-library-content';
 
 export type ChapterLang = ContentLanguage;
 
@@ -80,4 +80,4 @@ export function buildChapterRows(contents: AppLibraryContent[], lang: ChapterLan
     });
 }
 
-export { countWords } from '../../../shared/text';
+export { countWords } from '@/shared/text';

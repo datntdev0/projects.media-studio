@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AppWorkspace, CreateAppWorkspaceInput, ListAppWorkspacesFilter, UpdateAppWorkspaceInput } from '../../../shared/app-workspace';
+import type { AppWorkspace, CreateAppWorkspaceInput, ListAppWorkspacesFilter, UpdateAppWorkspaceInput } from '@/shared/app-workspace';
 
 export interface AppWorkspacesState {
   items: AppWorkspace[];

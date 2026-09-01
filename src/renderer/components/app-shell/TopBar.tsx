@@ -1,4 +1,4 @@
-import { BellIcon, PanelIcon } from '../icons';
+import { BellIcon, PanelIcon } from '@/components/icons';
 
 interface TopBarProps {
   title: string;

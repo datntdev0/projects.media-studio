@@ -203,3 +203,21 @@ export const IllustrationIcon = icon(
     <path d="m21 15-4.5-4.5L6 21" />
   </>,
 );
+
+export const PlayIcon = icon(<polygon points="6 3 20 12 6 21 6 3" />);
+
+export const ClockIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v4l2 2" />
+  </>,
+);
+
+export const CalendarIcon = icon(
+  <>
+    <rect x="3" y="4" width="18" height="18" />
+    <path d="M8 2v4M16 2v4M3 10h18" />
+  </>,
+);
+
+export const CloseIcon = icon(<path d="M18 6 6 18M6 6l12 12" />);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type AppLibrary, type CreateAppLibraryInput, type ListAppLibrariesFilter, type UpdateAppLibraryInput } from '../../../shared/app-library';
+import { type AppLibrary, type CreateAppLibraryInput, type ListAppLibrariesFilter, type UpdateAppLibraryInput } from '@/shared/app-library';
 
 export interface AppLibrariesState {
   items: AppLibrary[];

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAppInfoManager } from './app-info.manager';
-import { createTestDb } from '../database/test-db';
-import type { Db } from '../database/client';
+import { createTestDb } from '@/main/database/test-db';
+import type { Db } from '@/main/database/client';
 
 let db: Db;
 
