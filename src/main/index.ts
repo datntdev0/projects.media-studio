@@ -4,6 +4,8 @@ import { closeContainer, createContainer } from './container';
 import { registerCoverProtocolHandler } from './helpers/protocols/cover.protocol';
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
+import { registerQueueHandlers } from './queue';
+import { startScheduledJobs } from './scheduler';
 import { createMainWindow } from './windows/main-window';
 import { closeLogger, getLogFilePath, logger } from './helpers/logger';
 import { getAppBaseDir } from './helpers/paths';
@@ -36,7 +38,9 @@ app.whenReady().then(() => {
 
   container.manager.appInfo.init();
 
+  registerQueueHandlers(container);
   registerIpcHandlers(container);
+  startScheduledJobs(container);
 
   createMainWindow();
 
