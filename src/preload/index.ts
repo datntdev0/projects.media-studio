@@ -6,6 +6,7 @@ import { APP_INFO_IPC_CHANNELS, type AppInfoApi } from '../shared/app-info';
 import { APP_LIBRARY_IPC_CHANNELS, type AppLibraryApi } from '../shared/app-library';
 import { APP_LIBRARY_PACKAGE_IPC_CHANNELS, type AppLibraryPackageApi } from '../shared/app-library-package';
 import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '../shared/app-library-content';
+import { APP_WORKSPACE_IPC_CHANNELS, type AppWorkspaceApi } from '../shared/app-workspace';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -34,7 +35,16 @@ const appLibraryContentApi: AppLibraryContentApi = {
   remove: (libraryId, id) => ipcRenderer.invoke(APP_LIBRARY_CONTENT_IPC_CHANNELS.remove, libraryId, id),
 };
 
+const appWorkspaceApi: AppWorkspaceApi = {
+  list: (filter) => ipcRenderer.invoke(APP_WORKSPACE_IPC_CHANNELS.list, filter),
+  get: (id) => ipcRenderer.invoke(APP_WORKSPACE_IPC_CHANNELS.get, id),
+  create: (input) => ipcRenderer.invoke(APP_WORKSPACE_IPC_CHANNELS.create, input),
+  update: (id, input) => ipcRenderer.invoke(APP_WORKSPACE_IPC_CHANNELS.update, id, input),
+  remove: (id) => ipcRenderer.invoke(APP_WORKSPACE_IPC_CHANNELS.remove, id),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appLibraryPackageApi', appLibraryPackageApi);
 contextBridge.exposeInMainWorld('appLibraryContentApi', appLibraryContentApi);
+contextBridge.exposeInMainWorld('appWorkspaceApi', appWorkspaceApi);

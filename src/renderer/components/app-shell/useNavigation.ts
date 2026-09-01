@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 
 export type PageKey =
   | 'dashboard'
+  | 'workspaces'
   | 'library'
   | 'settings';
 

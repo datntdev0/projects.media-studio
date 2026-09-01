@@ -169,3 +169,37 @@ export const DownloadIcon = icon(
   </>,
 );
 
+
+export const WorkspacesIcon = icon(
+  <>
+    <rect x="3" y="3" width="6" height="6" />
+    <rect x="15" y="15" width="6" height="6" />
+    <path d="M9 6h6a2 2 0 0 1 2 2v4M15 18H9a2 2 0 0 1-2-2v-4" />
+  </>,
+);
+
+export const AudioNovelIcon = icon(
+  <path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3" />,
+);
+
+export const VideoRecapIcon = icon(
+  <>
+    <path d="m16 13 5.2 3.1a1 1 0 0 0 1.5-.9V8.8a1 1 0 0 0-1.5-.9L16 11z" />
+    <rect x="2" y="6" width="14" height="12" />
+  </>,
+);
+
+export const TranslateIcon = icon(
+  <>
+    <path d="M5 8h10M9 4v4M11 20l4-9 4 9M12.5 17h5" />
+    <path d="M13 8a9 9 0 0 1-8 8" />
+  </>,
+);
+
+export const IllustrationIcon = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" />
+    <circle cx="9" cy="9" r="1.5" />
+    <path d="m21 15-4.5-4.5L6 21" />
+  </>,
+);

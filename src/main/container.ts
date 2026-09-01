@@ -3,12 +3,14 @@ import { createAppInfoManager, type AppInfoManager } from './managers/app-info.m
 import { createAppLibraryManager, type AppLibraryManager } from './managers/app-library.manager';
 import { createAppLibraryPackageManager, type AppLibraryPackageManager } from './managers/app-library-package.manager';
 import { createAppLibraryContentManager, type AppLibraryContentManager } from './managers/app-library-content.manager';
+import { createAppWorkspaceManager, type AppWorkspaceManager } from './managers/app-workspace.manager';
 
 export interface Managers {
   appInfo: AppInfoManager;
   appLibrary: AppLibraryManager;
   appLibraryPackage: AppLibraryPackageManager;
   appLibraryContent: AppLibraryContentManager;
+  appWorkspace: AppWorkspaceManager;
 }
 
 /**
@@ -32,6 +34,7 @@ export function createContainer(): Container {
     appLibrary: createAppLibraryManager(db),
     appLibraryPackage: createAppLibraryPackageManager(db),
     appLibraryContent: createAppLibraryContentManager(db),
+    appWorkspace: createAppWorkspaceManager(db),
   };
 
   container = { db, manager };
