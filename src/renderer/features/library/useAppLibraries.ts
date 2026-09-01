@@ -11,6 +11,8 @@ export interface AppLibrariesState {
   create(input: CreateAppLibraryInput): Promise<AppLibrary>;
   update(id: string, input: UpdateAppLibraryInput): Promise<AppLibrary>;
   remove(id: string): Promise<void>;
+  /** Creates an item from an exported `.zip`, in place of describing one field by field. */
+  importPackage(data: ArrayBuffer): Promise<string>;
 }
 
 function errorMessage(error: unknown): string {
@@ -73,5 +75,14 @@ export function useAppLibraries(): AppLibrariesState {
     [refresh],
   );
 
-  return { items, loading, error, filter, setFilter, refresh, create, update, remove };
+  const importPackage = useCallback(
+    async (data: ArrayBuffer) => {
+      const id = await window.appLibraryPackageApi.import(data);
+      refresh();
+      return id;
+    },
+    [refresh],
+  );
+
+  return { items, loading, error, filter, setFilter, refresh, create, update, remove, importPackage };
 }

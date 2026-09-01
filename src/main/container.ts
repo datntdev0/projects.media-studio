@@ -1,22 +1,14 @@
-import type { Job } from 'node-schedule';
 import { closeDb, getDb, type Db } from './database/client';
 import { createAppInfoManager, type AppInfoManager } from './managers/app-info.manager';
 import { createAppLibraryManager, type AppLibraryManager } from './managers/app-library.manager';
-import { createAppScrapingManager, type AppScrapingManager } from './managers/app-scraping.manager';
+import { createAppLibraryPackageManager, type AppLibraryPackageManager } from './managers/app-library-package.manager';
 import { createAppLibraryContentManager, type AppLibraryContentManager } from './managers/app-library-content.manager';
-import { createAppWorkflowManager, type AppWorkflowManager } from './managers/app-workflow.manager';
-import { createAppWorkflowActivityManager, type AppWorkflowActivityManager } from './managers/app-workflow-activity.manager';
-import { createAppWorkflowHistoryManager, type AppWorkflowHistoryManager } from './managers/app-workflow-history.manager';
-import { createMessageBus, type MessageBus } from './queue/message-bus';
 
 export interface Managers {
   appInfo: AppInfoManager;
   appLibrary: AppLibraryManager;
-  appScraping: AppScrapingManager;
+  appLibraryPackage: AppLibraryPackageManager;
   appLibraryContent: AppLibraryContentManager;
-  appWorkflow: AppWorkflowManager;
-  appWorkflowActivity: AppWorkflowActivityManager;
-  appWorkflowHistory: AppWorkflowHistoryManager;
 }
 
 /**
@@ -27,9 +19,7 @@ export interface Managers {
  */
 export interface Container {
   db: Db;
-  bus: MessageBus;
   manager: Managers;
-  scheduledJobs: Job[];
 }
 
 let container: Container | undefined;
@@ -37,24 +27,18 @@ let container: Container | undefined;
 export function createContainer(): Container {
   const db = getDb();
 
-  const bus = createMessageBus();
-
   const manager: Managers = {
     appInfo: createAppInfoManager(db),
     appLibrary: createAppLibraryManager(db),
-    appScraping: createAppScrapingManager(db, bus),
+    appLibraryPackage: createAppLibraryPackageManager(db),
     appLibraryContent: createAppLibraryContentManager(db),
-    appWorkflow: createAppWorkflowManager(db, bus),
-    appWorkflowActivity: createAppWorkflowActivityManager(db),
-    appWorkflowHistory: createAppWorkflowHistoryManager(db),
   };
 
-  container = { db, manager, bus, scheduledJobs: [] };
+  container = { db, manager };
   return container;
 }
 
 export function closeContainer(): void {
-  container?.scheduledJobs.forEach((job) => job.cancel());
   closeDb();
   container = undefined;
 }

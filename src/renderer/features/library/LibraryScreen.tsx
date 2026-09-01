@@ -1,27 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
-import { EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '../../components/icons';
-import { AppLibraryStatus, AppLibraryType, LibrarySourceMode, type AppLibrary } from '../../../shared/app-library';
+import { DownloadIcon, EditIcon, GridViewIcon, MoreVerticalIcon, PlusIcon, SearchIcon, TableViewIcon, TrashIcon } from '../../components/icons';
+import { AppLibraryStatus, AppLibraryType, type AppLibrary } from '../../../shared/app-library';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAppLibraries } from './useAppLibraries';
 import { LibraryFormDialog } from './LibraryFormDialog';
 import { LibraryDetailScreen } from './LibraryDetailScreen';
-import { STATUS_TAG_CLASS, SOURCE_MODE_LABEL, TYPE_LABEL, contentLabelOf, formatDate, progressPctOf, summaryOf } from './libraryFormat';
+import { STATUS_TAG_CLASS, TYPE_LABEL, contentLabelOf, formatDate, progressPctOf, summaryOf } from './libraryFormat';
 
 type ViewMode = 'table' | 'grid';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function matchesQuery(item: AppLibrary, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return [item.title, item.sourceName, item.novelMetadata?.author ?? ''].some((field) => field.toLowerCase().includes(needle));
+  return [item.title, item.novelMetadata?.author ?? ''].some((field) => field.toLowerCase().includes(needle));
 }
 
 export function LibraryScreen() {
-  const { items, loading, error, filter, setFilter, create, update, remove, refresh } = useAppLibraries();
+  const { items, loading, error, filter, setFilter, create, update, remove, refresh, importPackage } = useAppLibraries();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>('table');
   const [dialogItem, setDialogItem] = useState<AppLibrary | 'new' | undefined>(undefined);
   const [confirmDelete, setConfirmDelete] = useState<AppLibrary | undefined>(undefined);
   const [removing, setRemoving] = useState<string | undefined>(undefined);
+  const [exporting, setExporting] = useState<string | undefined>(undefined);
+  const [exportError, setExportError] = useState<string | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
 
@@ -45,6 +51,18 @@ export function LibraryScreen() {
     }
   };
 
+  const handleExport = async (item: AppLibrary) => {
+    setExporting(item.id);
+    setExportError(undefined);
+    try {
+      await window.appLibraryPackageApi.exportZip(item.id);
+    } catch (err) {
+      setExportError(errorMessage(err));
+    } finally {
+      setExporting(undefined);
+    }
+  };
+
   const toggleMenu = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setMenuFor((current) => (current === id ? undefined : id));
@@ -56,6 +74,10 @@ export function LibraryScreen() {
         <button type="button" className="row-menu-item" onClick={() => setDialogItem(item)}>
           <EditIcon width={14} height={14} />
           Edit
+        </button>
+        <button type="button" className="row-menu-item" onClick={() => handleExport(item)} disabled={exporting === item.id}>
+          <DownloadIcon width={14} height={14} />
+          {exporting === item.id ? 'Exporting…' : 'Export .zip'}
         </button>
         <button type="button" className="row-menu-item is-danger" onClick={() => setConfirmDelete(item)} disabled={removing === item.id}>
           <TrashIcon width={14} height={14} />
@@ -75,7 +97,7 @@ export function LibraryScreen() {
           onContentChange={refresh}
         />
         {dialogItem !== undefined && (
-          <LibraryFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} />
+          <LibraryFormDialog item={dialogItem === 'new' ? undefined : dialogItem} onClose={() => setDialogItem(undefined)} onCreate={create} onUpdate={update} onImport={importPackage} />
         )}
         {confirmDelete && (
           <ConfirmDialog
@@ -127,20 +149,6 @@ export function LibraryScreen() {
           ))}
         </select>
 
-        <select
-          className="input"
-          style={{ width: 130 }}
-          value={filter.sourceMode ?? ''}
-          onChange={(e) => setFilter({ ...filter, sourceMode: (e.target.value || undefined) as LibrarySourceMode | undefined })}
-        >
-          <option value="">Any source</option>
-          {Object.values(LibrarySourceMode).map((mode) => (
-            <option key={mode} value={mode}>
-              {SOURCE_MODE_LABEL[mode]}
-            </option>
-          ))}
-        </select>
-
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10.2 }}>
           <span className="text-muted" style={{ fontSize: 12 }}>
             {visibleItems.length} item{visibleItems.length === 1 ? '' : 's'}
@@ -185,9 +193,9 @@ export function LibraryScreen() {
         </div>
       </div>
 
-      {error && (
+      {(error ?? exportError) && (
         <div className="text-muted" style={{ color: '#8a2f2f' }}>
-          {error}
+          {error ?? exportError}
         </div>
       )}
 
@@ -201,12 +209,11 @@ export function LibraryScreen() {
         <table className="table">
           <thead>
             <tr>
-              <th style={{ width: '38%' }}>Item</th>
-              <th style={{ width: '9%' }}>Type</th>
-              <th style={{ width: '15%' }}>Source</th>
-              <th style={{ width: '13%' }}>Content</th>
-              <th style={{ width: '10%' }}>Status</th>
-              <th style={{ width: '9%' }}>Updated</th>
+              <th style={{ width: '46%' }}>Item</th>
+              <th style={{ width: '11%' }}>Type</th>
+              <th style={{ width: '15%' }}>Content</th>
+              <th style={{ width: '12%' }}>Status</th>
+              <th style={{ width: '11%' }}>Updated</th>
               <th></th>
             </tr>
           </thead>
@@ -232,12 +239,6 @@ export function LibraryScreen() {
                 </td>
                 <td>
                   <span className="tag tag-outline">{TYPE_LABEL[item.type]}</span>
-                </td>
-                <td>
-                  <div style={{ fontSize: 13 }}>{item.sourceName}</div>
-                  <div className="text-muted" style={{ fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
-                    {item.sourceUrl}
-                  </div>
                 </td>
                 <td style={{ fontSize: 13 }}>{contentLabelOf(item)}</td>
                 <td>
@@ -306,6 +307,7 @@ export function LibraryScreen() {
           onClose={() => setDialogItem(undefined)}
           onCreate={create}
           onUpdate={update}
+          onImport={importPackage}
         />
       )}
       {confirmDelete && (

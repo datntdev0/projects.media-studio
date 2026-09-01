@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { BookIcon, CheckIcon, EditIcon, GlobeIcon, ImageSetIcon, VideoSetIcon } from '../../components/icons';
-import { AppLibraryType, LibrarySourceMode, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '../../../shared/app-library';
-import type { CrawlerDescriptor, ScrapingPreview } from '../../../shared/app-scraping';
+import { useRef, useState } from 'react';
+import { BookIcon, CheckIcon, EditIcon, ImageSetIcon, UploadIcon, VideoSetIcon } from '../../components/icons';
+import { AppLibraryType, NovelStatus, type AppLibrary, type CreateAppLibraryInput, type NovelDetails, type UpdateAppLibraryInput } from '../../../shared/app-library';
+import type { LibraryPackagePreview } from '../../../shared/app-library-package';
 import { CoverPicker } from './CoverPicker';
 
 interface LibraryFormDialogProps {
@@ -10,7 +10,11 @@ interface LibraryFormDialogProps {
   onClose(): void;
   onCreate(input: CreateAppLibraryInput): Promise<unknown>;
   onUpdate(id: string, input: UpdateAppLibraryInput): Promise<unknown>;
+  onImport(data: ArrayBuffer): Promise<unknown>;
 }
+
+/** How a new item comes into being — the dialog's own flow, not something the item records once created. */
+type CreateMode = 'import' | 'manual';
 
 const TYPE_OPTIONS: { type: AppLibraryType; Icon: typeof BookIcon; title: string; hint: string }[] = [
   { type: AppLibraryType.Novel, Icon: BookIcon, title: 'Novel', hint: 'Text, chapter by chapter' },
@@ -18,33 +22,17 @@ const TYPE_OPTIONS: { type: AppLibraryType; Icon: typeof BookIcon; title: string
   { type: AppLibraryType.Video, Icon: VideoSetIcon, title: 'Video set', hint: 'Many clips in one item' },
 ];
 
-const SOURCE_MODE_OPTIONS: { mode: LibrarySourceMode; Icon: typeof BookIcon; title: string; hint: string }[] = [
-  { mode: LibrarySourceMode.Crawler, Icon: GlobeIcon, title: 'From a crawler', hint: 'Name the source and paste a URL. Content is pulled in later.' },
-  { mode: LibrarySourceMode.Manual, Icon: EditIcon, title: 'Manually', hint: 'Enter the metadata yourself, then add content later.' },
+const CREATE_MODE_OPTIONS: { mode: CreateMode; Icon: typeof BookIcon; title: string; hint: string }[] = [
+  { mode: 'import', Icon: UploadIcon, title: 'From a .zip', hint: 'Import a package exported from this app, or written by the scraping script.' },
+  { mode: 'manual', Icon: EditIcon, title: 'Manually', hint: 'Enter the metadata yourself, then add content later.' },
 ];
-
-const NOVEL_STATUS_ALIASES: Record<string, NovelStatus> = {
-  ongoing: NovelStatus.Ongoing,
-  complete: NovelStatus.Complete,
-  completed: NovelStatus.Complete,
-  hiatus: NovelStatus.Hiatus,
-};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Maps what the crawler read for a novel onto the details a library item stores. */
-function novelDetailsFromPreview(preview: ScrapingPreview, crawlers: CrawlerDescriptor[]): NovelDetails {
-  const status = NOVEL_STATUS_ALIASES[(preview.novel.status ?? '').trim().toLowerCase()] ?? NovelStatus.Ongoing;
-  const crawler = crawlers.find((candidate) => candidate.name === preview.crawler);
-  return {
-    status,
-    author: preview.novel.author ?? '',
-    language: crawler?.defaultLanguage ?? '',
-    genres: preview.novel.category ? [preview.novel.category] : [],
-    description: preview.novel.description ?? '',
-  };
+function typeTitle(type: AppLibraryType): string {
+  return TYPE_OPTIONS.find((option) => option.type === type)?.title ?? type;
 }
 
 function novelDetailsFromForm(status: NovelStatus, author: string, language: string, genres: string, description: string): NovelDetails {
@@ -60,14 +48,13 @@ function novelDetailsFromForm(status: NovelStatus, author: string, language: str
   };
 }
 
-export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: LibraryFormDialogProps) {
+export function LibraryFormDialog({ item, onClose, onCreate, onUpdate, onImport }: LibraryFormDialogProps) {
   const isEdit = item !== undefined;
 
   const [step, setStep] = useState(1);
   const [type, setType] = useState<AppLibraryType>(item?.type ?? AppLibraryType.Novel);
-  const [sourceMode, setSourceMode] = useState<LibrarySourceMode>(item?.sourceMode ?? LibrarySourceMode.Crawler);
+  const [createMode, setCreateMode] = useState<CreateMode>('import');
   const [title, setTitle] = useState(item?.title ?? '');
-  const [sourceUrl, setSourceUrl] = useState(item?.sourceUrl ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
   const [novelStatus, setNovelStatus] = useState<NovelStatus>(item?.novelMetadata?.status ?? NovelStatus.Ongoing);
   const [novelAuthor, setNovelAuthor] = useState(item?.novelMetadata?.author ?? '');
@@ -75,63 +62,45 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
   const [novelGenres, setNovelGenres] = useState(item?.novelMetadata?.genres.join(', ') ?? '');
   const [novelDescription, setNovelDescription] = useState(item?.novelMetadata?.description ?? '');
 
-  const [crawlers, setCrawlers] = useState<CrawlerDescriptor[]>([]);
-  const [crawlerName, setCrawlerName] = useState(item?.sourceName ?? '');
-  const [previewing, setPreviewing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [packageData, setPackageData] = useState<ArrayBuffer | undefined>(undefined);
+  const [packageName, setPackageName] = useState('');
+  const [preview, setPreview] = useState<LibraryPackagePreview | undefined>(undefined);
+  const [inspecting, setInspecting] = useState(false);
   const [previewError, setPreviewError] = useState<string | undefined>(undefined);
-  const [preview, setPreview] = useState<ScrapingPreview | undefined>(undefined);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
   const isNovel = type === AppLibraryType.Novel;
-  const isCrawler = sourceMode === LibrarySourceMode.Crawler;
-  const lastStep = isCrawler ? 3 : 2;
+  const isImport = !isEdit && createMode === 'import';
+  const lastStep = isImport ? 3 : 2;
 
   const showShape = isEdit || step === 1;
-  const showSource = !isEdit && isCrawler && step === 2;
-  const showDetails = isEdit || (!isCrawler && step === 2);
-  const showReview = !isEdit && isCrawler && step === 3;
+  const showUpload = isImport && step === 2;
+  const showDetails = isEdit || (!isImport && step === 2);
+  const showReview = isImport && step === 3;
 
-  useEffect(() => {
-    if (isEdit || !isCrawler) return;
-    let cancelled = false;
-    window.appScrapingApi.getCrawlers(type).then((list) => {
-      if (cancelled) return;
-      setCrawlers(list);
-      setCrawlerName((current) => (list.some((crawler) => crawler.name === current) ? current : list[0]?.name ?? ''));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [type, isCrawler, isEdit]);
-
-  useEffect(() => {
-    if (isEdit || !isCrawler) return;
+  /** Reads the picked archive and asks the main process what importing it would create — nothing is written yet. */
+  const handleFile = async (file: File) => {
+    setInspecting(true);
+    setPreviewError(undefined);
     setPreview(undefined);
-    setPreviewError(undefined);
-    setCoverUrl('');
-  }, [crawlerName, sourceUrl, isEdit, isCrawler]);
-
-  const handlePreview = async () => {
-    if (!crawlerName || sourceUrl.trim() === '') return;
-    setPreviewing(true);
-    setPreviewError(undefined);
+    setPackageName(file.name);
     try {
-      const result = await window.appScrapingApi.preview(crawlerName, sourceUrl.trim());
-      setPreview(result);
-      setCoverUrl(result.novel.coverUrl ?? '');
+      const data = await file.arrayBuffer();
+      setPreview(await window.appLibraryPackageApi.inspect(data));
+      setPackageData(data);
     } catch (err) {
       setPreviewError(errorMessage(err));
-      setPreview(undefined);
+      setPackageData(undefined);
     } finally {
-      setPreviewing(false);
+      setInspecting(false);
     }
   };
 
-  const sourceValid = crawlerName !== '' && sourceUrl.trim() !== '' && preview !== undefined;
   const detailsValid = title.trim() !== '' && (!isNovel || (novelAuthor.trim() !== '' && novelLanguage.trim() !== ''));
-  const canAdvance = showReview ? true : showDetails ? detailsValid : showSource ? sourceValid : true;
+  const canAdvance = showUpload ? preview !== undefined : showDetails ? detailsValid : true;
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -141,24 +110,13 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
       if (isEdit) {
         const novel = isNovel ? novelDetailsFromForm(novelStatus, novelAuthor, novelLanguage, novelGenres, novelDescription) : undefined;
         await onUpdate(item.id, { title: title.trim(), coverUrl: coverUrl.trim() || null, novel });
-      } else if (isCrawler) {
-        if (!preview) throw new Error('Preview the source before creating the item.');
-        await onCreate({
-          title: preview.novel.title || sourceUrl.trim(),
-          type,
-          sourceMode,
-          sourceName: crawlerName,
-          sourceUrl: sourceUrl.trim(),
-          coverUrl: coverUrl.trim() || null,
-          novel: isNovel ? novelDetailsFromPreview(preview, crawlers) : undefined,
-        });
+      } else if (isImport) {
+        if (!packageData) throw new Error('Choose a package to import first.');
+        await onImport(packageData);
       } else {
         await onCreate({
           title: title.trim(),
           type,
-          sourceMode,
-          sourceName: 'Manual',
-          sourceUrl: null,
           coverUrl: coverUrl.trim() || null,
           novel: isNovel ? novelDetailsFromForm(novelStatus, novelAuthor, novelLanguage, novelGenres, novelDescription) : undefined,
         });
@@ -191,22 +149,24 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
     : step === 1
       ? 'New library item'
       : showReview
-        ? 'Review before creating'
-        : isCrawler
-          ? 'Choose a crawler and source'
+        ? 'Review before importing'
+        : isImport
+          ? 'Choose a package'
           : 'Enter the metadata';
   const dialogHint = isEdit
     ? 'Everything writable about the item. What is left blank is cleared.'
     : step === 1
       ? 'Type and source mode cannot be changed after creation.'
       : showReview
-        ? 'This is what the item will be created with.'
-        : isCrawler
-          ? 'The crawler reads the metadata now; the content follows when the job that fetches it exists.'
+        ? 'This is what the package will be imported as.'
+        : isImport
+          ? 'The package carries the metadata, the cover and the chapters already fetched.'
           : 'You will add chapters and files after the item is created.';
   const stepLabel = isEdit ? '' : `Step ${step} of ${lastStep}`;
   const backLabel = isEdit || step === 1 ? 'Cancel' : 'Back';
-  const nextLabel = isEdit ? 'Save changes' : step >= lastStep ? 'Create item' : 'Continue';
+  const nextLabel = isEdit ? 'Save changes' : step < lastStep ? 'Continue' : isImport ? 'Import item' : 'Create item';
+
+  const typeLocked = isEdit || isImport;
 
   return (
     <div className="dialog-backdrop">
@@ -221,110 +181,76 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
             <>
               <div className="field">
                 <label>Library type</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 13.6, opacity: isEdit ? 0.45 : 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 13.6, opacity: typeLocked ? 0.45 : 1 }}>
                   {TYPE_OPTIONS.map(({ type: optType, Icon, title: optTitle, hint }) => (
                     <label
                       key={optType}
                       className="blueprint"
-                      style={{ padding: 13.6, cursor: isEdit ? 'default' : 'pointer', display: 'block', background: type === optType ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
+                      style={{ padding: 13.6, cursor: typeLocked ? 'default' : 'pointer', display: 'block', background: type === optType ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
                     >
-                      <input type="radio" name="ctype" style={{ position: 'absolute', opacity: 0 }} checked={type === optType} disabled={isEdit} onChange={() => setType(optType)} />
+                      <input type="radio" name="ctype" style={{ position: 'absolute', opacity: 0 }} checked={type === optType} disabled={typeLocked} onChange={() => setType(optType)} />
                       <Icon width={18} height={18} />
                       <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16, marginTop: 6 }}>{optTitle}</div>
                       <div className="text-muted" style={{ fontSize: 12 }}>{hint}</div>
                     </label>
                   ))}
                 </div>
-              </div>
-
-              <div className="field">
-                <label>How is the content sourced?</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13.6, opacity: isEdit ? 0.45 : 1 }}>
-                  {SOURCE_MODE_OPTIONS.map(({ mode, Icon, title: optTitle, hint }) => (
-                    <label
-                      key={mode}
-                      className="blueprint"
-                      style={{ padding: 13.6, cursor: isEdit ? 'default' : 'pointer', display: 'block', background: sourceMode === mode ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
-                    >
-                      <input type="radio" name="cmode" style={{ position: 'absolute', opacity: 0 }} checked={sourceMode === mode} disabled={isEdit} onChange={() => setSourceMode(mode)} />
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Icon width={17} height={17} />
-                        <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{optTitle}</span>
-                      </div>
-                      <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{hint}</div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {showSource && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 13.6 }}>
-              <div className="field">
-                <label>Crawler</label>
-                {crawlers.length === 0 ? (
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    No crawler is available for this library type yet.
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10.2 }}>
-                    {crawlers.map((crawler) => (
-                      <label
-                        key={crawler.name}
-                        className="blueprint"
-                        style={{
-                          padding: '10.2px 13.6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          background: crawlerName === crawler.name ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="crawler"
-                          style={{ position: 'absolute', opacity: 0 }}
-                          checked={crawlerName === crawler.name}
-                          onChange={() => setCrawlerName(crawler.name)}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14 }}>{crawler.name}</div>
-                          <div className="text-muted" style={{ fontSize: 11 }}>
-                            {crawler.baseUrl.replace(/^https?:\/\//, '')} · {TYPE_OPTIONS.find((option) => option.type === crawler.libraryType)?.title}
-                          </div>
-                        </div>
-                        <span className="tag tag-accent">Available</span>
-                      </label>
-                    ))}
+                {isImport && (
+                  <div className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                    The package decides the type — it is read from the file you choose next.
                   </div>
                 )}
               </div>
 
+              {!isEdit && (
+                <div className="field">
+                  <label>How is the content sourced?</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13.6 }}>
+                    {CREATE_MODE_OPTIONS.map(({ mode, Icon, title: optTitle, hint }) => (
+                      <label
+                        key={mode}
+                        className="blueprint"
+                        style={{ padding: 13.6, cursor: 'pointer', display: 'block', background: createMode === mode ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent' }}
+                      >
+                        <input type="radio" name="cmode" style={{ position: 'absolute', opacity: 0 }} checked={createMode === mode} onChange={() => setCreateMode(mode)} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Icon width={17} height={17} />
+                          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{optTitle}</span>
+                        </div>
+                        <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{hint}</div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {showUpload && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13.6 }}>
               <div className="field">
-                <label>Resource URL</label>
-                <div style={{ display: 'flex', gap: 6.8 }}>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={sourceUrl}
-                    onChange={(e) => setSourceUrl(e.target.value)}
-                    placeholder="https://www.novel543.com/0413553971"
-                    autoFocus
-                  />
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    style={{ flex: 'none' }}
-                    onClick={handlePreview}
-                    disabled={!crawlerName || sourceUrl.trim() === '' || previewing}
-                  >
-                    {previewing ? 'Reading…' : 'Preview'}
+                <label>Package file</label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".zip"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file) handleFile(file);
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 6.8, alignItems: 'center' }}>
+                  <button className="btn btn-secondary" type="button" style={{ flex: 'none' }} onClick={() => fileRef.current?.click()} disabled={inspecting}>
+                    {inspecting ? 'Reading…' : packageName ? 'Choose another…' : 'Choose a .zip…'}
                   </button>
+                  <span className="text-muted" style={{ fontSize: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {packageName || 'No file chosen'}
+                  </span>
                 </div>
                 <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
-                  Reading a source takes a moment — it is fetched through a real browser.
+                  A package holds library.json, the cover, and one .txt per chapter.
                 </div>
               </div>
 
@@ -337,7 +263,7 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
               {preview && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-accent-700)' }}>
                   <CheckIcon width={14} height={14} />
-                  {crawlerName} read it · {preview.chapterCount} chapters detected
+                  {preview.title} · {preview.chapterCount} chapters, {preview.bodyCount} with text
                 </div>
               )}
             </div>
@@ -391,30 +317,43 @@ export function LibraryFormDialog({ item, onClose, onCreate, onUpdate }: Library
 
           {showReview && preview && (
             <div style={{ display: 'flex', gap: 20.4 }}>
-              <div style={{ flex: 'none' }}>
-                <CoverPicker value={coverUrl} onChange={setCoverUrl} alt={preview.novel.title} />
+              <div style={{ width: 150, flex: 'none' }}>
+                <div
+                  className={`blueprint${preview.cover ? '' : ' wireframe'}`}
+                  style={{ width: 150, aspectRatio: '3/4', position: 'relative', overflow: 'hidden' }}
+                >
+                  {preview.cover && (
+                    <img src={preview.cover} alt={preview.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )}
+                </div>
+                <div className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                  {preview.cover ? 'Cover from the package' : 'No cover in this package'}
+                </div>
               </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="card-kicker">Fetched from {crawlerName}</div>
-                <h4 style={{ margin: '2px 0 2px' }}>{preview.novel.title}</h4>
+                <div className="card-kicker">Read from {packageName}</div>
+                <h4 style={{ margin: '2px 0 2px' }}>{preview.title}</h4>
                 <div className="text-muted" style={{ fontSize: 13, marginBottom: 10.2 }}>
-                  {[preview.novel.author, preview.novel.category, preview.novel.status].filter(Boolean).join(' · ')}
+                  {[preview.author, typeTitle(preview.type), preview.language].filter(Boolean).join(' · ')}
                 </div>
                 <dl style={{ margin: 0, fontSize: 13, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 13.6px' }}>
-                  <dt className="text-muted">Found</dt>
-                  <dd style={{ margin: 0 }}>{preview.chapterCount} chapters</dd>
-                  <dt className="text-muted">Latest</dt>
-                  <dd style={{ margin: 0 }}>{preview.latestChapterTitle ?? '—'}</dd>
-                  <dt className="text-muted">Source</dt>
-                  <dd style={{ margin: 0 }}>{sourceUrl.trim()}</dd>
+                  <dt className="text-muted">Chapters</dt>
+                  <dd style={{ margin: 0 }}>
+                    {preview.chapterCount} ({preview.bodyCount} with text)
+                  </dd>
                 </dl>
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 13.6 }}>
-                  <span className="text-muted" style={{ fontSize: 12 }}>
-                    The item is created as a draft — the job that pulls this content comes later.
-                  </span>
-                  <button className="btn btn-ghost" type="button" style={{ marginLeft: 'auto', gap: 6, fontSize: 12 }} onClick={handlePreview} disabled={previewing}>
-                    Re-read source
-                  </button>
+
+                {/* Capped and scrollable: a synopsis can run long, and it must not push the dialog's buttons out of reach. */}
+                <div
+                  className="text-muted"
+                  style={{ fontSize: 12, lineHeight: 1.5, marginTop: 10.2, maxHeight: 108, overflowY: 'auto', whiteSpace: 'pre-line' }}
+                >
+                  {preview.description ?? 'This package carries no description.'}
+                </div>
+
+                <div className="text-muted" style={{ fontSize: 12, marginTop: 13.6 }}>
+                  A new item is created — importing the same package again would add a second one.
                 </div>
               </div>
             </div>
