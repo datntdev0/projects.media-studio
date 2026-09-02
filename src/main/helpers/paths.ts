@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import path from 'node:path';
 import { config } from './config';
+import { fileSlug } from './file-name';
 
 /**
  * Portable-style storage root: the directory next to wherever the app is
@@ -25,6 +26,21 @@ export function getAppDataDir(): string {
 /** Where scraped binary assets (e.g. cover images) are cached on disk, keyed by file name. */
 export function getAppCoverDir(): string {
   return path.join(getAppDataDir(), 'covers');
+}
+
+/**
+ * A workspace's own working directory: the library item it runs over, laid out
+ * exactly as the export package is, plus whatever its steps derive from it. Keyed
+ * by the workspace's name rather than its id, so the folder is recognisable on
+ * disk — two workspaces whose names normalize alike therefore share one.
+ */
+export function getAppWorkspaceDir(workspaceName: string): string {
+  return path.join(getAppBaseDir(), 'workspaces', fileSlug(workspaceName, 'workspace'));
+}
+
+/** Where the Semantic Analysis step writes its per-chapter extractions and the world bible merged from them. */
+export function getAppWorkspaceExtractionDir(workspaceName: string): string {
+  return path.join(getAppWorkspaceDir(workspaceName), 'extractions');
 }
 
 /** Custom scheme the renderer loads cover images through — a raw file path is not a URL a browser will load. */

@@ -5,6 +5,7 @@ import { QUEUE_NAMES } from '@/main/queue/queue-names';
 import { getAppWorkspaceRun, updateAppWorkspaceRun, updateAppWorkspaceRunStep } from '@/main/database/repositories/app-workspace-run.repo';
 import { getAppWorkspace, updateAppWorkspaceStatus as updateAppWorkspaceStatus, updateAppWorkspaceStep } from '@/main/database/repositories/app-workspace.repo';
 import { AUDIO_NOVEL_STEP_HANDLERS } from '@/main/helpers/audio-novel';
+import { prepareWorkspaceDir } from '@/main/helpers/workspace-workdir';
 import type { WorkspaceStepContext, WorkspaceStepHandler, WorkspaceStepOutcome } from '@/main/helpers/workspace-step';
 import { mirrorWorkspaceStepProgress, resyncWorkspaceStatus } from '@/main/managers/app-workspace-run.manager';
 import { AppWorkspace, WORKSPACE_STEP_NAME, WorkspacePreset, WorkspaceStatus, WorkspaceStepState, type WorkspaceStepKey } from '@/shared/app-workspace';
@@ -81,11 +82,12 @@ function startableStepOf(run: AppWorkspaceRun): WorkspaceRunStep | undefined {
   return run.steps.some((step) => step.idx < pending.idx && !isStepFinished(step)) ? undefined : pending;
 }
 
-/** Marks the run under way, and the workspace with it. */
+/** Marks the run under way, lays out the workspace's working copy of the novel, and moves the workspace with it. */
 function startRun(db: Db, run: AppWorkspaceRun): void {
   const now = Date.now();
   const workspace = getAppWorkspace(db, run.workspaceId);
   const library = getAppLibrary(db, workspace!.libraryId);
+  prepareWorkspaceDir(db, workspace!);
   updateAppWorkspaceRun(db, run.id, { status: WorkspaceRunStatus.Running, startedAt: run.startedAt ?? now, endedAt: null });
   updateAppWorkspaceStatus(db, run.workspaceId, WorkspaceStatus.Running, run.startedAt ?? now);
   run.steps.forEach(step => queueStep(db, workspace!, library!, run, step));
