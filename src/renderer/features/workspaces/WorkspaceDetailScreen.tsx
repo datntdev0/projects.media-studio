@@ -25,7 +25,8 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
   const [tab, setTab] = useState<WorkspaceTab>('overview');
   const [executeOpen, setExecuteOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<AppWorkspaceRun | undefined>(undefined);
-  const { runs, loading, error, submit, cancel } = useWorkspaceRuns(workspace.id, onRunChange);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const { runs, loading, error, submit, cancel, clear } = useWorkspaceRuns(workspace.id, onRunChange);
 
   const views = stepViewsOf(workspace);
   const strip = activityStripOf(workspace);
@@ -73,7 +74,7 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
         </div>
 
         {tab === 'log' ? (
-          <WorkspaceRunLog runs={runs} loading={loading} error={error} onCancel={setConfirmCancel} />
+          <WorkspaceRunLog runs={runs} loading={loading} error={error} onCancel={setConfirmCancel} onClear={() => setConfirmClear(true)} />
         ) : activeView ? (
           <WorkspaceStepSoon view={activeView} />
         ) : (
@@ -92,6 +93,18 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
           onConfirm={() => {
             cancel(confirmCancel.id);
             setConfirmCancel(undefined);
+          }}
+        />
+      )}
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear run log"
+          message={`Delete all ${runs.length} execution(s) of this workspace? The pipeline's progress is measured from them, so it resets to nothing done.`}
+          confirmLabel="Clear"
+          onCancel={() => setConfirmClear(false)}
+          onConfirm={() => {
+            clear();
+            setConfirmClear(false);
           }}
         />
       )}

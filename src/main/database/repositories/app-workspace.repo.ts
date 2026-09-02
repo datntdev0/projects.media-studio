@@ -127,7 +127,7 @@ export function updateAppWorkspace(db: Db, id: string, edit: AppWorkspaceEdit): 
 }
 
 /** The run-driven fields, which the listing's own edit never touches. */
-export function updateAppWorkspaceRunState(db: Db, id: string, status: WorkspaceStatus, lastRunAt: number | null): AppWorkspace {
+export function updateAppWorkspaceStatus(db: Db, id: string, status: WorkspaceStatus, lastRunAt: number | null): AppWorkspace {
   db.prepare('UPDATE app_workspaces SET status = ?, last_run_at = ?, updated_at = ? WHERE id = ?').run(status, lastRunAt, Date.now(), id);
   return getAppWorkspace(db, id)!;
 }

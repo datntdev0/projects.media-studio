@@ -2,15 +2,25 @@ import { logger } from '@/main/helpers/logger';
 import type { Db } from '@/main/database/client';
 import type { Container } from '@/main/container';
 import { QUEUE_NAMES } from '@/main/queue/queue-names';
-import { completeAppWorkspaceActivity, getAppWorkspaceRun, getAppWorkspaceRunStatus, listPendingAppWorkspaceActivities, updateAppWorkspaceRun } from '@/main/database/repositories/app-workspace-run.repo';
-import { updateAppWorkspaceRunState } from '@/main/database/repositories/app-workspace.repo';
-import { mirrorWorkspaceStepProgress, resyncWorkspaceStatus, toStepPlan } from '@/main/managers/app-workspace-run.manager';
-import { WORKSPACE_STEP_NAME, WorkspaceStatus, WorkspaceStepState, type WorkspaceStepKey } from '@/shared/app-workspace';
+import { getAppWorkspaceRun, updateAppWorkspaceRun, updateAppWorkspaceRunStep } from '@/main/database/repositories/app-workspace-run.repo';
+import { getAppWorkspace, updateAppWorkspaceStatus as updateAppWorkspaceStatus, updateAppWorkspaceStep } from '@/main/database/repositories/app-workspace.repo';
+import { AUDIO_NOVEL_STEP_HANDLERS } from '@/main/helpers/audio-novel';
+import type { WorkspaceStepContext, WorkspaceStepHandler, WorkspaceStepOutcome } from '@/main/helpers/workspace-step';
+import { mirrorWorkspaceStepProgress, resyncWorkspaceStatus } from '@/main/managers/app-workspace-run.manager';
+import { AppWorkspace, WORKSPACE_STEP_NAME, WorkspacePreset, WorkspaceStatus, WorkspaceStepState, type WorkspaceStepKey } from '@/shared/app-workspace';
 import { WorkspaceRunStatus, isRunActive, isStepFinished, type AppWorkspaceRun, type WorkspaceRunStep } from '@/shared/app-workspace-run';
+import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
+import { AppLibrary } from '@/shared/app-library';
 
 interface WorkspaceRunRequested {
   runId: string;
 }
+
+/** Which strategy works a step of which preset. Only the audio-novel pipeline has handlers today. */
+const STEP_HANDLERS: Record<WorkspacePreset, Partial<Record<WorkspaceStepKey, WorkspaceStepHandler>>> = {
+  [WorkspacePreset.AudioNovel]: AUDIO_NOVEL_STEP_HANDLERS,
+  [WorkspacePreset.VideoRecap]: {},
+};
 
 /**
  * The orchestrator of a workspace run, and the only place a run, its steps or its
@@ -24,9 +34,10 @@ export function registerAppWorkspaceRunHandler({ db, bus }: Container): void {
 }
 
 /**
- * Advances one run as far as it can go now: it starts the run, then works each
- * step's sub-steps in order, and stops when a step is booked for a later time
- * (the scheduler's tick brings it back) or when the run is settled.
+ * Advances one run as far as it can go now, one step at a time and in order: it
+ * starts the run, hands each step to the handler that knows how to work it, and
+ * settles the run at the end. It returns at a step booked for a later time, which
+ * the scheduler's tick brings back round.
  */
 export async function orchestrateWorkspaceRun(db: Db, runId: string): Promise<void> {
   const opening = getAppWorkspaceRun(db, runId);
@@ -38,13 +49,10 @@ export async function orchestrateWorkspaceRun(db: Db, runId: string): Promise<vo
 
   for (;;) {
     const run = getAppWorkspaceRun(db, runId);
-    if (!run || !isRunActive(run)) return;
+    if (!run || !isRunActive(run)) return; // Stop if the run is no longer active
 
     const next = startableStepOf(run);
-    if (!next) {
-      settleRun(db, run);
-      return;
-    }
+    if (!next) { completeRun(db, run); return; } // No more steps to work, settle the run
 
     if (next.state === WorkspaceStepState.Pending) {
       if (next.startAt !== null && next.startAt > Date.now()) {
@@ -56,11 +64,10 @@ export async function orchestrateWorkspaceRun(db: Db, runId: string): Promise<vo
       if (run.status !== WorkspaceRunStatus.Running) {
         startRun(db, run);
       }
-      startStep(db, run, next);
     }
 
-    if (!(await workStep(db, run, next))) return;
-    finishStep(db, runId, next.stepKey);
+    const outcome = await startStep(db, run, next);
+    if (outcome) completeStep(db, run, next, outcome);
   }
 }
 
@@ -77,83 +84,78 @@ function startableStepOf(run: AppWorkspaceRun): WorkspaceRunStep | undefined {
 /** Marks the run under way, and the workspace with it. */
 function startRun(db: Db, run: AppWorkspaceRun): void {
   const now = Date.now();
-  updateAppWorkspaceRun(db, run.id, { status: WorkspaceRunStatus.Running, steps: run.steps.map(toStepPlan), startedAt: run.startedAt ?? now, endedAt: null });
-  mirrorRunProgress(db, run);
-  updateAppWorkspaceRunState(db, run.workspaceId, WorkspaceStatus.Running, run.startedAt ?? now);
+  const workspace = getAppWorkspace(db, run.workspaceId);
+  const library = getAppLibrary(db, workspace!.libraryId);
+  updateAppWorkspaceRun(db, run.id, { status: WorkspaceRunStatus.Running, startedAt: run.startedAt ?? now, endedAt: null });
+  updateAppWorkspaceStatus(db, run.workspaceId, WorkspaceStatus.Running, run.startedAt ?? now);
+  run.steps.forEach(step => queueStep(db, workspace!, library!, run, step));
+
   logger.info(`[run] #${run.seq} of workspace ${run.workspaceId} started — ${run.steps.length} step(s), ch. ${run.fromChapter}–${run.toChapter}`);
+}
+
+/** Queues a step for execution, preparing it in the database and marking it as pending. */
+function queueStep(db: Db, workspace: AppWorkspace, library: AppLibrary, run: AppWorkspaceRun, step: WorkspaceRunStep): void {
+  const name = WORKSPACE_STEP_NAME[step.stepKey];
+  const handler = workspace && STEP_HANDLERS[workspace.preset][step.stepKey];
+  if (!handler) throw new Error(`No handler for step ${name} in preset ${workspace?.preset}`);
+
+  const context: WorkspaceStepContext = { db, ws: workspace, lib: library!, run, step, onProgress: () => {} };
+  const totalCount = handler.totalCount(context).length;
+
+  updateAppWorkspaceRunStep(db, run.id, step.stepKey, { state: WorkspaceStepState.Pending, totalCount, startedAt: null, endedAt: null, error: null });
+  updateAppWorkspaceStep(db, run.workspaceId, step.stepKey, { state: WorkspaceStepState.Pending, totalCount, doneCount: 0, failedCount: 0 });
+}
+
+/**
+ * Hands one step to its own handler, which works out the sub-steps it covers,
+ * works them, and records each in the run's history. Returns what the step got
+ * through, or undefined when the step could not be worked or stopped early.
+ */
+async function startStep(db: Db, run: AppWorkspaceRun, step: WorkspaceRunStep): Promise<WorkspaceStepOutcome | undefined> {
+  const name = WORKSPACE_STEP_NAME[step.stepKey];
+  const workspace = getAppWorkspace(db, run.workspaceId);
+  const library = getAppLibrary(db, workspace!.libraryId);
+  const handler = workspace && STEP_HANDLERS[workspace.preset][step.stepKey];
+  if (!handler) throw new Error(`No handler for step ${name} in preset ${workspace?.preset}`);
+
+  const context: WorkspaceStepContext = { db, ws: workspace!, lib: library!, run, step, onProgress: () => {} };
+  
+  const now = Date.now();
+  const totalCount = step.totalCount;
+  updateAppWorkspaceRunStep(db, run.id, step.stepKey, { state: WorkspaceStepState.Running, totalCount, startedAt: now, endedAt: null, error: null });
+  updateAppWorkspaceStep(db, run.workspaceId, step.stepKey, { state: WorkspaceStepState.Running, totalCount, doneCount: 0, failedCount: 0 });
+  logger.info(`[run] #${run.seq} ${name} started — ${totalCount} sub-step(s) to work`);
+
+  context.onProgress = (doneCount, failedCount) => updateAppWorkspaceStep(db, run.workspaceId, step.stepKey, { state: WorkspaceStepState.Running, totalCount, doneCount, failedCount });
+  const outcome = await handler.run(context);
+  return outcome.stopped ? undefined : outcome;
+}
+
+/** Settles the step from what its handler got through. */
+function completeStep(db: Db, run: AppWorkspaceRun, step: WorkspaceRunStep, outcome: WorkspaceStepOutcome): void {
+  const now = Date.now();
+  const state = outcome.failedCount > 0 ? WorkspaceStepState.Failed : WorkspaceStepState.Done;
+
+  updateAppWorkspaceRunStep(db, run.id, step.stepKey, { state, totalCount: step.totalCount, startedAt: step.startedAt, endedAt: now, error: step.error });
+  updateAppWorkspaceStep(db, run.workspaceId, step.stepKey, { state, totalCount: step.totalCount, doneCount: outcome.doneCount, failedCount: outcome.failedCount });
+  logger.info(`[run] #${run.seq} ${WORKSPACE_STEP_NAME[step.stepKey]} ${state} — ${outcome.doneCount} done, ${outcome.failedCount} failed`);
 }
 
 /** Re-reads what the workspace has worked of the novel, so its pipeline shows this run's progress. */
 function mirrorRunProgress(db: Db, run: AppWorkspaceRun): void {
-  for (const step of run.steps) {
-    mirrorWorkspaceStepProgress(db, run.workspaceId, step.stepKey, step.state);
-  }
-}
-
-function startStep(db: Db, run: AppWorkspaceRun, step: WorkspaceRunStep): void {
-  const now = Date.now();
-  const steps = run.steps.map((candidate) => (candidate.stepKey === step.stepKey ? { ...toStepPlan(candidate), state: WorkspaceStepState.Running, startedAt: now } : toStepPlan(candidate)));
-  updateAppWorkspaceRun(db, run.id, { status: WorkspaceRunStatus.Running, steps, startedAt: run.startedAt ?? now, endedAt: null });
-  mirrorWorkspaceStepProgress(db, run.workspaceId, step.stepKey, WorkspaceStepState.Running);
-}
-
-/**
- * Works every sub-step of one step, in order. Nothing does the real work yet: a
- * sub-step logs itself and is marked completed. Returns false when the run was
- * cancelled under us, so the caller stops touching it.
- */
-async function workStep(db: Db, run: AppWorkspaceRun, step: WorkspaceRunStep): Promise<boolean> {
-  const name = WORKSPACE_STEP_NAME[step.stepKey];
-  const pending = listPendingAppWorkspaceActivities(db, run.id, step.stepKey);
-  logger.info(`[run] #${run.seq} ${name} started — ${pending.length} sub-step(s) to work`);
-
-  for (const activity of pending) {
-    // One sub-step per turn of the event loop, so the app stays responsive and a cancel can land between them.
-    await nextTurn();
-    if (getAppWorkspaceRunStatus(db, run.id) !== WorkspaceRunStatus.Running) {
-      logger.info(`[run] #${run.seq} ${name} stopped — the run is no longer running`);
-      return false;
-    }
-
-    const startedAt = Date.now();
-    logger.debug(`[run] #${run.seq} ${name} sub-step ${activity.subStepNo} completed`);
-    completeAppWorkspaceActivity(db, activity.id, startedAt, Date.now());
-
-    mirrorWorkspaceStepProgress(db, run.workspaceId, step.stepKey, WorkspaceStepState.Running);
-  }
-
-  return true;
-}
-
-/** Settles the step from the counts its sub-step rows now carry. */
-function finishStep(db: Db, runId: string, stepKey: WorkspaceStepKey): void {
-  const run = getAppWorkspaceRun(db, runId);
-  const worked = run?.steps.find((step) => step.stepKey === stepKey);
-  if (!run || !worked) return;
-
-  const now = Date.now();
-  const failed = worked.failedCount > 0;
-  const state = failed ? WorkspaceStepState.Failed : WorkspaceStepState.Done;
-  const steps = run.steps.map((step) => (step.stepKey === stepKey ? { ...toStepPlan(step), state, endedAt: now } : toStepPlan(step)));
-
-  updateAppWorkspaceRun(db, run.id, { status: run.status, steps, startedAt: run.startedAt, endedAt: null });
-  mirrorWorkspaceStepProgress(db, run.workspaceId, stepKey, state);
-  logger.info(`[run] #${run.seq} ${WORKSPACE_STEP_NAME[stepKey]} ${state} — ${worked.doneCount} of ${worked.totalCount} sub-step(s)`);
+  run.steps.forEach(step => mirrorWorkspaceStepProgress(db, run.workspaceId, step.stepKey, step.state, step.totalCount || undefined));
 }
 
 /** Ends the run once no step can be worked: everything finished, or a failed step blocks the rest. */
-function settleRun(db: Db, run: AppWorkspaceRun): void {
+function completeRun(db: Db, run: AppWorkspaceRun): void {
   const failed = run.steps.some((step) => step.state === WorkspaceStepState.Failed);
   if (!failed && !run.steps.every(isStepFinished)) return;
 
-  const status = failed ? WorkspaceRunStatus.Failed : WorkspaceRunStatus.Completed;
-  updateAppWorkspaceRun(db, run.id, { status, steps: run.steps.map(toStepPlan), startedAt: run.startedAt, endedAt: Date.now() });
-  resyncWorkspaceStatus(db, run.workspaceId);
-  logger.info(`[run] #${run.seq} of workspace ${run.workspaceId} ${status}`);
-}
+  const now = Date.now();
+  const wsStatus = failed ? WorkspaceStatus.Failed : WorkspaceStatus.Completed;
+  const runStatus = failed ? WorkspaceRunStatus.Failed : WorkspaceRunStatus.Completed;
+  updateAppWorkspaceRun(db, run.id, { status: runStatus, startedAt: run.startedAt, endedAt: now });
+  updateAppWorkspaceStatus(db, run.workspaceId, wsStatus, now);
 
-function nextTurn(): Promise<void> {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
-  });
+  logger.info(`[run] #${run.seq} of workspace ${run.workspaceId} ${runStatus}`);
 }

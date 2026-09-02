@@ -1,40 +1,24 @@
 import type { Db } from '@/main/database/client';
-import { countWorkspaceStepProgress, createAppWorkspaceRun, getAppWorkspaceRun, listActiveAppWorkspaceRuns, listAppWorkspaceRuns, skipPendingAppWorkspaceActivities, updateAppWorkspaceRun } from '@/main/database/repositories/app-workspace-run.repo';
-import { getAppWorkspace, updateAppWorkspaceRunState, updateAppWorkspaceStep } from '@/main/database/repositories/app-workspace.repo';
+import { countWorkspaceStepProgress, createAppWorkspaceRun, deleteAppWorkspaceRunsByWorkspaceId, getAppWorkspaceRun, listActiveAppWorkspaceRuns, listAppWorkspaceRuns, updateAppWorkspaceRun, updateAppWorkspaceRunStep } from '@/main/database/repositories/app-workspace-run.repo';
+import { getAppWorkspace, updateAppWorkspaceStatus, updateAppWorkspaceStep } from '@/main/database/repositories/app-workspace.repo';
 import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
 import { QUEUE_NAMES } from '@/main/queue/queue-names';
 import type { MessageBus } from '@/main/queue/message-bus';
 import { WORKSPACE_STEP_NAME, WORKSPACE_STEP_UNIT, WorkspaceStatus, WorkspaceStepState, WorkspaceStepUnit, type AppWorkspace, type WorkspaceStepKey } from '@/shared/app-workspace';
-import { WorkspaceRunMode, WorkspaceRunStatus, isRunActive, isStepFinished, validateRunInput, type AppWorkspaceRun, type SubmitWorkspaceActivityInput, type SubmitWorkspaceRunInput, type WorkspaceActivityDraft, type WorkspaceRunStep, type WorkspaceRunStepPlan } from '@/shared/app-workspace-run';
+import { WorkspaceRunMode, WorkspaceRunStatus, isRunActive, isStepFinished, validateRunInput, type AppWorkspaceRun, type SubmitWorkspaceActivityInput, type SubmitWorkspaceRunInput, type WorkspaceRunStepDraft } from '@/shared/app-workspace-run';
 
 export interface AppWorkspaceRunManager {
   list(workspaceId: string): AppWorkspaceRun[];
   get(id: string): AppWorkspaceRun | undefined;
-  /** Records the run and, when it starts now, hands it to the orchestrator. No state is moved here. */
   submit(input: SubmitWorkspaceRunInput): AppWorkspaceRun;
   cancel(id: string): AppWorkspaceRun;
-  /** Asks the orchestrator to look at every unfinished run — the scheduler's tick. */
+  clear(workspaceId: string): void;
   dispatchActive(): AppWorkspaceRun[];
 }
 
 /** One step of a submitted run, paired with its position in the preset. */
 interface OrderedStep extends SubmitWorkspaceActivityInput {
   idx: number;
-}
-
-/** The step plan without the counts the repository tallies onto it. */
-export function toStepPlan(step: WorkspaceRunStep): WorkspaceRunStepPlan {
-  return {
-    stepKey: step.stepKey,
-    idx: step.idx,
-    state: step.state,
-    startAt: step.startAt,
-    retries: step.retries,
-    retryDelayMinutes: step.retryDelayMinutes,
-    startedAt: step.startedAt,
-    endedAt: step.endedAt,
-    error: step.error,
-  };
 }
 
 /** The novel's chapter count, or 0 when the novel is gone. */
@@ -48,17 +32,17 @@ export function novelChapterCountOf(db: Db, libraryId: string): number {
  * to cover, and its done count is every sub-step this workspace has worked — so a
  * run over part of the novel moves the bar part of the way.
  */
-export function mirrorWorkspaceStepProgress(db: Db, workspaceId: string, stepKey: WorkspaceStepKey, state: WorkspaceStepState): void {
+export function mirrorWorkspaceStepProgress(db: Db, workspaceId: string, stepKey: WorkspaceStepKey, state: WorkspaceStepState, declaredTotal?: number): void {
   const workspace = getAppWorkspace(db, workspaceId);
   const step = workspace?.steps.find((candidate) => candidate.key === stepKey);
   if (!workspace || !step) return;
 
   const worked = countWorkspaceStepProgress(db, workspaceId, stepKey);
-  // Only the chapter-counted steps can be measured against the novel; export counts
-  // the parts that have been prepared, which is all there is to go on.
-  const totalCount = WORKSPACE_STEP_UNIT[stepKey] === WorkspaceStepUnit.Part ? worked.totalCount : novelChapterCountOf(db, workspace.libraryId);
+  // Only the chapter-counted steps can be measured against the novel on their own;
+  // for the rest the step's handler is the one that knows how many sub-steps there are.
+  const fallback = WORKSPACE_STEP_UNIT[stepKey] === WorkspaceStepUnit.Part ? Math.max(step.totalCount, worked.totalCount) : novelChapterCountOf(db, workspace.libraryId);
 
-  updateAppWorkspaceStep(db, workspaceId, stepKey, { state, doneCount: worked.doneCount, failedCount: worked.failedCount, totalCount });
+  updateAppWorkspaceStep(db, workspaceId, stepKey, { state, doneCount: worked.doneCount, failedCount: worked.failedCount, totalCount: declaredTotal ?? fallback });
 }
 
 /**
@@ -71,7 +55,7 @@ export function resyncWorkspaceStatus(db: Db, workspaceId: string): void {
 
   const active = listAppWorkspaceRuns(db, workspaceId).find(isRunActive);
   if (active) {
-    updateAppWorkspaceRunState(db, workspaceId, active.status === WorkspaceRunStatus.Running ? WorkspaceStatus.Running : WorkspaceStatus.Scheduled, workspace.lastRunAt);
+    updateAppWorkspaceStatus(db, workspaceId, active.status === WorkspaceRunStatus.Running ? WorkspaceStatus.Running : WorkspaceStatus.Scheduled, workspace.lastRunAt);
     return;
   }
 
@@ -82,7 +66,7 @@ export function resyncWorkspaceStatus(db: Db, workspaceId: string): void {
       ? WorkspaceStatus.Failed
       : WorkspaceStatus.Draft;
 
-  updateAppWorkspaceRunState(db, workspaceId, status, workspace.lastRunAt);
+  updateAppWorkspaceStatus(db, workspaceId, status, workspace.lastRunAt);
 }
 
 export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorkspaceRunManager {
@@ -123,15 +107,6 @@ export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorksp
     return ordered.sort((left, right) => left.idx - right.idx);
   };
 
-  /**
-   * One sub-step row per chapter in range. Export counts exporting parts, which
-   * do not exist until they are prepared, so it starts with no sub-steps at all.
-   */
-  const subStepsOf = (stepKey: WorkspaceStepKey, fromChapter: number, toChapter: number): WorkspaceActivityDraft[] => {
-    if (WORKSPACE_STEP_UNIT[stepKey] === WorkspaceStepUnit.Part) return [];
-    return Array.from({ length: toChapter - fromChapter + 1 }, (_unused, offset) => ({ stepKey, subStepNo: fromChapter + offset }));
-  };
-
   return {
     list: (workspaceId) => listAppWorkspaceRuns(db, workspaceId),
 
@@ -152,17 +127,16 @@ export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorksp
         throw new Error(error);
       }
 
-      // Everything starts waiting: moving a run, its steps or the workspace is the orchestrator's job.
-      const steps: WorkspaceRunStepPlan[] = ordered.map((step) => ({
+      // Everything starts waiting: moving a run, its steps or the workspace is the
+      // orchestrator's job, and how many sub-steps a step covers is its handler's.
+      const steps: WorkspaceRunStepDraft[] = ordered.map((step) => ({
         stepKey: step.stepKey,
         idx: step.idx,
         state: WorkspaceStepState.Pending,
         startAt: step.startAt,
         retries: step.retries,
         retryDelayMinutes: step.retryDelayMinutes,
-        startedAt: null,
-        endedAt: null,
-        error: null,
+        totalCount: 0,
       }));
 
       const run = createAppWorkspaceRun(db, {
@@ -173,7 +147,6 @@ export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorksp
         toChapter: input.toChapter,
         startedAt: null,
         steps,
-        activities: steps.flatMap((step) => subStepsOf(step.stepKey, input.fromChapter, input.toChapter)),
       });
 
       if (immediate) {
@@ -185,29 +158,32 @@ export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorksp
 
     cancel: (id) => {
       const run = needRun(id);
-      if (!isRunActive(run)) {
-        throw new Error('This run has already finished.');
-      }
+      if (!isRunActive(run)) throw new Error('This run has already finished.');
 
       const now = Date.now();
-      const steps = run.steps.map((step) => {
-        if (isStepFinished(step)) return toStepPlan(step);
-        // A step that was working stops where it got to — what it finished still counts.
-        mirrorWorkspaceStepProgress(db, run.workspaceId, step.stepKey, WorkspaceStepState.Pending);
-        return { ...toStepPlan(step), state: WorkspaceStepState.Skipped, endedAt: now };
-      });
+      for (const step of run.steps) {
+        if (isStepFinished(step)) continue;
+        updateAppWorkspaceRunStep(db, run.id, step.stepKey, { state: WorkspaceStepState.Skipped, totalCount: step.totalCount, startedAt: step.startedAt, endedAt: now, error: step.error });
+        updateAppWorkspaceStep(db, run.workspaceId, step.stepKey, { state: WorkspaceStepState.Skipped, totalCount: step.totalCount, doneCount: step.doneCount, failedCount: step.failedCount });
+      }
 
-      skipPendingAppWorkspaceActivities(db, run.id, now);
-      const cancelled = updateAppWorkspaceRun(db, id, { status: WorkspaceRunStatus.Cancelled, steps, startedAt: run.startedAt, endedAt: now });
-      resyncWorkspaceStatus(db, run.workspaceId);
+      const cancelled = updateAppWorkspaceRun(db, id, { status: WorkspaceRunStatus.Cancelled, startedAt: run.startedAt, endedAt: now });
+      updateAppWorkspaceStatus(db, run.workspaceId, WorkspaceStatus.Completed, run.endedAt);
       return cancelled;
+    },
+
+    clear: (workspaceId) => {
+      const workspace = needWorkspace(workspaceId);
+      if (listAppWorkspaceRuns(db, workspace.id).some(isRunActive)) {
+        throw new Error('This workspace has a run in flight — cancel it before clearing the log.');
+      }
+
+      deleteAppWorkspaceRunsByWorkspaceId(db, workspace.id);
     },
 
     dispatchActive: () => {
       const runs = listActiveAppWorkspaceRuns(db);
-      for (const run of runs) {
-        request(run);
-      }
+      runs.forEach((run) => request(run));
       return runs;
     },
   };

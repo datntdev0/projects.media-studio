@@ -6,4 +6,5 @@ export function registerAppWorkspaceRunHandlers({ manager }: Container): void {
   ipcMain.handle(APP_WORKSPACE_RUN_IPC_CHANNELS.list, (_event, workspaceId: string) => manager.appWorkspaceRun.list(workspaceId));
   ipcMain.handle(APP_WORKSPACE_RUN_IPC_CHANNELS.submit, (_event, input) => manager.appWorkspaceRun.submit(input));
   ipcMain.handle(APP_WORKSPACE_RUN_IPC_CHANNELS.cancel, (_event, id: string) => manager.appWorkspaceRun.cancel(id));
+  ipcMain.handle(APP_WORKSPACE_RUN_IPC_CHANNELS.clear, (_event, workspaceId: string) => manager.appWorkspaceRun.clear(workspaceId));
 }

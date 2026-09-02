@@ -7,7 +7,7 @@ import { defineConfig } from 'vite';
 // and Vite's lib build otherwise names the output chunk after the entry
 // file's basename (`index.js` for both `src/main/index.ts` and
 // `src/preload/index.ts`), which collide. Pin an explicit name here.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   // Path aliases, kept in step with `paths` in tsconfig.node.json.
   resolve: {
     alias: {
@@ -17,6 +17,10 @@ export default defineConfig({
     },
   },
   build: {
+    // Forge runs dev builds with `command: 'serve'`. Without a source map the
+    // debugger can't map breakpoints in src/main back to .vite/build/main.js.
+    sourcemap: command === 'serve' ? 'inline' : false,
+    minify: command === 'serve' ? false : undefined,
     lib: {
       entry: 'src/main/index.ts',
       fileName: () => 'main.js',
@@ -31,4 +35,4 @@ export default defineConfig({
       external: ['node:sqlite'],
     },
   },
-});
+}));

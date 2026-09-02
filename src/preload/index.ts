@@ -48,6 +48,7 @@ const appWorkspaceRunApi: AppWorkspaceRunApi = {
   list: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_RUN_IPC_CHANNELS.list, workspaceId),
   submit: (input) => ipcRenderer.invoke(APP_WORKSPACE_RUN_IPC_CHANNELS.submit, input),
   cancel: (id) => ipcRenderer.invoke(APP_WORKSPACE_RUN_IPC_CHANNELS.cancel, id),
+  clear: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_RUN_IPC_CHANNELS.clear, workspaceId),
 };
 
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);

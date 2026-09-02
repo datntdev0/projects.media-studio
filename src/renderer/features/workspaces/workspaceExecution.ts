@@ -2,7 +2,8 @@ import { WorkspaceRunMode, type SubmitWorkspaceActivityInput, type SubmitWorkspa
 import type { WorkspaceStepKey } from '@/shared/app-workspace';
 
 // The execute dialog's own form state, and how it turns into the request main takes.
-// A scheduled run carries no start time of its own — each step brings its own.
+// A run carries no start time of its own — each step brings its own, and a run is
+// scheduled rather than immediate exactly when one of its steps books a time.
 
 export enum StepStartMode {
   /** Runs as soon as the step ahead of it completes. */
@@ -21,10 +22,16 @@ export interface ExecutionStepPlan {
 }
 
 export const RETRY_OPTIONS = [3, 2, 1, 0];
-export const RETRY_DELAY_OPTIONS = [1, 5, 15];
+/** The first wait after a failure — it doubles with each further retry (see `retryDelayMsOf`). */
+export const RETRY_DELAY_OPTIONS = [1, 5, 15, 30, 60];
+export const DEFAULT_RETRY_DELAY_MINUTES = 1;
 
 export function retryLabelOf(retries: number): string {
   return retries === 0 ? 'None' : `${retries}×`;
+}
+
+export function retryDelayLabelOf(minutes: number): string {
+  return minutes < 60 ? `${minutes} min` : `${minutes / 60} hour`;
 }
 
 /** A `datetime-local` value for the given moment, in the user's own timezone. */
@@ -42,27 +49,32 @@ export function defaultStepStart(previous: string | undefined, hoursApart = 2): 
   return toDateTimeInputValue(start);
 }
 
-function startAtOf(plan: ExecutionStepPlan, mode: WorkspaceRunMode): number | null {
-  if (mode === WorkspaceRunMode.Immediate || plan.startMode === StepStartMode.AfterPrevious) return null;
+function startAtOf(plan: ExecutionStepPlan): number | null {
+  if (plan.startMode === StepStartMode.AfterPrevious) return null;
   const parsed = new Date(plan.startAt).getTime();
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+/** Booking any step makes the run a scheduled one; with nothing booked it starts now. */
+export function runModeOf(plans: ExecutionStepPlan[]): WorkspaceRunMode {
+  const booked = plans.some((plan) => plan.enabled && plan.startMode === StepStartMode.AtTime);
+  return booked ? WorkspaceRunMode.Scheduled : WorkspaceRunMode.Immediate;
+}
+
 /** The form as main takes it: the included steps only, each with the start time it booked. */
-export function toRunInput(workspaceId: string, mode: WorkspaceRunMode, from: string, to: string, plans: ExecutionStepPlan[]): SubmitWorkspaceRunInput {
+export function toRunInput(workspaceId: string, from: string, to: string, plans: ExecutionStepPlan[]): SubmitWorkspaceRunInput {
   const steps: SubmitWorkspaceActivityInput[] = plans
     .filter((plan) => plan.enabled)
-    .map((plan) => ({ stepKey: plan.key, startAt: startAtOf(plan, mode), retries: plan.retries, retryDelayMinutes: plan.retryDelayMinutes }));
+    .map((plan) => ({ stepKey: plan.key, startAt: startAtOf(plan), retries: plan.retries, retryDelayMinutes: plan.retryDelayMinutes }));
 
-  return { workspaceId, mode, fromChapter: Number(from), toChapter: Number(to), steps };
+  return { workspaceId, mode: runModeOf(plans), fromChapter: Number(from), toChapter: Number(to), steps };
 }
 
 /**
  * Why the form cannot be submitted yet, beyond what `validateRunInput` covers —
  * a step asked to start at a time the picker has not been given.
  */
-export function missingStartTimeOf(mode: WorkspaceRunMode, plans: ExecutionStepPlan[]): string | undefined {
-  if (mode === WorkspaceRunMode.Immediate) return undefined;
+export function missingStartTimeOf(plans: ExecutionStepPlan[]): string | undefined {
   const missing = plans.some((plan) => plan.enabled && plan.startMode === StepStartMode.AtTime && plan.startAt === '');
   return missing ? 'A step set to start at a time needs that time.' : undefined;
 }

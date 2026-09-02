@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '@/main/database/client';
 import { WorkspaceStepState, type WorkspaceStepCounts, type WorkspaceStepKey } from '@/shared/app-workspace';
-import { ACTIVE_RUN_STATUSES, type AppWorkspaceRun, type AppWorkspaceRunDraft, type AppWorkspaceRunEdit, type WorkspaceRunMode, type WorkspaceRunStep, type WorkspaceRunStepPlan, type WorkspaceRunStatus } from '@/shared/app-workspace-run';
+import { ACTIVE_RUN_STATUSES, type AppWorkspaceRun, type AppWorkspaceRunDraft, type AppWorkspaceRunEdit, type WorkspaceActivityDraft, type WorkspaceRunMode, type WorkspaceRunStep, type WorkspaceRunStepDraft, type WorkspaceRunStepEdit, type WorkspaceRunStatus } from '@/shared/app-workspace-run';
 
 interface AppWorkspaceRunRow {
   id: string;
@@ -11,7 +11,6 @@ interface AppWorkspaceRunRow {
   status: string;
   from_chapter: number;
   to_chapter: number;
-  steps: string;
   started_at: number | null;
   ended_at: number | null;
   created_at: number;
@@ -21,53 +20,115 @@ interface AppWorkspaceRunRow {
 interface StepCountRow {
   run_id: string;
   step_key: string;
-  state: string;
-  tally: number;
+  done_tally: number;
+  failed_tally: number;
 }
 
-const NO_COUNTS: WorkspaceStepCounts = { doneCount: 0, failedCount: 0, totalCount: 0 };
-
-/** A sub-step the orchestrator has still to work. */
-export interface PendingActivity {
+interface AppWorkspaceRunStepRow {
   id: string;
-  subStepNo: number;
+  run_id: string;
+  idx: number;
+  step_key: string;
+  state: string;
+  start_at: number | null;
+  retry: number;
+  retry_delay: number;
+  total_count: number;
+  started_at: number | null;
+  ended_at: number | null;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
 }
+
+/** What a step's history says it got through. */
+interface StepTally {
+  doneCount: number;
+  failedCount: number;
+}
+
+const NO_TALLY: StepTally = { doneCount: 0, failedCount: 0 };
 
 function countsKey(runId: string, stepKey: string): string {
   return `${runId}:${stepKey}`;
 }
 
 /**
- * Each step's progress, tallied over its sub-step rows in one query — a step
- * stores no counts of its own, so this is where they come from.
+ * One row per sub-step of the history rows it reads, saying how its attempts
+ * went — retries append a row per attempt, so a sub-step has to be folded back
+ * into one outcome before anything is counted. Callers add their own filter and
+ * `GROUP BY` to it.
  */
-function countsByStep(db: Db, runIds: string[]): Map<string, WorkspaceStepCounts> {
-  const counts = new Map<string, WorkspaceStepCounts>();
-  if (runIds.length === 0) return counts;
+const SUB_STEP_ATTEMPTS = `SELECT a.run_id, a.step_key, a.sub_step_no,
+    COUNT(CASE WHEN a.state = '${WorkspaceStepState.Done}' THEN 1 END) AS done_attempts,
+    COUNT(CASE WHEN a.state = '${WorkspaceStepState.Failed}' THEN 1 END) AS failed_attempts
+  FROM app_workspace_activities a`;
+
+/** A sub-step counts once: done when any attempt landed, failed only when none did. */
+const DONE_SUB_STEPS = 'COUNT(CASE WHEN done_attempts > 0 THEN 1 END)';
+const FAILED_SUB_STEPS = 'COUNT(CASE WHEN done_attempts = 0 AND failed_attempts > 0 THEN 1 END)';
+
+/**
+ * What each step of these runs got through, tallied over its history rows in one
+ * query. A step's own total is on the run, since only its handler knows how many
+ * sub-steps it covers.
+ */
+function talliesByStep(db: Db, runIds: string[]): Map<string, StepTally> {
+  const tallies = new Map<string, StepTally>();
+  if (runIds.length === 0) return tallies;
 
   const placeholders = runIds.map(() => '?').join(', ');
   const rows = db
-    .prepare(`SELECT run_id, step_key, state, COUNT(*) AS tally FROM app_workspace_activities WHERE run_id IN (${placeholders}) GROUP BY run_id, step_key, state`)
+    .prepare(
+      `SELECT run_id, step_key, ${DONE_SUB_STEPS} AS done_tally, ${FAILED_SUB_STEPS} AS failed_tally
+       FROM (${SUB_STEP_ATTEMPTS} WHERE a.run_id IN (${placeholders}) GROUP BY a.run_id, a.step_key, a.sub_step_no)
+       GROUP BY run_id, step_key`,
+    )
     .all(...runIds) as unknown as StepCountRow[];
 
   for (const row of rows) {
-    const key = countsKey(row.run_id, row.step_key);
-    const current = counts.get(key) ?? { ...NO_COUNTS };
-    if (row.state === WorkspaceStepState.Done) current.doneCount += row.tally;
-    if (row.state === WorkspaceStepState.Failed) current.failedCount += row.tally;
-    current.totalCount += row.tally;
-    counts.set(key, current);
+    tallies.set(countsKey(row.run_id, row.step_key), { doneCount: row.done_tally, failedCount: row.failed_tally });
   }
 
-  return counts;
+  return tallies;
 }
 
-function toRun(row: AppWorkspaceRunRow, counts: Map<string, WorkspaceStepCounts>): AppWorkspaceRun {
-  const plans = JSON.parse(row.steps) as WorkspaceRunStepPlan[];
-  const steps: WorkspaceRunStep[] = plans
-    .map((plan) => ({ ...plan, ...(counts.get(countsKey(row.id, plan.stepKey)) ?? NO_COUNTS) }))
-    .sort((left, right) => left.idx - right.idx);
+function toRunStep(row: AppWorkspaceRunStepRow, tally: StepTally): WorkspaceRunStep {
+  return {
+    stepKey: row.step_key as WorkspaceStepKey,
+    idx: row.idx,
+    state: row.state as WorkspaceStepState,
+    startAt: row.start_at,
+    retries: row.retry,
+    retryDelayMinutes: row.retry_delay,
+    totalCount: row.total_count,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    error: row.error,
+    ...tally,
+  };
+}
 
+/** The steps of many runs in one query — a listing would otherwise read them run by run. */
+function stepsByRun(db: Db, runIds: string[], tallies: Map<string, StepTally>): Map<string, WorkspaceRunStep[]> {
+  const grouped = new Map<string, WorkspaceRunStep[]>();
+  if (runIds.length === 0) return grouped;
+
+  const placeholders = runIds.map(() => '?').join(', ');
+  const rows = db
+    .prepare(`SELECT * FROM app_workspace_run_steps WHERE run_id IN (${placeholders}) ORDER BY idx`)
+    .all(...runIds) as unknown as AppWorkspaceRunStepRow[];
+
+  for (const row of rows) {
+    const steps = grouped.get(row.run_id) ?? [];
+    steps.push(toRunStep(row, tallies.get(countsKey(row.run_id, row.step_key)) ?? NO_TALLY));
+    grouped.set(row.run_id, steps);
+  }
+
+  return grouped;
+}
+
+function toRun(row: AppWorkspaceRunRow, steps: WorkspaceRunStep[]): AppWorkspaceRun {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -85,8 +146,9 @@ function toRun(row: AppWorkspaceRunRow, counts: Map<string, WorkspaceStepCounts>
 }
 
 function hydrate(db: Db, rows: AppWorkspaceRunRow[]): AppWorkspaceRun[] {
-  const counts = countsByStep(db, rows.map((row) => row.id));
-  return rows.map((row) => toRun(row, counts));
+  const runIds = rows.map((row) => row.id);
+  const steps = stepsByRun(db, runIds, talliesByStep(db, runIds));
+  return rows.map((row) => toRun(row, steps.get(row.id) ?? []));
 }
 
 /** The next label for this workspace — runs are numbered per workspace, from 1. */
@@ -115,7 +177,7 @@ export function listActiveAppWorkspaceRuns(db: Db): AppWorkspaceRun[] {
   return hydrate(db, rows);
 }
 
-/** The run, its step plan and every sub-step row it covers — one transaction, since a half-written run has no meaning. */
+/** The run and the steps it covers — one transaction, since a run without its steps has no meaning. */
 export function createAppWorkspaceRun(db: Db, draft: AppWorkspaceRunDraft): AppWorkspaceRun {
   const id = randomUUID();
   const now = Date.now();
@@ -123,16 +185,12 @@ export function createAppWorkspaceRun(db: Db, draft: AppWorkspaceRunDraft): AppW
   db.exec('BEGIN');
   try {
     db.prepare(
-      `INSERT INTO app_workspace_runs (id, workspace_id, seq, mode, status, from_chapter, to_chapter, steps, started_at, ended_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-    ).run(id, draft.workspaceId, nextSeq(db, draft.workspaceId), draft.mode, draft.status, draft.fromChapter, draft.toChapter, JSON.stringify(draft.steps), draft.startedAt, now, now);
+      `INSERT INTO app_workspace_runs (id, workspace_id, seq, mode, status, from_chapter, to_chapter, started_at, ended_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+    ).run(id, draft.workspaceId, nextSeq(db, draft.workspaceId), draft.mode, draft.status, draft.fromChapter, draft.toChapter, draft.startedAt, now, now);
 
-    const insert = db.prepare(
-      `INSERT INTO app_workspace_activities (id, run_id, step_key, sub_step_no, state, attempt, error, started_at, ended_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, NULL, NULL, NULL, ?, ?)`,
-    );
-    for (const activity of draft.activities) {
-      insert.run(randomUUID(), id, activity.stepKey, activity.subStepNo, WorkspaceStepState.Pending, now, now);
+    for (const step of draft.steps) {
+      insertRunStep(db, id, step, now);
     }
     db.exec('COMMIT');
   } catch (error) {
@@ -143,16 +201,38 @@ export function createAppWorkspaceRun(db: Db, draft: AppWorkspaceRunDraft): AppW
   return getAppWorkspaceRun(db, id)!;
 }
 
+function insertRunStep(db: Db, runId: string, step: WorkspaceRunStepDraft, now: number): void {
+  db.prepare(
+    `INSERT INTO app_workspace_run_steps (id, run_id, idx, step_key, state, start_at, retry, retry_delay, total_count, started_at, ended_at, error, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+  ).run(randomUUID(), runId, step.idx, step.stepKey, step.state, step.startAt, step.retries, step.retryDelayMinutes, step.totalCount, now, now);
+}
+
+/** Appends one worked sub-step to a run's history. */
+export function createAppWorkspaceActivity(db: Db, draft: WorkspaceActivityDraft): void {
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO app_workspace_activities (id, run_id, step_key, sub_step_no, state, attempt, error, started_at, ended_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(randomUUID(), draft.runId, draft.stepKey, draft.subStepNo, draft.state, draft.attempt, draft.error, draft.startedAt, draft.endedAt, now, now);
+}
+
 export function updateAppWorkspaceRun(db: Db, id: string, edit: AppWorkspaceRunEdit): AppWorkspaceRun {
-  db.prepare('UPDATE app_workspace_runs SET status = ?, steps = ?, started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?').run(
-    edit.status,
-    JSON.stringify(edit.steps),
+  db.prepare('UPDATE app_workspace_runs SET status = ?, started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?').run(edit.status, edit.startedAt, edit.endedAt, Date.now(), id);
+  return getAppWorkspaceRun(db, id)!;
+}
+
+export function updateAppWorkspaceRunStep(db: Db, runId: string, stepKey: WorkspaceStepKey, edit: WorkspaceRunStepEdit): void {
+  db.prepare('UPDATE app_workspace_run_steps SET state = ?, total_count = ?, started_at = ?, ended_at = ?, error = ?, updated_at = ? WHERE run_id = ? AND step_key = ?').run(
+    edit.state,
+    edit.totalCount,
     edit.startedAt,
     edit.endedAt,
+    edit.error,
     Date.now(),
-    id,
+    runId,
+    stepKey,
   );
-  return getAppWorkspaceRun(db, id)!;
 }
 
 /**
@@ -164,14 +244,13 @@ export function updateAppWorkspaceRun(db: Db, id: string, edit: AppWorkspaceRunE
 export function countWorkspaceStepProgress(db: Db, workspaceId: string, stepKey: WorkspaceStepKey): WorkspaceStepCounts {
   const row = db
     .prepare(
-      `SELECT COUNT(DISTINCT CASE WHEN a.state = ? THEN a.sub_step_no END) AS done_tally,
-              COUNT(DISTINCT CASE WHEN a.state = ? THEN a.sub_step_no END) AS failed_tally,
-              COUNT(DISTINCT a.sub_step_no) AS total_tally
-       FROM app_workspace_activities a
-       JOIN app_workspace_runs r ON r.id = a.run_id
-       WHERE r.workspace_id = ? AND a.step_key = ?`,
+      `SELECT ${DONE_SUB_STEPS} AS done_tally, ${FAILED_SUB_STEPS} AS failed_tally, COUNT(*) AS total_tally
+       FROM (${SUB_STEP_ATTEMPTS}
+         JOIN app_workspace_runs r ON r.id = a.run_id
+         WHERE r.workspace_id = ? AND a.step_key = ?
+         GROUP BY a.sub_step_no)`,
     )
-    .get(WorkspaceStepState.Done, WorkspaceStepState.Failed, workspaceId, stepKey) as { done_tally: number; failed_tally: number; total_tally: number };
+    .get(workspaceId, stepKey) as { done_tally: number; failed_tally: number; total_tally: number };
 
   return { doneCount: row.done_tally, failedCount: row.failed_tally, totalCount: row.total_tally };
 }
@@ -182,38 +261,10 @@ export function getAppWorkspaceRunStatus(db: Db, id: string): WorkspaceRunStatus
   return row ? (row.status as WorkspaceRunStatus) : undefined;
 }
 
-/** One step's sub-steps still to be worked, in the order they run. */
-export function listPendingAppWorkspaceActivities(db: Db, runId: string, stepKey: WorkspaceStepKey): PendingActivity[] {
-  const rows = db
-    .prepare('SELECT id, sub_step_no FROM app_workspace_activities WHERE run_id = ? AND step_key = ? AND state = ? ORDER BY sub_step_no')
-    .all(runId, stepKey, WorkspaceStepState.Pending) as unknown as { id: string; sub_step_no: number }[];
-  return rows.map((row) => ({ id: row.id, subStepNo: row.sub_step_no }));
-}
-
-export function completeAppWorkspaceActivity(db: Db, id: string, startedAt: number, endedAt: number): void {
-  db.prepare('UPDATE app_workspace_activities SET state = ?, attempt = 1, started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?').run(
-    WorkspaceStepState.Done,
-    startedAt,
-    endedAt,
-    endedAt,
-    id,
-  );
-}
-
-/** Marks every sub-step still waiting as skipped — what cancelling a run leaves behind. */
-export function skipPendingAppWorkspaceActivities(db: Db, runId: string, endedAt: number): void {
-  db.prepare('UPDATE app_workspace_activities SET state = ?, ended_at = ?, updated_at = ? WHERE run_id = ? AND state IN (?, ?)').run(
-    WorkspaceStepState.Skipped,
-    endedAt,
-    endedAt,
-    runId,
-    WorkspaceStepState.Pending,
-    WorkspaceStepState.Running,
-  );
-}
-
-/** Both tables at once — there are no foreign keys, so the cascade is spelled out here. */
+/** Every table at once — there are no foreign keys, so the cascade is spelled out here. */
 export function deleteAppWorkspaceRunsByWorkspaceId(db: Db, workspaceId: string): void {
-  db.prepare('DELETE FROM app_workspace_activities WHERE run_id IN (SELECT id FROM app_workspace_runs WHERE workspace_id = ?)').run(workspaceId);
+  const runsOfWorkspace = 'SELECT id FROM app_workspace_runs WHERE workspace_id = ?';
+  db.prepare(`DELETE FROM app_workspace_activities WHERE run_id IN (${runsOfWorkspace})`).run(workspaceId);
+  db.prepare(`DELETE FROM app_workspace_run_steps WHERE run_id IN (${runsOfWorkspace})`).run(workspaceId);
   db.prepare('DELETE FROM app_workspace_runs WHERE workspace_id = ?').run(workspaceId);
 }

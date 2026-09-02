@@ -11,6 +11,7 @@ export interface WorkspaceRunsState {
   refresh(): void;
   submit(input: SubmitWorkspaceRunInput): Promise<AppWorkspaceRun>;
   cancel(id: string): Promise<AppWorkspaceRun>;
+  clear(): Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -77,5 +78,14 @@ export function useWorkspaceRuns(workspaceId: string, onChange?: () => void): Wo
     [load, onChange],
   );
 
-  return { runs, loading, error, refresh, submit, cancel };
+  const clear = useCallback(
+    async () => {
+      await window.appWorkspaceRunApi.clear(workspaceId);
+      await load(false);
+      onChange?.();
+    },
+    [workspaceId, load, onChange],
+  );
+
+  return { runs, loading, error, refresh, submit, cancel, clear };
 }

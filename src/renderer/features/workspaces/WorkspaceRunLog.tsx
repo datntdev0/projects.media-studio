@@ -2,12 +2,14 @@ import { WorkspaceStepState } from '@/shared/app-workspace';
 import { isRunActive, type AppWorkspaceRun, type WorkspaceRunStep } from '@/shared/app-workspace-run';
 import { formatDate } from '@/features/library/libraryFormat';
 import { RUN_MODE_LABEL, RUN_STATUS_LABEL, RUN_STATUS_TAG_CLASS, STEP_NAME, STEP_STATE_LABEL, STEP_STATE_TAG_CLASS, orderLabelOf, runRangeLabelOf, stepCountLabelOf } from './workspaceFormat';
+import { retryDelayLabelOf } from './workspaceExecution';
 
 interface WorkspaceRunLogProps {
   runs: AppWorkspaceRun[];
   loading: boolean;
   error: string | undefined;
   onCancel(run: AppWorkspaceRun): void;
+  onClear(): void;
 }
 
 /** When a step ran, or what it is still waiting for. */
@@ -17,15 +19,33 @@ function timingOf(step: WorkspaceRunStep): string {
   return `${formatDate(step.startedAt)} → ${formatDate(step.endedAt)}`;
 }
 
-export function WorkspaceRunLog({ runs, loading, error, onCancel }: WorkspaceRunLogProps) {
+export function WorkspaceRunLog({ runs, loading, error, onCancel, onClear }: WorkspaceRunLogProps) {
   if (loading) {
     return <div className="text-muted" style={{ padding: 20.4 }}>Loading…</div>;
   }
+
+  const inFlight = runs.some(isRunActive);
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 20.4 }}>
       <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 17 }}>
         {error && <div style={{ color: '#8a2f2f', fontSize: 13 }}>{error}</div>}
+
+        {runs.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10.2 }}>
+            <span className="card-kicker">{runs.length} execution{runs.length === 1 ? '' : 's'}</span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 10px' }}
+              onClick={onClear}
+              disabled={inFlight}
+              title={inFlight ? 'A run is in flight — cancel it before clearing the log.' : undefined}
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {runs.length === 0 ? (
           <div className="blueprint" style={{ borderStyle: 'dashed', padding: 34, textAlign: 'center' }}>
@@ -57,7 +77,7 @@ export function WorkspaceRunLog({ runs, loading, error, onCancel }: WorkspaceRun
                       {step.error && ` · ${step.error}`}
                     </span>
                     <span className="text-muted" style={{ flex: 'none', fontSize: 11 }}>
-                      retry {step.retries === 0 ? 'off' : `${step.retries}× / ${step.retryDelayMinutes} min`}
+                      retry {step.retries === 0 ? 'off' : `${step.retries}× / ${retryDelayLabelOf(step.retryDelayMinutes)}`}
                     </span>
                   </div>
                 ))}

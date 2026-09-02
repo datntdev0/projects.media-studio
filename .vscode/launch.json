@@ -10,6 +10,9 @@
       "windows": {
         "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-forge-vscode-win.cmd"
       },
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/.vite/build/**/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
       "outputCapture": "std",
       "console": "integratedTerminal"
     }

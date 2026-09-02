@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { CalendarIcon, CloseIcon, PlayIcon } from '@/components/icons';
+import { CloseIcon } from '@/components/icons';
 import type { AppLibrary } from '@/shared/app-library';
 import { WorkspaceStatus, WorkspaceStepKey, type AppWorkspace } from '@/shared/app-workspace';
 import { WorkspaceRunMode, validateRunInput, type SubmitWorkspaceRunInput } from '@/shared/app-workspace-run';
 import { STEP_NAME, orderLabelOf } from './workspaceFormat';
-import { RETRY_DELAY_OPTIONS, RETRY_OPTIONS, StepStartMode, defaultStepStart, missingStartTimeOf, retryLabelOf, toRunInput, type ExecutionStepPlan } from './workspaceExecution';
+import { DEFAULT_RETRY_DELAY_MINUTES, RETRY_DELAY_OPTIONS, RETRY_OPTIONS, StepStartMode, defaultStepStart, missingStartTimeOf, retryDelayLabelOf, retryLabelOf, runModeOf, toRunInput, type ExecutionStepPlan } from './workspaceExecution';
 
 interface WorkspaceExecuteDialogProps {
   workspace: AppWorkspace;
@@ -13,11 +13,6 @@ interface WorkspaceExecuteDialogProps {
   onClose(): void;
   onSubmit(input: SubmitWorkspaceRunInput): Promise<unknown>;
 }
-
-const MODE_CARDS = [
-  { mode: WorkspaceRunMode.Immediate, Icon: PlayIcon, title: 'Immediately', hint: 'Starts now. Each step begins as soon as the previous one completes.' },
-  { mode: WorkspaceRunMode.Scheduled, Icon: CalendarIcon, title: 'Scheduled', hint: 'Book a start time per step. The first step is what the run waits on.' },
-];
 
 function immediateNoteOf(workspace: AppWorkspace): string {
   if (workspace.lastRunAt === null) return 'The full pipeline runs over the chapter range, one step at a time.';
@@ -32,11 +27,11 @@ function initialPlans(workspace: AppWorkspace): ExecutionStepPlan[] {
     startMode: StepStartMode.AfterPrevious,
     startAt: '',
     retries: 3,
-    retryDelayMinutes: 5,
+    retryDelayMinutes: DEFAULT_RETRY_DELAY_MINUTES,
   }));
 }
 
-/** A booked run needs an anchor, so the first step it covers starts on the clock. */
+/** A booked run needs an anchor, so the first step it covers starts on the clock too. */
 function anchorFirstStep(plans: ExecutionStepPlan[]): ExecutionStepPlan[] {
   const first = plans.find((plan) => plan.enabled);
   if (!first || first.startMode === StepStartMode.AtTime) return plans;
@@ -49,30 +44,31 @@ function errorMessage(error: unknown): string {
 
 export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: WorkspaceExecuteDialogProps) {
   const total = novel?.novelMetadata?.discoveredCount ?? 0;
-  const [mode, setMode] = useState<WorkspaceRunMode>(WorkspaceRunMode.Immediate);
   const [from, setFrom] = useState('1');
   const [to, setTo] = useState(String(total === 0 ? 1 : total));
   const [plans, setPlans] = useState<ExecutionStepPlan[]>(() => initialPlans(workspace));
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
 
-  const scheduled = mode === WorkspaceRunMode.Scheduled;
-  const input = toRunInput(workspace.id, mode, from, to, plans);
-  const error = missingStartTimeOf(mode, plans) ?? validateRunInput(input, total, Date.now());
+  const scheduled = runModeOf(plans) === WorkspaceRunMode.Scheduled;
+  const input = toRunInput(workspace.id, from, to, plans);
+  const error = missingStartTimeOf(plans) ?? validateRunInput(input, total, Date.now());
   const inRange = error === undefined ? input.toChapter - input.fromChapter + 1 : 0;
 
   const patchPlan = (key: WorkspaceStepKey, patch: Partial<ExecutionStepPlan>) =>
     setPlans((current) => current.map((plan) => (plan.key === key ? { ...plan, ...patch } : plan)));
 
-  const selectMode = (next: WorkspaceRunMode) => {
-    setMode(next);
-    if (next === WorkspaceRunMode.Scheduled) setPlans(anchorFirstStep);
-  };
-
   /** The time a step's picker opens on — staggered after the last step booked ahead of it. */
   const startAtDefaultFor = (plan: ExecutionStepPlan): string => {
     const booked = plans.slice(0, plans.indexOf(plan)).filter((candidate) => candidate.enabled && candidate.startAt !== '');
     return defaultStepStart(booked.at(-1)?.startAt);
+  };
+
+  /** Sets how one step starts, booking the run's first step with it so the run has its anchor. */
+  const bookStep = (plan: ExecutionStepPlan, startMode: StepStartMode) => {
+    const atTime = startMode === StepStartMode.AtTime;
+    patchPlan(plan.key, { startMode, startAt: atTime ? plan.startAt || startAtDefaultFor(plan) : plan.startAt });
+    if (atTime) setPlans(anchorFirstStep);
   };
 
   const handleSubmit = async () => {
@@ -102,23 +98,6 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
         </div>
 
         <div style={{ padding: 20.4, maxHeight: '64vh', overflow: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13.6, marginBottom: 20.4 }}>
-            {MODE_CARDS.map(({ mode: cardMode, Icon, title, hint }) => (
-              <label
-                key={cardMode}
-                className="blueprint"
-                style={{ padding: 13.6, display: 'block', cursor: 'pointer', background: mode === cardMode ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : 'transparent' }}
-              >
-                <input type="radio" name="execmode" style={{ position: 'absolute', opacity: 0 }} checked={mode === cardMode} onChange={() => selectMode(cardMode)} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon />
-                  <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16 }}>{title}</span>
-                </div>
-                <div className="text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>{hint}</div>
-              </label>
-            ))}
-          </div>
-
           <div className="field" style={{ marginBottom: 20.4 }}>
             <label>Chapter range</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -131,97 +110,91 @@ export function WorkspaceExecuteDialog({ workspace, novel, onClose, onSubmit }: 
             </div>
           </div>
 
-          {scheduled ? (
-            <>
-              <div className="field" style={{ marginBottom: 6 }}><label>Steps in this run</label></div>
-              <table className="table" style={{ marginBottom: 13.6 }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '35%' }}>Step</th>
-                    <th style={{ width: '35%' }}>Start</th>
-                    <th style={{ width: '15%' }}>Retry #</th>
-                    <th style={{ width: '15%' }}>Retry delay</th>
+          <div className="field" style={{ marginBottom: 6 }}><label>Steps in this run</label></div>
+          <table className="table" style={{ marginBottom: 13.6 }}>
+            <thead>
+              <tr>
+                <th style={{ width: '35%' }}>Step</th>
+                <th style={{ width: '35%' }}>Start</th>
+                <th style={{ width: '15%' }}>Retry #</th>
+                <th style={{ width: '15%' }}>Retry delay</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((plan) => {
+                const step = workspace.steps.find((candidate) => candidate.key === plan.key);
+                return (
+                  <tr key={plan.key}>
+                    <td>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          style={{ accentColor: 'var(--color-accent)', width: 14, height: 14 }}
+                          checked={plan.enabled}
+                          onChange={() => patchPlan(plan.key, { enabled: !plan.enabled })}
+                        />
+                        {orderLabelOf(step?.idx ?? 0)} · {STEP_NAME[plan.key]}
+                      </label>
+                    </td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12.5, width: '100%' }}
+                        value={plan.startMode}
+                        disabled={!plan.enabled}
+                        onChange={(e) => bookStep(plan, e.target.value as StepStartMode)}
+                      >
+                        <option value={StepStartMode.AfterPrevious}>Immediately after previous</option>
+                        <option value={StepStartMode.AtTime}>At a set time…</option>
+                      </select>
+                      {plan.startMode === StepStartMode.AtTime && (
+                        <input
+                          className="input"
+                          type="datetime-local"
+                          style={{ fontSize: 12.5, marginTop: 5 }}
+                          value={plan.startAt}
+                          disabled={!plan.enabled}
+                          onChange={(e) => patchPlan(plan.key, { startAt: e.target.value })}
+                        />
+                      )}
+                    </td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12.5, width: '100%' }}
+                        value={plan.retries}
+                        disabled={!plan.enabled}
+                        onChange={(e) => patchPlan(plan.key, { retries: Number(e.target.value) })}
+                      >
+                        {RETRY_OPTIONS.map((retries) => (
+                          <option key={retries} value={retries}>{retryLabelOf(retries)}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12.5, width: '100%' }}
+                        value={plan.retryDelayMinutes}
+                        disabled={!plan.enabled || plan.retries === 0}
+                        onChange={(e) => patchPlan(plan.key, { retryDelayMinutes: Number(e.target.value) })}
+                      >
+                        {RETRY_DELAY_OPTIONS.map((minutes) => (
+                          <option key={minutes} value={minutes}>{retryDelayLabelOf(minutes)}</option>
+                        ))}
+                      </select>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {plans.map((plan) => {
-                    const step = workspace.steps.find((candidate) => candidate.key === plan.key);
-                    return (
-                      <tr key={plan.key}>
-                        <td>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              style={{ accentColor: 'var(--color-accent)', width: 14, height: 14 }}
-                              checked={plan.enabled}
-                              onChange={() => patchPlan(plan.key, { enabled: !plan.enabled })}
-                            />
-                            {orderLabelOf(step?.idx ?? 0)} · {STEP_NAME[plan.key]}
-                          </label>
-                        </td>
-                        <td>
-                          <select
-                            className="input"
-                            style={{ fontSize: 12.5, width: '100%' }}
-                            value={plan.startMode}
-                            disabled={!plan.enabled}
-                            onChange={(e) => {
-                              const startMode = e.target.value as StepStartMode;
-                              patchPlan(plan.key, { startMode, startAt: startMode === StepStartMode.AtTime ? plan.startAt || startAtDefaultFor(plan) : plan.startAt });
-                            }}
-                          >
-                            <option value={StepStartMode.AfterPrevious}>Immediately after previous</option>
-                            <option value={StepStartMode.AtTime}>At a set time…</option>
-                          </select>
-                          {plan.startMode === StepStartMode.AtTime && (
-                            <input
-                              className="input"
-                              type="datetime-local"
-                              style={{ fontSize: 12.5, marginTop: 5 }}
-                              value={plan.startAt}
-                              disabled={!plan.enabled}
-                              onChange={(e) => patchPlan(plan.key, { startAt: e.target.value })}
-                            />
-                          )}
-                        </td>
-                        <td>
-                          <select
-                            className="input"
-                            style={{ fontSize: 12.5, width: '100%' }}
-                            value={plan.retries}
-                            disabled={!plan.enabled}
-                            onChange={(e) => patchPlan(plan.key, { retries: Number(e.target.value) })}
-                          >
-                            {RETRY_OPTIONS.map((retries) => (
-                              <option key={retries} value={retries}>{retryLabelOf(retries)}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            className="input"
-                            style={{ fontSize: 12.5, width: '100%' }}
-                            value={plan.retryDelayMinutes}
-                            disabled={!plan.enabled || plan.retries === 0}
-                            onChange={(e) => patchPlan(plan.key, { retryDelayMinutes: Number(e.target.value) })}
-                          >
-                            {RETRY_DELAY_OPTIONS.map((minutes) => (
-                              <option key={minutes} value={minutes}>{minutes} min</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
-                The first step in the run needs a set time — it is what the run waits on. A later step with no set time starts as soon as the step ahead of it completes; one with a set time waits for both. Retries apply per sub-step — a chapter or a part.
-              </div>
-            </>
-          ) : (
-            <div className="text-muted" style={{ fontSize: 13, lineHeight: 1.6 }}>{immediateNoteOf(workspace)}</div>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
+            {scheduled
+              ? 'The first step in the run needs a set time — it is what the run waits on. A later step with no set time starts as soon as the step ahead of it completes; one with a set time waits for both.'
+              : `${immediateNoteOf(workspace)} Set a start time on a step to book the run for later instead.`}
+            {' '}Retries apply per sub-step — a chapter or a part — and the delay doubles with each one.
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6.8, padding: '13.6px 20.4px', borderTop: '1px solid var(--color-divider)' }}>

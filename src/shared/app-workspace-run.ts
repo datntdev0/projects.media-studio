@@ -4,7 +4,7 @@
 // that execution (a chapter, or an exporting part) in `app_workspace_activities`
 // (see database/migrations/V0.1.2__create_app_workspace_runs.sql).
 
-import { WORKSPACE_STEP_NAME, WorkspaceStepKey, WorkspaceStepState, type WorkspaceStepCounts } from './app-workspace';
+import { WORKSPACE_STEP_NAME, WorkspaceStepKey, WorkspaceStepState } from './app-workspace';
 
 export enum WorkspaceRunMode {
   Immediate = 'immediate',
@@ -23,11 +23,11 @@ export enum WorkspaceRunStatus {
 }
 
 /**
- * One step of one run as it is stored on the run itself. `startAt` is the step's
- * own booked start; null means it starts as soon as the step ahead of it
- * completes, which is every step of an immediate run.
+ * One step a run covers, as the run is submitted. `startAt` is the step's own
+ * booked start; null means it starts as soon as the step ahead of it completes,
+ * which is every step of an immediate run.
  */
-export interface WorkspaceRunStepPlan {
+export interface WorkspaceRunStepDraft {
   stepKey: WorkspaceStepKey;
   /** The step's position in the preset, so a run reads in pipeline order. */
   idx: number;
@@ -36,18 +36,33 @@ export interface WorkspaceRunStepPlan {
   /** Attempts per sub-step after the first failure, 0 for none. */
   retries: number;
   retryDelayMinutes: number;
+  /** How many sub-steps the step covers, as its handler worked them out. 0 until it starts. */
+  totalCount: number;
+}
+
+/** A run's step, with what its activity history says it got through. */
+export interface WorkspaceRunStep extends WorkspaceRunStepDraft {
+  startedAt: number | null;
+  endedAt: number | null;
+  error: string | null;
+  doneCount: number;
+  failedCount: number;
+}
+
+/** The fields a step's own lifecycle rewrites — its key, position and booking are fixed at submission. */
+export interface WorkspaceRunStepEdit {
+  state: WorkspaceStepState;
+  totalCount: number;
   startedAt: number | null;
   endedAt: number | null;
   error: string | null;
 }
 
-/** A run's step with the counts read back off its sub-step rows. */
-export interface WorkspaceRunStep extends WorkspaceRunStepPlan, WorkspaceStepCounts {}
-
 /**
- * One sub-step run — the unit of work a run is actually made of. `subStepNo` is
- * a chapter number for the chapter-counted steps and a part number for export,
- * and `attempt` counts the tries it has taken under its step's retry policy.
+ * One sub-step that has been worked — a row of the run's history, appended once
+ * it is over, never revisited. `subStepNo` is a chapter number for the
+ * chapter-counted steps and a part number for export, and `attempt` says which
+ * try this was under the step's retry policy.
  */
 export interface WorkspaceActivity {
   id: string;
@@ -57,8 +72,8 @@ export interface WorkspaceActivity {
   state: WorkspaceStepState;
   attempt: number;
   error: string | null;
-  startedAt: number | null;
-  endedAt: number | null;
+  startedAt: number;
+  endedAt: number;
 }
 
 export interface AppWorkspaceRun {
@@ -103,20 +118,24 @@ export interface AppWorkspaceRunDraft {
   fromChapter: number;
   toChapter: number;
   startedAt: number | null;
-  steps: WorkspaceRunStepPlan[];
-  /** The sub-steps the run covers — the queue its steps work through. */
-  activities: WorkspaceActivityDraft[];
+  steps: WorkspaceRunStepDraft[];
 }
 
+/** One history row as the step handler that worked it hands it over. */
 export interface WorkspaceActivityDraft {
+  runId: string;
   stepKey: WorkspaceStepKey;
   subStepNo: number;
+  state: WorkspaceStepState;
+  attempt: number;
+  error: string | null;
+  startedAt: number;
+  endedAt: number;
 }
 
-/** The fields a run's own lifecycle rewrites — its mode, range and sub-steps are fixed at submission. */
+/** The fields a run's own lifecycle rewrites — its mode, range and steps are fixed at submission. */
 export interface AppWorkspaceRunEdit {
   status: WorkspaceRunStatus;
-  steps: WorkspaceRunStepPlan[];
   startedAt: number | null;
   endedAt: number | null;
 }
@@ -128,7 +147,15 @@ export function isRunActive(run: AppWorkspaceRun): boolean {
   return ACTIVE_RUN_STATUSES.includes(run.status);
 }
 
-export function isStepFinished(step: WorkspaceRunStepPlan): boolean {
+/**
+ * How long to wait before the retry that follows `attempt`: the step's own delay,
+ * doubling with each attempt, so a sub-step that keeps failing backs off.
+ */
+export function retryDelayMsOf(retryDelayMinutes: number, attempt: number): number {
+  return retryDelayMinutes * 60_000 * 2 ** (attempt - 1);
+}
+
+export function isStepFinished(step: WorkspaceRunStep): boolean {
   return step.state === WorkspaceStepState.Done || step.state === WorkspaceStepState.Skipped;
 }
 
@@ -184,6 +211,7 @@ export const APP_WORKSPACE_RUN_IPC_CHANNELS = {
   list: 'app-workspace-run:list',
   submit: 'app-workspace-run:submit',
   cancel: 'app-workspace-run:cancel',
+  clear: 'app-workspace-run:clear',
 } as const;
 
 export interface AppWorkspaceRunApi {
@@ -191,4 +219,6 @@ export interface AppWorkspaceRunApi {
   list(workspaceId: string): Promise<AppWorkspaceRun[]>;
   submit(input: SubmitWorkspaceRunInput): Promise<AppWorkspaceRun>;
   cancel(id: string): Promise<AppWorkspaceRun>;
+  /** Drops one workspace's whole history, and the progress mirrored from it. */
+  clear(workspaceId: string): Promise<void>;
 }
