@@ -3,6 +3,8 @@
 // library novel, stored in the `app_workspaces` / `app_workspace_steps` tables
 // (see database/migrations/V0.1.1__create_app_workspaces.sql).
 
+import type { LlmSettings } from './llm';
+
 export enum WorkspacePreset {
   AudioNovel = 'audio-novel',
   VideoRecap = 'video-recap',
@@ -40,6 +42,18 @@ export const WORKSPACE_STEP_NAME: Record<WorkspaceStepKey, string> = {
   [WorkspaceStepKey.FrameIllustration]: 'Frame Illustration',
   [WorkspaceStepKey.Export]: 'Export',
 };
+
+/** The steps that call an LLM, and so cannot run until the workspace has picked one. */
+export const WORKSPACE_STEP_NEEDS_LLM: Record<WorkspaceStepKey, boolean> = {
+  [WorkspaceStepKey.SemanticAnalysis]: true,
+  [WorkspaceStepKey.SemanticTranslate]: true,
+  [WorkspaceStepKey.NarrationSpeech]: false,
+  [WorkspaceStepKey.FrameIllustration]: false,
+  [WorkspaceStepKey.Export]: false,
+};
+
+/** Said by the run submission and by the step itself, so both name the same fix. */
+export const NO_LLM_MESSAGE = 'Pick an LLM engine and model on the Semantic Analysis step before running it.';
 
 /** What a step counts one of — a run scopes the chapter-counted steps from its chapter range. */
 export enum WorkspaceStepUnit {
@@ -117,6 +131,8 @@ export interface AppWorkspace {
   preset: WorkspacePreset;
   libraryId: string;
   status: WorkspaceStatus;
+  /** The LLM its steps call, or null until one is picked — config.json names models, never an engine. */
+  llm: LlmSettings | null;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
   createdAt: number;
@@ -130,6 +146,7 @@ export interface AppWorkspaceDraft {
   preset: WorkspacePreset;
   libraryId: string;
   status: WorkspaceStatus;
+  llm: LlmSettings | null;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
 }

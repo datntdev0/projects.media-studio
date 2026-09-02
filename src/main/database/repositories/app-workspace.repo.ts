@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '@/main/database/client';
 import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepEdit, WorkspaceStepKey, WorkspaceStepState } from '@/shared/app-workspace';
+import type { LlmEngine, LlmSettings } from '@/shared/llm';
 
 interface AppWorkspaceRow {
   id: string;
@@ -9,6 +10,8 @@ interface AppWorkspaceRow {
   preset: string;
   library_id: string;
   status: string;
+  llm_engine: string | null;
+  llm_model: string | null;
   last_run_at: number | null;
   created_at: number;
   updated_at: number;
@@ -38,6 +41,11 @@ function toWorkspaceStep(row: AppWorkspaceStepRow): WorkspaceStep {
   };
 }
 
+/** The workspace's own LLM choice, or null when it follows config.json — see `resolveLlmSettings`. */
+function toLlmSettings(row: AppWorkspaceRow): LlmSettings | null {
+  return row.llm_engine ? { engine: row.llm_engine as LlmEngine, model: row.llm_model ?? '' } : null;
+}
+
 function toAppWorkspace(row: AppWorkspaceRow, steps: WorkspaceStep[]): AppWorkspace {
   return {
     id: row.id,
@@ -46,6 +54,7 @@ function toAppWorkspace(row: AppWorkspaceRow, steps: WorkspaceStep[]): AppWorksp
     preset: row.preset as WorkspacePreset,
     libraryId: row.library_id,
     status: row.status as WorkspaceStatus,
+    llm: toLlmSettings(row),
     steps,
     lastRunAt: row.last_run_at,
     createdAt: row.created_at,
@@ -109,9 +118,9 @@ export function createAppWorkspace(db: Db, draft: AppWorkspaceDraft): AppWorkspa
   const now = Date.now();
 
   db.prepare(
-    `INSERT INTO app_workspaces (id, name, description, preset, library_id, status, last_run_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, draft.name, draft.description, draft.preset, draft.libraryId, draft.status, draft.lastRunAt, now, now);
+    `INSERT INTO app_workspaces (id, name, description, preset, library_id, status, llm_engine, llm_model, last_run_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, draft.name, draft.description, draft.preset, draft.libraryId, draft.status, draft.llm?.engine ?? null, draft.llm?.model ?? null, draft.lastRunAt, now, now);
 
   for (const step of draft.steps) {
     insertStep(db, id, step, now);
@@ -129,6 +138,12 @@ export function updateAppWorkspace(db: Db, id: string, edit: AppWorkspaceEdit): 
 /** The run-driven fields, which the listing's own edit never touches. */
 export function updateAppWorkspaceStatus(db: Db, id: string, status: WorkspaceStatus, lastRunAt: number | null): AppWorkspace {
   db.prepare('UPDATE app_workspaces SET status = ?, last_run_at = ?, updated_at = ? WHERE id = ?').run(status, lastRunAt, Date.now(), id);
+  return getAppWorkspace(db, id)!;
+}
+
+/** The workspace's LLM choice, which its own listing edit never touches. */
+export function updateAppWorkspaceLlm(db: Db, id: string, llm: LlmSettings | null): AppWorkspace {
+  db.prepare('UPDATE app_workspaces SET llm_engine = ?, llm_model = ?, updated_at = ? WHERE id = ?').run(llm?.engine ?? null, llm?.model ?? null, Date.now(), id);
   return getAppWorkspace(db, id)!;
 }
 

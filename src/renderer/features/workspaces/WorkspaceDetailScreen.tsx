@@ -3,13 +3,14 @@ import { DetailHeader } from '@/components/DetailHeader';
 import { ClockIcon, PlayIcon } from '@/components/icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import type { AppLibrary } from '@/shared/app-library';
-import type { AppWorkspace } from '@/shared/app-workspace';
+import { WorkspaceStepKey, type AppWorkspace } from '@/shared/app-workspace';
 import { isRunActive, type AppWorkspaceRun } from '@/shared/app-workspace-run';
 import { STATUS_LABEL, STATUS_TAG_CLASS, activityStripOf, presetMetaOf, stepViewsOf } from './workspaceFormat';
 import { useWorkspaceRuns } from './useWorkspaceRuns';
 import { WorkspaceStepper, type WorkspaceTab } from './WorkspaceStepper';
 import { WorkspaceOverview } from './WorkspaceOverview';
 import { WorkspaceStepSoon } from './WorkspaceStepSoon';
+import { WorkspaceSemanticAnalysis } from './WorkspaceSemanticAnalysis';
 import { WorkspaceRunLog } from './WorkspaceRunLog';
 import { WorkspaceExecuteDialog } from './WorkspaceExecuteDialog';
 
@@ -75,6 +76,8 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
 
         {tab === 'log' ? (
           <WorkspaceRunLog runs={runs} loading={loading} error={error} onCancel={setConfirmCancel} onClear={() => setConfirmClear(true)} />
+        ) : tab === WorkspaceStepKey.SemanticAnalysis ? (
+          <WorkspaceSemanticAnalysis workspace={workspace} />
         ) : activeView ? (
           <WorkspaceStepSoon view={activeView} />
         ) : (

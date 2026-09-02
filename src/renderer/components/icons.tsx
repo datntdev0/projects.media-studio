@@ -87,6 +87,8 @@ export const SunIcon = icon(
 
 export const MoonIcon = icon(<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />);
 
+export const ChevronDownIcon = icon(<path d="m6 9 6 6 6-6" />);
+
 export const EditIcon = icon(<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />);
 
 export const TrashIcon = icon(

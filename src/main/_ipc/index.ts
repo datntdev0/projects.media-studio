@@ -5,6 +5,7 @@ import { registerAppLibraryPackageHandlers } from './app-library-package.handler
 import { registerAppLibraryContentHandlers } from './app-library-content.handlers';
 import { registerAppWorkspaceHandlers } from './app-workspace.handlers';
 import { registerAppWorkspaceRunHandlers } from './app-workspace-run.handlers';
+import { registerAppWorkspaceExtractionHandlers } from './app-workspace-extraction.handlers';
 
 export function registerIpcHandlers(container: Container): void {
   registerAppInfoHandlers(container);
@@ -13,4 +14,5 @@ export function registerIpcHandlers(container: Container): void {
   registerAppLibraryContentHandlers(container);
   registerAppWorkspaceHandlers(container);
   registerAppWorkspaceRunHandlers(container);
+  registerAppWorkspaceExtractionHandlers(container);
 }

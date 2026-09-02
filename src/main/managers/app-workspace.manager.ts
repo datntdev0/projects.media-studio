@@ -71,6 +71,8 @@ export function createAppWorkspaceManager(db: Db): AppWorkspaceManager {
         preset: input.preset,
         libraryId: input.libraryId,
         status: WorkspaceStatus.Draft,
+        // Null: a new workspace follows config.json until its own picker changes it.
+        llm: null,
         steps: initialSteps(input),
         lastRunAt: null,
       });

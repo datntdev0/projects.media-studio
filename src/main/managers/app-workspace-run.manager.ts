@@ -4,7 +4,8 @@ import { getAppWorkspace, updateAppWorkspaceStatus, updateAppWorkspaceStep } fro
 import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
 import { QUEUE_NAMES } from '@/main/queue/queue-names';
 import type { MessageBus } from '@/main/queue/message-bus';
-import { WORKSPACE_STEP_NAME, WORKSPACE_STEP_UNIT, WorkspaceStatus, WorkspaceStepState, WorkspaceStepUnit, type AppWorkspace, type WorkspaceStepKey } from '@/shared/app-workspace';
+import { resolveLlmSettings } from '@/main/helpers/config';
+import { NO_LLM_MESSAGE, WORKSPACE_STEP_NAME, WORKSPACE_STEP_NEEDS_LLM, WORKSPACE_STEP_UNIT, WorkspaceStatus, WorkspaceStepState, WorkspaceStepUnit, type AppWorkspace, type WorkspaceStepKey } from '@/shared/app-workspace';
 import { WorkspaceRunMode, WorkspaceRunStatus, isRunActive, isStepFinished, validateRunInput, type AppWorkspaceRun, type SubmitWorkspaceActivityInput, type SubmitWorkspaceRunInput, type WorkspaceRunStepDraft } from '@/shared/app-workspace-run';
 
 export interface AppWorkspaceRunManager {
@@ -32,17 +33,18 @@ export function novelChapterCountOf(db: Db, libraryId: string): number {
  * to cover, and its done count is every sub-step this workspace has worked — so a
  * run over part of the novel moves the bar part of the way.
  */
-export function mirrorWorkspaceStepProgress(db: Db, workspaceId: string, stepKey: WorkspaceStepKey, state: WorkspaceStepState, declaredTotal?: number): void {
+export function mirrorWorkspaceStepProgress(db: Db, workspaceId: string, stepKey: WorkspaceStepKey, state: WorkspaceStepState): void {
   const workspace = getAppWorkspace(db, workspaceId);
   const step = workspace?.steps.find((candidate) => candidate.key === stepKey);
   if (!workspace || !step) return;
 
   const worked = countWorkspaceStepProgress(db, workspaceId, stepKey);
   // Only the chapter-counted steps can be measured against the novel on their own;
-  // for the rest the step's handler is the one that knows how many sub-steps there are.
-  const fallback = WORKSPACE_STEP_UNIT[stepKey] === WorkspaceStepUnit.Part ? Math.max(step.totalCount, worked.totalCount) : novelChapterCountOf(db, workspace.libraryId);
+  // for the rest the step's handler is the one that knows how many sub-steps there are,
+  // and it has already written that onto the workspace's step.
+  const totalCount = WORKSPACE_STEP_UNIT[stepKey] === WorkspaceStepUnit.Part ? Math.max(step.totalCount, worked.totalCount) : novelChapterCountOf(db, workspace.libraryId);
 
-  updateAppWorkspaceStep(db, workspaceId, stepKey, { state, doneCount: worked.doneCount, failedCount: worked.failedCount, totalCount: declaredTotal ?? fallback });
+  updateAppWorkspaceStep(db, workspaceId, stepKey, { state, doneCount: worked.doneCount, failedCount: worked.failedCount, totalCount });
 }
 
 /**
@@ -125,6 +127,10 @@ export function createAppWorkspaceRunManager(db: Db, bus: MessageBus): AppWorksp
       const error = validateRunInput({ ...input, steps: ordered }, novelChapterCountOf(db, workspace.libraryId), Date.now());
       if (error) {
         throw new Error(error);
+      }
+      // An LLM step has nothing to call until the workspace names one, so the run is refused here rather than failing mid-flight.
+      if (ordered.some((step) => WORKSPACE_STEP_NEEDS_LLM[step.stepKey]) && !resolveLlmSettings(workspace.llm)) {
+        throw new Error(NO_LLM_MESSAGE);
       }
 
       // Everything starts waiting: moving a run, its steps or the workspace is the
