@@ -4,6 +4,7 @@ import { createAppLibraryManager } from './app-library.manager';
 import { createTestDb } from '@/main/database/test-db';
 import type { Db } from '@/main/database/client';
 import { AppLibraryType, NovelStatus } from '@/shared/app-library';
+import { DEFAULT_SPEECH } from '@/shared/app-workspace-narration';
 import { WorkspacePreset, WorkspaceStatus, WorkspaceStepKey, WorkspaceStepState, type CreateAppWorkspaceInput } from '@/shared/app-workspace';
 
 vi.mock('@/main/helpers/cover-storage', () => ({
@@ -38,6 +39,8 @@ describe('app workspace manager', () => {
 
     expect(created.status).toBe(WorkspaceStatus.Draft);
     expect(created.lastRunAt).toBeNull();
+    expect(created.llm).toBeNull();
+    expect(created.speech).toEqual(DEFAULT_SPEECH);
     expect(created.steps).toEqual([
       { key: WorkspaceStepKey.SemanticAnalysis, idx: 1, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
       { key: WorkspaceStepKey.SemanticTranslate, idx: 2, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },

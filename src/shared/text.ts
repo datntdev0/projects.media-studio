@@ -19,3 +19,19 @@ export function countWords(body: string): number {
 
   return cjkCount + restCount;
 }
+
+/**
+ * A name reduced to lower-case letters and digits: punctuation, spaces and dashes
+ * are dropped rather than folded into a separator, diacritics fold onto the letter
+ * they sit on, and đ becomes d, so a Vietnamese name comes out plain ASCII. Letters
+ * of a script with no such decomposition (Chinese, say) are kept. What a workspace's
+ * directory and a voice's preview file are both named by.
+ */
+export function plainSlug(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replaceAll('đ', 'd')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}

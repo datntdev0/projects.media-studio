@@ -10,6 +10,7 @@ import { APP_WORKSPACE_IPC_CHANNELS, type AppWorkspaceApi } from '@/shared/app-w
 import { APP_WORKSPACE_RUN_IPC_CHANNELS, type AppWorkspaceRunApi } from '@/shared/app-workspace-run';
 import { APP_WORKSPACE_EXTRACTION_IPC_CHANNELS, type AppWorkspaceExtractionApi } from '@/shared/app-workspace-extraction';
 import { APP_WORKSPACE_TRANSLATION_IPC_CHANNELS, type AppWorkspaceTranslationApi } from '@/shared/app-workspace-translation';
+import { APP_WORKSPACE_NARRATION_IPC_CHANNELS, type AppWorkspaceNarrationApi } from '@/shared/app-workspace-narration';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -69,6 +70,12 @@ const appWorkspaceTranslationApi: AppWorkspaceTranslationApi = {
   saveChapter: (workspaceId, chapterNo, body) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.saveChapter, workspaceId, chapterNo, body),
 };
 
+const appWorkspaceNarrationApi: AppWorkspaceNarrationApi = {
+  read: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_NARRATION_IPC_CHANNELS.read, workspaceId),
+  setSpeech: (workspaceId, speech) => ipcRenderer.invoke(APP_WORKSPACE_NARRATION_IPC_CHANNELS.setSpeech, workspaceId, speech),
+  readChapter: (workspaceId, chapterNo) => ipcRenderer.invoke(APP_WORKSPACE_NARRATION_IPC_CHANNELS.readChapter, workspaceId, chapterNo),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appLibraryPackageApi', appLibraryPackageApi);
@@ -77,3 +84,4 @@ contextBridge.exposeInMainWorld('appWorkspaceApi', appWorkspaceApi);
 contextBridge.exposeInMainWorld('appWorkspaceRunApi', appWorkspaceRunApi);
 contextBridge.exposeInMainWorld('appWorkspaceExtractionApi', appWorkspaceExtractionApi);
 contextBridge.exposeInMainWorld('appWorkspaceTranslationApi', appWorkspaceTranslationApi);
+contextBridge.exposeInMainWorld('appWorkspaceNarrationApi', appWorkspaceNarrationApi);

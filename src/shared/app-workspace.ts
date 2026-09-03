@@ -4,6 +4,7 @@
 // (see database/migrations/V0.1.1__create_app_workspaces.sql).
 
 import type { LlmSettings } from './llm';
+import type { SpeechSettings } from './app-workspace-narration';
 
 export enum WorkspacePreset {
   AudioNovel = 'audio-novel',
@@ -133,6 +134,8 @@ export interface AppWorkspace {
   status: WorkspaceStatus;
   /** The LLM its steps call, or null until one is picked — config.json names models, never an engine. */
   llm: LlmSettings | null;
+  /** The voice and pace Narration Speech reads with — every workspace starts on the step's defaults. */
+  speech: SpeechSettings;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
   createdAt: number;
@@ -147,6 +150,7 @@ export interface AppWorkspaceDraft {
   libraryId: string;
   status: WorkspaceStatus;
   llm: LlmSettings | null;
+  speech: SpeechSettings;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
 }

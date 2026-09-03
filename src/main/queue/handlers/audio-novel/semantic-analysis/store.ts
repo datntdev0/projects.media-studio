@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileWrittenAt, readJsonFile, writeJsonFile } from '@/main/helpers/json-file';
+import { IDX_WIDTH, chapterFileStem, chapterNosOf, listChapterFiles } from '@/main/helpers/chapter-files';
 import { getAppWorkspaceExtractionDir } from '@/main/helpers/paths';
 import type { ChapterExtraction, WorldBible } from '@/shared/app-workspace-extraction';
 
-/** Zero-padded chapter and timeline ids, e.g. `chapter0001-timeline0002`. */
-const IDX_WIDTH = 4;
+export { chapterFileStem };
 
 const WORLD_FILE = 'world.json';
 
@@ -19,21 +19,14 @@ export function timelineIdxOf(position: number): string {
   return `timeline${String(position).padStart(IDX_WIDTH, '0')}`;
 }
 
-/** The stem every per-chapter file shares — `chapter-0001`. */
-export function chapterFileStem(chapterNo: number): string {
-  return `chapter-${String(chapterNo).padStart(IDX_WIDTH, '0')}`;
-}
-
 /** One chapter's extraction file, e.g. `chapter-0001.json`. */
 function chapterFile(dir: string, chapterNo: number): string {
   return path.join(dir, `${chapterFileStem(chapterNo)}.json`);
 }
 
 /** The extraction files a workspace has, in chapter order. */
-function extractionFileNames(workspaceName: string): string[] {
-  const dir = getAppWorkspaceExtractionDir(workspaceName);
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((name) => /^chapter-\d+\.json$/.test(name)).sort();
+function extractionFiles(workspaceName: string): string[] {
+  return listChapterFiles(getAppWorkspaceExtractionDir(workspaceName), '.json');
 }
 
 /** Whether the chapter already has an extraction on disk — checked without reading it. */
@@ -51,7 +44,7 @@ export function writeChapterExtraction(workspaceName: string, chapterNo: number,
 
 /** The chapter numbers that have an extraction file, read from the file names alone. */
 export function listExtractedChapterNos(workspaceName: string): number[] {
-  return extractionFileNames(workspaceName).map((name) => Number(/\d+/.exec(name)![0]));
+  return chapterNosOf(extractionFiles(workspaceName));
 }
 
 /**
@@ -60,9 +53,8 @@ export function listExtractedChapterNos(workspaceName: string): number[] {
  * that are readable still make a usable world bible.
  */
 export function readChapterExtractions(workspaceName: string): ChapterExtraction[] {
-  const dir = getAppWorkspaceExtractionDir(workspaceName);
-  return extractionFileNames(workspaceName).flatMap((name) => {
-    const extraction = readJsonFile<ChapterExtraction>(path.join(dir, name));
+  return extractionFiles(workspaceName).flatMap((file) => {
+    const extraction = readJsonFile<ChapterExtraction>(file);
     return extraction ? [extraction] : [];
   });
 }

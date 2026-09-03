@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:06,720
+Xin chào, tôi là Quang Sơn, một trong những giọng đọc của Media Studio.
+
+2
+00:00:07,020 --> 00:00:13,180
+Media Studio là ứng dụng quản lý thư viện truyện, hình ảnh và video của riêng bạn.
+
+3
+00:00:13,480 --> 00:00:23,320
+Ứng dụng thu thập nội dung từ các trang nguồn, phân tích và dịch từng chương, rồi chuyển lời văn thành giọng đọc như bạn đang nghe.
+
+4
+00:00:23,620 --> 00:00:28,580
+Hãy chọn giọng đọc và nhịp độ phù hợp với câu chuyện của bạn.

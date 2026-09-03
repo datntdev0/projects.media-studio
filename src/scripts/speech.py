@@ -14,10 +14,16 @@ must be the same length. Paths are relative to wherever you run it from.
 Each worker loads its own copy of the model and reads one file at a time, so `--workers` is
 bounded by what the GPU holds, not by how many files there are. A file that fails is logged and
 left without output rather than stopping the run.
+
+Logging goes to stderr. Stdout carries one JSON line per file as it settles, for a caller that
+drives this script and follows its progress:
+
+    {"event": "file", "index": 0, "source": "...", "target": "...", "ok": true, "error": null}
 """
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -32,6 +38,10 @@ logger = logging.getLogger("speech")
 
 DEFAULT_VOICE = "Ngọc Huyền"
 DEFAULT_BATCH_SIZE = 32
+PACE_RANGE = (0.5, 2.0)
+
+# One file to read: its position in the batch, the text to read, and the wav to write.
+Job = tuple[int, Path, Path]
 
 
 def read_lines(path: Path) -> list[str]:
@@ -39,37 +49,44 @@ def read_lines(path: Path) -> list[str]:
     return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def collect_jobs(args: argparse.Namespace) -> list[tuple[Path, Path]]:
-    """The (input, output) pairs to work, from either the single or the batch flags."""
+def collect_jobs(args: argparse.Namespace) -> list[Job]:
+    """The jobs to work, from either the single or the batch flags."""
     if args.input:
-        return [(Path(args.input), Path(args.output))]
+        return [(0, Path(args.input), Path(args.output))]
 
     inputs = read_lines(Path(args.input_batch))
     outputs = read_lines(Path(args.output_batch))
     if len(inputs) != len(outputs):
         raise ValueError(f"--input-batch lists {len(inputs)} files but --output-batch lists {len(outputs)}; they must pair up line by line.")
-    return [(Path(source), Path(target)) for source, target in zip(inputs, outputs)]
+    return [(index, Path(source), Path(target)) for index, (source, target) in enumerate(zip(inputs, outputs))]
 
 
-def read_file(speaker: Speaker, source: Path, target: Path, voice: str, gen_srt: bool) -> None:
+def report(job: Job, error: Exception | None) -> None:
+    """Tells whoever drives this script how one file went, as a JSON line on stdout."""
+    index, source, target = job
+    event = {"event": "file", "index": index, "source": str(source), "target": str(target), "ok": error is None, "error": None if error is None else str(error)}
+    print(json.dumps(event), flush=True)
+
+
+def read_file(speaker: Speaker, source: Path, target: Path, args: argparse.Namespace) -> None:
     """Synthesizes one file into its wav (and srt), moving the wav into place only once it is whole."""
     lines = read_lines(source)
     if not lines:
         raise ValueError("the file has no text")
 
-    audio, spans = speaker.read(lines, voice)
+    audio, spans = speaker.read(lines, args.voice, args.pace)
 
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(target.name + ".tmp")
     speaker.save(audio, partial)
-    if gen_srt:
+    if args.gen_srt:
         write_srt(lines, spans, target.with_suffix(".srt"))
     os.replace(partial, target)
 
 
-async def read_files(jobs: list[tuple[Path, Path]], args: argparse.Namespace) -> int:
+async def read_files(jobs: list[Job], args: argparse.Namespace) -> int:
     """Works every job across `--workers` model instances; returns how many failed."""
-    pending: asyncio.Queue[tuple[Path, Path]] = asyncio.Queue()
+    pending: asyncio.Queue[Job] = asyncio.Queue()
     for job in jobs:
         pending.put_nowait(job)
 
@@ -85,14 +102,17 @@ async def read_files(jobs: list[tuple[Path, Path]], args: argparse.Namespace) ->
 
         while True:
             try:
-                source, target = pending.get_nowait()
+                job = pending.get_nowait()
             except asyncio.QueueEmpty:
                 return
+            _, source, target = job
             try:
-                await asyncio.to_thread(read_file, speaker, source, target, args.voice, args.gen_srt)
+                await asyncio.to_thread(read_file, speaker, source, target, args)
+                report(job, None)
             except Exception as error:
                 failed += 1
                 logger.warning("%s failed: %s", source, error)
+                report(job, error)
             finally:
                 done += 1
                 logger.info("%s done (%d/%d)", source, done, len(jobs))
@@ -103,7 +123,7 @@ async def read_files(jobs: list[tuple[Path, Path]], args: argparse.Namespace) ->
 
 async def run(args: argparse.Namespace) -> int:
     jobs = collect_jobs(args)
-    missing = [str(source) for source, _ in jobs if not source.is_file()]
+    missing = [str(source) for _, source, _ in jobs if not source.is_file()]
     if missing:
         raise ValueError(f"no such input file: {', '.join(missing)}")
 
@@ -111,7 +131,7 @@ async def run(args: argparse.Namespace) -> int:
     if scheduled:
         await wait_until(scheduled)
 
-    logger.info("reading %d file(s) with voice %s on %s, %d worker(s)", len(jobs), args.voice, args.device, args.workers)
+    logger.info("reading %d file(s) with voice %s at pace %.2f on %s, %d worker(s)", len(jobs), args.voice, args.pace, args.device, args.workers)
     failed = await read_files(jobs, args)
     logger.info("%d file(s) read%s", len(jobs) - failed, f", {failed} failed" if failed else "")
     return failed
@@ -126,6 +146,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-batch", help="A file listing the .wav to write for each --input-batch line")
     parser.add_argument("--gen-srt", action="store_true", help="Also write an .srt beside every .wav")
     parser.add_argument("--voice", default=DEFAULT_VOICE, help=f"A VieNeu preset voice (default {DEFAULT_VOICE})")
+    parser.add_argument("--pace", type=float, default=1.0, help="Speed the speech up or down, pitch kept: 1.0 as synthesized, 1.2 faster, 0.8 slower")
     parser.add_argument("--device", default="auto", help="Where the model runs: auto (default), cuda or cpu")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Text chunks per forward pass on the GPU (default {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--workers", type=int, default=1, help="How many files to read at once, i.e. model instances loaded (default 1)")
@@ -136,6 +157,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--input needs --output")
     if args.input_batch and not args.output_batch:
         parser.error("--input-batch needs --output-batch")
+    if not PACE_RANGE[0] <= args.pace <= PACE_RANGE[1]:
+        parser.error(f"--pace must be between {PACE_RANGE[0]} and {PACE_RANGE[1]}")
     return args
 
 

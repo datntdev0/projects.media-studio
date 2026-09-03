@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '@/main/database/client';
 import type { AppWorkspace, AppWorkspaceDraft, AppWorkspaceEdit, ListAppWorkspacesFilter, WorkspacePreset, WorkspaceStatus, WorkspaceStep, WorkspaceStepEdit, WorkspaceStepKey, WorkspaceStepState } from '@/shared/app-workspace';
 import type { LlmEngine, LlmSettings } from '@/shared/llm';
+import type { SpeechSettings } from '@/shared/app-workspace-narration';
 
 interface AppWorkspaceRow {
   id: string;
@@ -12,6 +13,8 @@ interface AppWorkspaceRow {
   status: string;
   llm_engine: string | null;
   llm_model: string | null;
+  speech_voice: string;
+  speech_pace: number;
   last_run_at: number | null;
   created_at: number;
   updated_at: number;
@@ -55,6 +58,7 @@ function toAppWorkspace(row: AppWorkspaceRow, steps: WorkspaceStep[]): AppWorksp
     libraryId: row.library_id,
     status: row.status as WorkspaceStatus,
     llm: toLlmSettings(row),
+    speech: { voice: row.speech_voice, pace: row.speech_pace },
     steps,
     lastRunAt: row.last_run_at,
     createdAt: row.created_at,
@@ -118,9 +122,9 @@ export function createAppWorkspace(db: Db, draft: AppWorkspaceDraft): AppWorkspa
   const now = Date.now();
 
   db.prepare(
-    `INSERT INTO app_workspaces (id, name, description, preset, library_id, status, llm_engine, llm_model, last_run_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, draft.name, draft.description, draft.preset, draft.libraryId, draft.status, draft.llm?.engine ?? null, draft.llm?.model ?? null, draft.lastRunAt, now, now);
+    `INSERT INTO app_workspaces (id, name, description, preset, library_id, status, llm_engine, llm_model, speech_voice, speech_pace, last_run_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, draft.name, draft.description, draft.preset, draft.libraryId, draft.status, draft.llm?.engine ?? null, draft.llm?.model ?? null, draft.speech.voice, draft.speech.pace, draft.lastRunAt, now, now);
 
   for (const step of draft.steps) {
     insertStep(db, id, step, now);
@@ -144,6 +148,12 @@ export function updateAppWorkspaceStatus(db: Db, id: string, status: WorkspaceSt
 /** The workspace's LLM choice, which its own listing edit never touches. */
 export function updateAppWorkspaceLlm(db: Db, id: string, llm: LlmSettings | null): AppWorkspace {
   db.prepare('UPDATE app_workspaces SET llm_engine = ?, llm_model = ?, updated_at = ? WHERE id = ?').run(llm?.engine ?? null, llm?.model ?? null, Date.now(), id);
+  return getAppWorkspace(db, id)!;
+}
+
+/** The workspace's voice and pace, which its own listing edit never touches. */
+export function updateAppWorkspaceSpeech(db: Db, id: string, speech: SpeechSettings): AppWorkspace {
+  db.prepare('UPDATE app_workspaces SET speech_voice = ?, speech_pace = ?, updated_at = ? WHERE id = ?').run(speech.voice, speech.pace, Date.now(), id);
   return getAppWorkspace(db, id)!;
 }
 

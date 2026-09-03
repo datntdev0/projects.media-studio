@@ -208,6 +208,13 @@ export const IllustrationIcon = icon(
 
 export const PlayIcon = icon(<polygon points="6 3 20 12 6 21 6 3" />);
 
+export const PauseIcon = icon(
+  <>
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </>,
+);
+
 export const ClockIcon = icon(
   <>
     <circle cx="12" cy="12" r="9" />

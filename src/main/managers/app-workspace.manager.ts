@@ -3,6 +3,7 @@ import { createAppWorkspace, deleteAppWorkspace, deleteAppWorkspaceStepsByWorksp
 import { deleteAppWorkspaceRunsByWorkspaceId } from '@/main/database/repositories/app-workspace-run.repo';
 import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
 import { AppLibraryType } from '@/shared/app-library';
+import { DEFAULT_SPEECH } from '@/shared/app-workspace-narration';
 import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type ListAppWorkspacesFilter, type UpdateAppWorkspaceInput, type WorkspaceStep } from '@/shared/app-workspace';
 
 export interface AppWorkspaceManager {
@@ -73,6 +74,7 @@ export function createAppWorkspaceManager(db: Db): AppWorkspaceManager {
         status: WorkspaceStatus.Draft,
         // Null: a new workspace follows config.json until its own picker changes it.
         llm: null,
+        speech: DEFAULT_SPEECH,
         steps: initialSteps(input),
         lastRunAt: null,
       });

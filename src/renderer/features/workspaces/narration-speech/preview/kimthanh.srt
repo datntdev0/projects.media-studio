@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:05,840
+Xin chào, tôi là Kim Thanh, một trong những giọng đọc của Media Studio.
+
+2
+00:00:06,140 --> 00:00:13,260
+Media Studio là ứng dụng quản lý thư viện truyện, hình ảnh và video của riêng bạn.
+
+3
+00:00:13,560 --> 00:00:22,040
+Ứng dụng thu thập nội dung từ các trang nguồn, phân tích và dịch từng chương, rồi chuyển lời văn thành giọng đọc như bạn đang nghe.
+
+4
+00:00:22,340 --> 00:00:27,460
+Hãy chọn giọng đọc và nhịp độ phù hợp với câu chuyện của bạn.

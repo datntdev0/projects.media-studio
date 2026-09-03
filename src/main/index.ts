@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import started from 'electron-squirrel-startup';
 import { closeContainer, createContainer } from './container';
-import { registerCoverProtocolHandler } from './helpers/protocols/cover.protocol';
+import { registerProtocolHandlers } from './helpers/protocols';
 import { runMigrations } from './database/migrate';
 import { registerIpcHandlers } from './_ipc';
 import { registerQueueHandlers } from './queue';
@@ -31,7 +31,7 @@ process.on('unhandledRejection', (reason) => logger.error('Unhandled rejection',
 app.whenReady().then(() => {
   logStartup();
 
-  registerCoverProtocolHandler();
+  registerProtocolHandlers();
 
   const container = createContainer();
   runMigrations(container.db);

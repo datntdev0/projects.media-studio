@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LANGUAGE_NAME, TRANSLATION_LANGUAGE, type WorkspaceChapterTranslation, type WorkspaceTranslationChapter } from '@/shared/app-workspace-translation';
 import { chapterRailTagOf } from './translationFormat';
 import { paragraphsOf } from './worldFormat';
+import { ChapterRail } from './ChapterRail';
 
 interface TranslationChapterPaneProps {
   workspaceId: string;
@@ -72,24 +73,12 @@ export function TranslationChapterPane({ workspaceId, chapters }: TranslationCha
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-      <div style={{ width: 360, flex: 'none', borderRight: '1px solid var(--color-divider)', overflow: 'auto' }}>
-        {chapters.map((entry) => {
-          const tag = chapterRailTagOf(entry);
-          return (
-            <div
-              key={entry.idx}
-              title={tag.tip}
-              onClick={() => tag.open && pick(entry.idx)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 13.6px', borderBottom: '1px solid color-mix(in srgb, var(--color-text) 7%, transparent)', cursor: tag.open ? 'pointer' : 'not-allowed', opacity: tag.open ? 1 : 0.45, background: entry.idx === selected ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : undefined }}
-            >
-              <span className="text-muted" style={{ fontSize: 12, width: 28, flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{entry.idx}</span>
-              <span style={{ fontSize: 12.5, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.title}</span>
-              <span className={`tag ${tag.tagClass}`} style={{ flex: 'none', fontSize: 10, padding: '1px 6px' }}>{tag.label}</span>
-            </div>
-          );
-        })}
-        <div className="text-muted" style={{ padding: '10px 13.6px', fontSize: 11, lineHeight: 1.5 }}>Greyed chapters were not extracted — analysis must succeed for them before translation.</div>
-      </div>
+      <ChapterRail
+        rows={chapters.map((entry) => ({ idx: entry.idx, title: entry.title, tag: chapterRailTagOf(entry) }))}
+        selected={selected}
+        onPick={pick}
+        note="Greyed chapters were not extracted — analysis must succeed for them before translation."
+      />
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {!chapter ? (

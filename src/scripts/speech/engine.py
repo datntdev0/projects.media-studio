@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import librosa
 import numpy as np
 import soundfile as sf
 
@@ -29,8 +30,8 @@ class Speaker:
     def voices(self) -> list[str]:
         return [name for _, name in self.model.list_preset_voices()]
 
-    def read(self, lines: list[str], voice: str) -> tuple[np.ndarray, list[tuple[float, float]]]:
-        """The lines spoken back to back, and where each one starts and ends in the result."""
+    def read(self, lines: list[str], voice: str, pace: float = 1.0) -> tuple[np.ndarray, list[tuple[float, float]]]:
+        """The lines spoken back to back at `pace` times normal speed, and where each one starts and ends in the result."""
         clips = self.model.infer_batch(lines, voice=voice)
         gap = np.zeros(round(LINE_GAP_SECONDS * self.sample_rate), dtype=np.float32)
 
@@ -38,12 +39,18 @@ class Speaker:
         spans: list[tuple[float, float]] = []
         cursor = 0.0
         for clip in clips:
+            clip = self.stretch(clip.astype(np.float32), pace)
             duration = len(clip) / self.sample_rate
             spans.append((cursor, cursor + duration))
-            parts.extend((clip.astype(np.float32), gap))
+            parts.extend((clip, gap))
             cursor += duration + LINE_GAP_SECONDS
 
         return np.concatenate(parts[:-1]), spans
+
+    @staticmethod
+    def stretch(clip: np.ndarray, pace: float) -> np.ndarray:
+        """The clip spoken `pace` times faster with its pitch kept; 1.0 leaves it as synthesized."""
+        return clip if pace == 1.0 else librosa.effects.time_stretch(clip, rate=pace)
 
     def save(self, audio: np.ndarray, path: Path) -> None:
         sf.write(str(path), audio, self.sample_rate, format="WAV")

@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:04,480
+Xin chào, tôi là Phạm Tuyên, một trong những giọng đọc của Media Studio.
+
+2
+00:00:04,780 --> 00:00:09,500
+Media Studio là ứng dụng quản lý thư viện truyện, hình ảnh và video của riêng bạn.
+
+3
+00:00:09,800 --> 00:00:15,960
+Ứng dụng thu thập nội dung từ các trang nguồn, phân tích và dịch từng chương, rồi chuyển lời văn thành giọng đọc như bạn đang nghe.
+
+4
+00:00:16,260 --> 00:00:19,460
+Hãy chọn giọng đọc và nhịp độ phù hợp với câu chuyện của bạn.

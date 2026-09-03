@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:05,840
+Xin chào, tôi là Đức Trí, một trong những giọng đọc của Media Studio.
+
+2
+00:00:06,140 --> 00:00:13,100
+Media Studio là ứng dụng quản lý thư viện truyện, hình ảnh và video của riêng bạn.
+
+3
+00:00:13,400 --> 00:00:22,200
+Ứng dụng thu thập nội dung từ các trang nguồn, phân tích và dịch từng chương, rồi chuyển lời văn thành giọng đọc như bạn đang nghe.
+
+4
+00:00:22,500 --> 00:00:26,580
+Hãy chọn giọng đọc và nhịp độ phù hợp với câu chuyện của bạn.

@@ -5,6 +5,7 @@ import AdmZip from 'adm-zip';
 import { config } from './config';
 import { LIBRARY_PACKAGE_CHAPTERS_DIR, LIBRARY_PACKAGE_MANIFEST, type LibraryPackageChapter, type LibraryPackageManifest } from '@/shared/app-library-package';
 import { TRANSLATION_LANGUAGE } from '@/shared/app-workspace-translation';
+import { plainSlug } from '@/shared/text';
 
 /** The path characters Windows reserves — none of them may reach a file name. */
 const RESERVED_FILENAME_CHARS = new Set(['\\', '/', ':', '*', '?', '"', '<', '>', '|']);
@@ -36,23 +37,9 @@ export function fileSlug(title: string, fallback: string): string {
   return cleaned || fallback;
 }
 
-/**
- * A name reduced to a directory name: lower case, letters and digits only.
- * Punctuation, spaces and dashes are dropped rather than folded into a
- * separator, and diacritics fold onto the letter they sit on, so a Vietnamese
- * name comes out plain ASCII. Letters of a script that has no such
- * decomposition (Chinese, say) are kept, since dropping them would leave every
- * such name on the same fallback.
- */
+/** A name reduced to a directory name — `plainSlug`, capped, falling back when nothing usable is left. */
 export function directorySlug(name: string, fallback: string): string {
-  const cleaned = name
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]/gu, '')
-    .slice(0, MAX_SLUG_LENGTH);
-
-  return cleaned || fallback;
+  return plainSlug(name).slice(0, MAX_SLUG_LENGTH) || fallback;
 }
 
 /**
@@ -112,6 +99,26 @@ export function getAppWorkspaceTranslationDir(workspaceName: string): string {
   return path.join(getAppWorkspaceDir(workspaceName), 'translations', TRANSLATION_LANGUAGE);
 }
 
+const NARRATIONS_DIR = 'narrations';
+
+/** Where the Narration Speech step writes the lines it reads, and each chapter's .wav and .srt. */
+export function getAppWorkspaceNarrationDir(workspaceName: string): string {
+  return path.join(getAppWorkspaceDir(workspaceName), NARRATIONS_DIR);
+}
+
+/** Custom scheme the renderer streams narration audio through — `app-narration://<workspace slug>/<file>`. */
+export const NARRATION_PROTOCOL = 'app-narration';
+
+export function narrationFileUrl(workspaceName: string, fileName: string): string {
+  return `${NARRATION_PROTOCOL}://${directorySlug(workspaceName, 'workspace')}/${encodeURIComponent(fileName)}`;
+}
+
+/** The file an `app-narration` URL names — the slug is the folder as it is on disk, and the file its bare name. */
+export function narrationFileOf(url: string): string {
+  const { hostname, pathname } = new URL(url);
+  return path.join(getAppDataDir(), 'workspaces', hostname, NARRATIONS_DIR, path.basename(decodeURIComponent(pathname)));
+}
+
 /** One chapter of a workspace's working copy — its manifest entry and the body on disk beside it. */
 export interface WorkspaceChapter {
   entry: LibraryPackageChapter;
@@ -154,3 +161,8 @@ export function readWorkspaceChapter(workspaceName: string, idx: number): Worksp
 
 /** Custom scheme the renderer loads cover images through — a raw file path is not a URL a browser will load. */
 export const COVER_PROTOCOL = 'app-cover';
+
+/** The cached cover an `app-cover` URL names. Chromium collapses a host-less URL's path into the host, so covers use a throwaway host and keep the file name in the path. */
+export function coverFileOf(url: string): string {
+  return path.join(getAppCoverDir(), path.basename(decodeURIComponent(new URL(url).pathname)));
+}

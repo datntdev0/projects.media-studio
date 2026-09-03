@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 *.wav
 *.srt
+# The voice previews the Narration Speech screen plays are shipped with the app
+!src/renderer/features/workspaces/narration-speech/preview/*.srt
 
 # Logs
 logs

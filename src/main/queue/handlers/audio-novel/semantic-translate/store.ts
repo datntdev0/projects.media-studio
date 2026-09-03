@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileWrittenAt, readJsonFile, writeJsonFile } from '@/main/helpers/json-file';
 import { getAppWorkspaceTranslationDir } from '@/main/helpers/paths';
-import { chapterFileStem } from '@/main/queue/handlers/audio-novel/semantic-analysis';
+import { chapterFileStem, chapterNosOf, latestWrittenAt, listChapterFiles } from '@/main/helpers/chapter-files';
 import { TRANSLATION_LANGUAGE, type ChapterTranslation, type WorldTranslation } from '@/shared/app-workspace-translation';
 
 const WORLD_FILE = `world.${TRANSLATION_LANGUAGE}.json`;
@@ -25,13 +25,7 @@ function chapterTextFile(workspaceName: string, chapterNo: number): string {
 
 /** The per-chapter files with the given extension, in chapter order. */
 function chapterFiles(workspaceName: string, ext: string): string[] {
-  const dir = getAppWorkspaceTranslationDir(workspaceName);
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((name) => name.startsWith('chapter-') && name.endsWith(ext)).sort().map((name) => path.join(dir, name));
-}
-
-function chapterNosOf(files: string[]): number[] {
-  return files.map((file) => Number(/\d+/.exec(path.basename(file))![0]));
+  return listChapterFiles(getAppWorkspaceTranslationDir(workspaceName), ext);
 }
 
 export function readWorldTranslation(workspaceName: string): WorldTranslation | undefined {
@@ -61,8 +55,7 @@ export function listDistributedChapterNos(workspaceName: string): number[] {
 
 /** When the last chapter metadata was distributed, or undefined when none has been. */
 export function chaptersDistributedAt(workspaceName: string): number | undefined {
-  const stamps = chapterFiles(workspaceName, META_EXT).map((file) => fileWrittenAt(file) ?? 0);
-  return stamps.length === 0 ? undefined : Math.max(...stamps);
+  return latestWrittenAt(chapterFiles(workspaceName, META_EXT));
 }
 
 /** Whether the chapter's text is already translated — checked without reading it. */

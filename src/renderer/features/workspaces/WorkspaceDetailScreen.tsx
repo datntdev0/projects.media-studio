@@ -12,6 +12,7 @@ import { WorkspaceOverview } from './WorkspaceOverview';
 import { WorkspaceStepSoon } from './WorkspaceStepSoon';
 import { WorkspaceSemanticAnalysis } from './WorkspaceSemanticAnalysis';
 import { WorkspaceSemanticTranslate } from './WorkspaceSemanticTranslate';
+import { WorkspaceNarrationSpeech } from './WorkspaceNarrationSpeech';
 import { WorkspaceRunLog } from './WorkspaceRunLog';
 import { WorkspaceExecuteDialog } from './WorkspaceExecuteDialog';
 
@@ -81,6 +82,8 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
           <WorkspaceSemanticAnalysis workspace={workspace} />
         ) : tab === WorkspaceStepKey.SemanticTranslate && activeView?.step ? (
           <WorkspaceSemanticTranslate workspace={workspace} />
+        ) : tab === WorkspaceStepKey.NarrationSpeech ? (
+          <WorkspaceNarrationSpeech workspace={workspace} />
         ) : activeView ? (
           <WorkspaceStepSoon view={activeView} />
         ) : (
