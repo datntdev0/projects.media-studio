@@ -3,8 +3,8 @@ import { PlusIcon } from '@/components/icons';
 import { formatDate } from '@/features/library/libraryFormat';
 import { NO_LLM_MESSAGE, WorkspaceStatus, WorkspaceStepKey, type AppWorkspace } from '@/shared/app-workspace';
 import type { WorkspaceExtractionChapter, WorkspaceWorldState, WorldBible } from '@/shared/app-workspace-extraction';
-import { LLM_ENGINE_LABEL, LlmEngine, firstModelOf, type LlmOptions, type LlmSettings } from '@/shared/llm';
-import { STEP_NAME, STEP_STATE_LABEL, STEP_STATE_TAG_CLASS, stepCountLabelOf } from './workspaceFormat';
+import { STEP_NAME, stepTagOf } from './workspaceFormat';
+import { LlmPicker } from './LlmPicker';
 import { useWorkspaceWorld } from './useWorkspaceWorld';
 import { WorldSection, WORLD_SECTION_LABEL, emptyCharacter, emptyTerm, emptyTimeline, extractionProgressOf } from './worldFormat';
 import { WorldCharacterTable } from './WorldCharacterTable';
@@ -25,66 +25,6 @@ function addTo(world: WorldBible, section: WorldSection): WorldBible {
   if (section === WorldSection.Characters) return { ...world, characters: [...world.characters, emptyCharacter()] };
   if (section === WorldSection.Timelines) return { ...world, timelines: [...world.timelines, emptyTimeline()] };
   return { ...world, glossary: [...world.glossary, emptyTerm()] };
-}
-
-interface LlmPickerProps {
-  /** Null until this workspace has picked — config.json names models, never an engine. */
-  llm: LlmSettings | null;
-  options: LlmOptions;
-  disabled: boolean;
-  onChange(llm: LlmSettings): void;
-}
-
-/**
- * Which CLI this workspace's LLM steps call. There is no default: nothing runs
- * until an engine is picked here, and picking one takes that engine's first
- * configured model, since a model belongs to one engine only. The lists come
- * from `llm.models` in config.json, so adding a model is a config change rather
- * than a code one.
- */
-function LlmPicker({ llm, options, disabled, onChange }: LlmPickerProps) {
-  const models = llm ? options.models[llm.engine] ?? [] : [];
-  // A model the config no longer lists is still shown — it is what the chapters already extracted were extracted with.
-  const shown = !llm || models.includes(llm.model) ? models : [llm.model, ...models];
-
-  return (
-    <>
-      <select
-        className="input"
-        style={{ width: 120, fontSize: 13 }}
-        value={llm?.engine ?? ''}
-        disabled={disabled}
-        onChange={(e) => {
-          const engine = e.target.value as LlmEngine;
-          onChange({ engine, model: firstModelOf(options, engine) });
-        }}
-      >
-        {!llm && <option value="">Pick engine…</option>}
-        {options.engines.map((engine) => (
-          <option key={engine} value={engine}>{LLM_ENGINE_LABEL[engine]}</option>
-        ))}
-      </select>
-      <select
-        className="input"
-        style={{ width: 180, fontSize: 13 }}
-        value={llm?.model ?? ''}
-        disabled={disabled || !llm}
-        onChange={(e) => llm && onChange({ engine: llm.engine, model: e.target.value })}
-      >
-        {!llm && <option value="">No model</option>}
-        {shown.map((model) => (
-          <option key={model} value={model}>{model}</option>
-        ))}
-      </select>
-    </>
-  );
-}
-
-/** What the header says about the step's own progress, read off the workspace row. */
-function stepTagOf(workspace: AppWorkspace): { tag: string; tagClass: string; count: string } {
-  const step = workspace.steps.find((candidate) => candidate.key === WorkspaceStepKey.SemanticAnalysis);
-  if (!step) return { tag: 'Off', tagClass: 'tag-neutral', count: 'Not in this pipeline' };
-  return { tag: STEP_STATE_LABEL[step.state], tagClass: STEP_STATE_TAG_CLASS[step.state], count: stepCountLabelOf(step) };
 }
 
 function mergedLabelOf(state: WorkspaceWorldState | undefined): string {
@@ -140,7 +80,7 @@ export function WorkspaceSemanticAnalysis({ workspace }: WorkspaceSemanticAnalys
   const [section, setSection] = useState<WorldSection>(WorldSection.Characters);
 
   const timelineIdxs = useMemo(() => draft?.timelines.map((timeline) => timeline.idx) ?? [], [draft]);
-  const step = stepTagOf(workspace);
+  const step = stepTagOf(workspace, WorkspaceStepKey.SemanticAnalysis);
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

@@ -7,7 +7,8 @@ import { mergeWorldBible } from './merge';
 import { buildChapterExtractionPrompt, CHAPTER_EXTRACTION_SCHEMA } from './prompt';
 import { chapterIdxOf, readChapterExtractions, timelineIdxOf, writeChapterExtraction, writeWorldBible } from './store';
 
-export { hasChapterExtraction, listExtractedChapterNos, readWorldBible, worldBibleWrittenAt, writeWorldBible } from './store';
+export { chapterFileStem, chapterIdxOf, hasChapterExtraction, listExtractedChapterNos, readChapterExtraction, readChapterExtractions, readWorldBible, worldBibleWrittenAt, writeWorldBible } from './store';
+export { timelineIdxFor, worldTimelineIdx } from './merge';
 
 /**
  * The ids the extraction is filed under are the app's to decide, not the model's:

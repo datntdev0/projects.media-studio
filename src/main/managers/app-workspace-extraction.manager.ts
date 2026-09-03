@@ -15,6 +15,19 @@ export interface AppWorkspaceExtractionManager {
   setLlm(workspaceId: string, llm: LlmSettings): WorkspaceWorldState;
 }
 
+/** One of the novel's chapters as a step's screen lists it. */
+export interface NovelChapter {
+  idx: number;
+  title: string;
+}
+
+/** The novel's original chapters in order — what the per-chapter steps measure themselves against. */
+export function novelChaptersOf(db: Db, libraryId: string): NovelChapter[] {
+  return listAppLibraryContents(db, libraryId, { type: AppLibraryContentType.Original })
+    .map((content) => ({ idx: content.idx, title: content.textContent?.title ?? '' }))
+    .sort((left, right) => left.idx - right.idx);
+}
+
 /**
  * The Semantic Analysis step's output, which lives in the workspace's working
  * directory rather than the database — so this manager composes the extraction
@@ -33,9 +46,7 @@ export function createAppWorkspaceExtractionManager(db: Db): AppWorkspaceExtract
   /** The novel's chapters paired with whether this workspace has an extraction for each. */
   const chaptersOf = (workspace: AppWorkspace): WorkspaceExtractionChapter[] => {
     const extracted = new Set(listExtractedChapterNos(workspace.name));
-    return listAppLibraryContents(db, workspace.libraryId, { type: AppLibraryContentType.Original })
-      .map((content) => ({ idx: content.idx, title: content.textContent?.title ?? '', extracted: extracted.has(content.idx) }))
-      .sort((left, right) => left.idx - right.idx);
+    return novelChaptersOf(db, workspace.libraryId).map((chapter) => ({ ...chapter, extracted: extracted.has(chapter.idx) }));
   };
 
   const stateOf = (workspace: AppWorkspace): WorkspaceWorldState => ({

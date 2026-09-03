@@ -136,6 +136,13 @@ export function stepCountLabelOf(counts: WorkspaceStepCounts): string {
   return counts.failedCount === 0 ? counted : `${counted} · ${counts.failedCount} failed`;
 }
 
+/** What a step's own screen says in its header about the step's progress, read off the workspace row. */
+export function stepTagOf(workspace: AppWorkspace, key: WorkspaceStepKey): { tag: string; tagClass: string; count: string } {
+  const step = workspace.steps.find((candidate) => candidate.key === key);
+  if (!step) return { tag: 'Off', tagClass: 'tag-neutral', count: 'Not in this pipeline' };
+  return { tag: STEP_STATE_LABEL[step.state], tagClass: STEP_STATE_TAG_CLASS[step.state], count: stepCountLabelOf(step) };
+}
+
 export function stepTooltipOf(step: WorkspaceStep): string {
   return `${STEP_NAME[step.key]} — ${STEP_STATE_LABEL[step.state]} · ${stepCountLabelOf(step)}`;
 }

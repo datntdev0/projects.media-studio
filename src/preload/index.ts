@@ -9,6 +9,7 @@ import { APP_LIBRARY_CONTENT_IPC_CHANNELS, type AppLibraryContentApi } from '@/s
 import { APP_WORKSPACE_IPC_CHANNELS, type AppWorkspaceApi } from '@/shared/app-workspace';
 import { APP_WORKSPACE_RUN_IPC_CHANNELS, type AppWorkspaceRunApi } from '@/shared/app-workspace-run';
 import { APP_WORKSPACE_EXTRACTION_IPC_CHANNELS, type AppWorkspaceExtractionApi } from '@/shared/app-workspace-extraction';
+import { APP_WORKSPACE_TRANSLATION_IPC_CHANNELS, type AppWorkspaceTranslationApi } from '@/shared/app-workspace-translation';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -59,6 +60,15 @@ const appWorkspaceExtractionApi: AppWorkspaceExtractionApi = {
   setLlm: (workspaceId, llm) => ipcRenderer.invoke(APP_WORKSPACE_EXTRACTION_IPC_CHANNELS.setLlm, workspaceId, llm),
 };
 
+const appWorkspaceTranslationApi: AppWorkspaceTranslationApi = {
+  read: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.read, workspaceId),
+  save: (workspaceId, world) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.save, workspaceId, world),
+  translateMetadata: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.translateMetadata, workspaceId),
+  distribute: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.distribute, workspaceId),
+  readChapter: (workspaceId, chapterNo) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.readChapter, workspaceId, chapterNo),
+  saveChapter: (workspaceId, chapterNo, body) => ipcRenderer.invoke(APP_WORKSPACE_TRANSLATION_IPC_CHANNELS.saveChapter, workspaceId, chapterNo, body),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appLibraryPackageApi', appLibraryPackageApi);
@@ -66,3 +76,4 @@ contextBridge.exposeInMainWorld('appLibraryContentApi', appLibraryContentApi);
 contextBridge.exposeInMainWorld('appWorkspaceApi', appWorkspaceApi);
 contextBridge.exposeInMainWorld('appWorkspaceRunApi', appWorkspaceRunApi);
 contextBridge.exposeInMainWorld('appWorkspaceExtractionApi', appWorkspaceExtractionApi);
+contextBridge.exposeInMainWorld('appWorkspaceTranslationApi', appWorkspaceTranslationApi);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { EditIcon, TrashIcon } from '@/components/icons';
 import type { WorldTimeline } from '@/shared/app-workspace-extraction';
 import { formatList, parseList, timelineKeyLabel } from './worldFormat';
+import { RowActions } from './RowActions';
 import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
 
 interface WorldTimelineTableProps {
@@ -46,16 +46,7 @@ export function WorldTimelineTable({ timelines, onChange }: WorldTimelineTablePr
               <td style={{ fontSize: 13 }}>{timeline.summary || '—'}</td>
               <td className="text-muted" style={{ fontSize: 13 }}>{timeline.context || '—'}</td>
               <td style={{ fontSize: 13 }}>{timeline.participants.join(', ') || '—'}</td>
-              <td>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                  <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Edit" onClick={() => setEditing(at)}>
-                    <EditIcon width={14} height={14} />
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Remove" onClick={() => onChange(timelines.filter((_unused, position) => position !== at))}>
-                    <TrashIcon width={14} height={14} />
-                  </button>
-                </div>
-              </td>
+              <td><RowActions onEdit={() => setEditing(at)} onRemove={() => onChange(timelines.filter((_unused, position) => position !== at))} /></td>
             </tr>
           ))}
         </tbody>

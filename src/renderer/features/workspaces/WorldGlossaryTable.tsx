@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { EditIcon, TrashIcon } from '@/components/icons';
 import type { WorldGlossaryTerm } from '@/shared/app-workspace-extraction';
+import { RowActions } from './RowActions';
 import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
 
 interface WorldGlossaryTableProps {
@@ -45,16 +45,7 @@ export function WorldGlossaryTable({ glossary, onChange }: WorldGlossaryTablePro
               <td style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}>{term.term}</td>
               <td style={{ fontSize: 13 }}>{term.definition || '—'}</td>
               <td className="text-muted" style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{term.chapterCount}</td>
-              <td>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                  <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Edit" onClick={() => setEditing(at)}>
-                    <EditIcon width={14} height={14} />
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Remove" onClick={() => onChange(glossary.filter((_unused, position) => position !== at))}>
-                    <TrashIcon width={14} height={14} />
-                  </button>
-                </div>
-              </td>
+              <td><RowActions onEdit={() => setEditing(at)} onRemove={() => onChange(glossary.filter((_unused, position) => position !== at))} /></td>
             </tr>
           ))}
         </tbody>

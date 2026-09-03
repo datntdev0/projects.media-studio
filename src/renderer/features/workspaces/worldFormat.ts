@@ -65,6 +65,12 @@ export function parseRelationshipLines(text: string): CharacterRelationship[] {
     });
 }
 
+/** What a character keeps per scene — the shape the world bible and its translation share. */
+export interface SceneKeyed {
+  appearance: Record<string, string>;
+  relationships: Record<string, CharacterRelationship[]>;
+}
+
 /** One row of a character's per-scene block — its outfit and its relationships together. */
 export interface CharacterSceneRow {
   idx: string;
@@ -73,16 +79,21 @@ export interface CharacterSceneRow {
 }
 
 /** Every scene a character has something recorded for, in story order. */
-export function sceneRowsOf(character: WorldCharacter): CharacterSceneRow[] {
+export function sceneRowsOf(character: SceneKeyed): CharacterSceneRow[] {
   const keys = [...new Set([...Object.keys(character.appearance), ...Object.keys(character.relationships)])].sort();
   return keys.map((idx) => ({ idx, clothing: character.appearance[idx] ?? '', relationships: character.relationships[idx] ?? [] }));
 }
 
 /** The line under a character's name — how much of the novel they are recorded across. */
-export function characterChapterLabel(character: WorldCharacter): string {
+export function characterChapterLabel(character: SceneKeyed & { weight: CharacterWeight }): string {
   const scenes = sceneRowsOf(character);
   const chapters = new Set(scenes.map((scene) => chapterOfKey(scene.idx))).size;
   return `${CHARACTER_WEIGHT_LABEL[character.weight]} · ${chapters} chapter(s) · ${scenes.length} scene(s)`;
+}
+
+/** Text split into the paragraphs the reading pane shows — one per non-empty line. */
+export function paragraphsOf(text: string): string[] {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
 }
 
 /** How far the step has got over the novel, for the chapters rail. */

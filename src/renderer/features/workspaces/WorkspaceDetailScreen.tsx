@@ -11,6 +11,7 @@ import { WorkspaceStepper, type WorkspaceTab } from './WorkspaceStepper';
 import { WorkspaceOverview } from './WorkspaceOverview';
 import { WorkspaceStepSoon } from './WorkspaceStepSoon';
 import { WorkspaceSemanticAnalysis } from './WorkspaceSemanticAnalysis';
+import { WorkspaceSemanticTranslate } from './WorkspaceSemanticTranslate';
 import { WorkspaceRunLog } from './WorkspaceRunLog';
 import { WorkspaceExecuteDialog } from './WorkspaceExecuteDialog';
 
@@ -78,6 +79,8 @@ export function WorkspaceDetailScreen({ workspace, novel, onBack, onRunChange }:
           <WorkspaceRunLog runs={runs} loading={loading} error={error} onCancel={setConfirmCancel} onClear={() => setConfirmClear(true)} />
         ) : tab === WorkspaceStepKey.SemanticAnalysis ? (
           <WorkspaceSemanticAnalysis workspace={workspace} />
+        ) : tab === WorkspaceStepKey.SemanticTranslate && activeView?.step ? (
+          <WorkspaceSemanticTranslate workspace={workspace} />
         ) : activeView ? (
           <WorkspaceStepSoon view={activeView} />
         ) : (

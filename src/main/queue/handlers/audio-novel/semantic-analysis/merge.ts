@@ -13,7 +13,7 @@ function strongerWeight(left: CharacterWeight, right: CharacterWeight): Characte
 }
 
 /** The world-wide id of one of a chapter's timelines — `chapter0001-timeline0002`. */
-function worldTimelineIdx(chapterIdx: string, position: number): string {
+export function worldTimelineIdx(chapterIdx: string, position: number): string {
   return `${chapterIdx}-${timelineIdxOf(position)}`;
 }
 
@@ -23,7 +23,7 @@ function worldTimelineIdx(chapterIdx: string, position: number): string {
  * outfit and a set of relationships once, but the world bible keys them by when
  * they were true, and this is the closest the chapter comes to saying when.
  */
-function timelineIdxFor(character: ChapterCharacter, chapterIdx: string, timelines: ChapterTimeline[]): string {
+export function timelineIdxFor(character: ChapterCharacter, chapterIdx: string, timelines: ChapterTimeline[]): string {
   const names = new Set([character.name, ...character.alias]);
   const position = timelines.findIndex((timeline) => timeline.participants.some((participant) => names.has(participant)));
   return worldTimelineIdx(chapterIdx, position === -1 ? 1 : position + 1);

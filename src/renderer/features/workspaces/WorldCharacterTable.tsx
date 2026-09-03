@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ChevronDownIcon, EditIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import { ChevronDownIcon, EditIcon, PlusIcon } from '@/components/icons';
 import type { CharacterWeight, WorldCharacter } from '@/shared/app-workspace-extraction';
 import { CHARACTER_WEIGHT_LABEL, WEIGHT_OPTIONS, characterChapterLabel, formatList, formatRelationshipLines, formatRelationships, parseList, parseRelationshipLines, sceneRowsOf, timelineKeyLabel } from './worldFormat';
+import { RowActions } from './RowActions';
 import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
 
 interface WorldCharacterTableProps {
@@ -23,20 +24,6 @@ function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {
 /** The scene a newly added detail is filed under — the first one nothing is recorded for. */
 function firstFreeIdx(timelineIdxs: string[], taken: string[]): string {
   return timelineIdxs.find((idx) => !taken.includes(idx)) ?? timelineIdxs[0] ?? '';
-}
-
-/** The two controls at the end of a row. */
-function RowActions({ onEdit, onRemove }: { onEdit(): void; onRemove(): void }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-      <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Edit" onClick={onEdit}>
-        <EditIcon width={14} height={14} />
-      </button>
-      <button type="button" className="btn btn-secondary btn-icon" style={{ borderColor: 'transparent', width: 26, height: 26 }} title="Remove" onClick={onRemove}>
-        <TrashIcon width={14} height={14} />
-      </button>
-    </div>
-  );
 }
 
 /**

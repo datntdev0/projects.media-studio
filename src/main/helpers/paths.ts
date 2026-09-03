@@ -4,6 +4,7 @@ import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { config } from './config';
 import { LIBRARY_PACKAGE_CHAPTERS_DIR, LIBRARY_PACKAGE_MANIFEST, type LibraryPackageChapter, type LibraryPackageManifest } from '@/shared/app-library-package';
+import { TRANSLATION_LANGUAGE } from '@/shared/app-workspace-translation';
 
 /** The path characters Windows reserves — none of them may reach a file name. */
 const RESERVED_FILENAME_CHARS = new Set(['\\', '/', ':', '*', '?', '"', '<', '>', '|']);
@@ -94,6 +95,11 @@ export function getAppWorkspaceExtractionDir(workspaceName: string): string {
   return path.join(getAppWorkspaceDir(workspaceName), 'extractions');
 }
 
+/** Where the Semantic Translate step writes the translated world bible, the chapter metadata distributed from it, and the translated chapter texts. */
+export function getAppWorkspaceTranslationDir(workspaceName: string): string {
+  return path.join(getAppWorkspaceDir(workspaceName), 'translations', TRANSLATION_LANGUAGE);
+}
+
 /** A stored path as it reads in a log line — relative to the app's own base dir, since the absolute prefix says nothing. */
 export function appRelativePath(target: string): string {
   return path.relative(getAppBaseDir(), target).split(path.sep).join('/');
@@ -110,7 +116,7 @@ export interface WorkspaceChapter {
  * it in exactly the shape the archive has: `library.json`, `chapters/`, and the
  * cover. The item is re-exported on every execution, so a chapter edited since
  * the last run is picked up — stale chapter files are cleared first, and what the
- * steps themselves have written (`extractions/`) is left alone. Takes the archive
+ * steps themselves have written (`extractions/`, `translations/`) is left alone. Takes the archive
  * rather than building it, so this module stays free of the database.
  */
 export function prepareWorkspaceDir(workspaceName: string, packageData: Buffer): string {
