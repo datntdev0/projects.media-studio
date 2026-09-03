@@ -8,9 +8,9 @@ import { LlmPicker } from './LlmPicker';
 import { useWorkspaceTranslation } from './useWorkspaceTranslation';
 import { translationCountLabelOf } from './translationFormat';
 import { WorldSection, WORLD_SECTION_LABEL } from './worldFormat';
-import { TranslationCharacterTable } from './TranslationCharacterTable';
-import { TranslationTimelineTable } from './TranslationTimelineTable';
-import { TranslationGlossaryTable } from './TranslationGlossaryTable';
+import { CharacterTable } from './semantic-translate/CharacterTable';
+import { TimelineTable } from './semantic-translate/TimelineTable';
+import { GlossaryTable } from './semantic-translate/GlossaryTable';
 import { TranslationChapterPane } from './TranslationChapterPane';
 
 interface WorkspaceSemanticTranslateProps {
@@ -136,9 +136,9 @@ export function WorkspaceSemanticTranslate({ workspace }: WorkspaceSemanticTrans
                 ))}
               </div>
 
-              {section === WorldSection.Characters && <TranslationCharacterTable characters={draft.characters} source={source.characters} onChange={(characters) => edit({ ...draft, characters })} />}
-              {section === WorldSection.Timelines && <TranslationTimelineTable timelines={draft.timelines} source={source.timelines} onChange={(timelines) => edit({ ...draft, timelines })} />}
-              {section === WorldSection.Glossary && <TranslationGlossaryTable glossary={draft.glossary} source={source.glossary} onChange={(glossary) => edit({ ...draft, glossary })} />}
+              {section === WorldSection.Characters && <CharacterTable characters={draft.characters} source={source.characters} onChange={(characters) => edit({ ...draft, characters })} />}
+              {section === WorldSection.Timelines && <TimelineTable timelines={draft.timelines} source={source.timelines} onChange={(timelines) => edit({ ...draft, timelines })} />}
+              {section === WorldSection.Glossary && <GlossaryTable glossary={draft.glossary} source={source.glossary} onChange={(glossary) => edit({ ...draft, glossary })} />}
 
               <div className="text-muted" style={{ fontSize: 12, marginTop: 13.6 }}>{distributedLabelOf(state)}</div>
             </>

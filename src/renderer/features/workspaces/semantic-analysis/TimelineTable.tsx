@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { WorldTimeline } from '@/shared/app-workspace-extraction';
-import { formatList, parseList, timelineKeyLabel } from './worldFormat';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { formatList, parseList, timelineKeyLabel } from '@/features/workspaces/worldFormat';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface WorldTimelineTableProps {
+interface TimelineTableProps {
   timelines: WorldTimeline[];
   onChange(timelines: WorldTimeline[]): void;
 }
@@ -19,7 +19,7 @@ function fieldsOf(timeline: WorldTimeline): WorldEditField[] {
 }
 
 /** The novel's scenes in story order — one row each, edited in place through the dialog. */
-export function WorldTimelineTable({ timelines, onChange }: WorldTimelineTableProps) {
+export function TimelineTable({ timelines, onChange }: TimelineTableProps) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
 
   const apply = (at: number, values: Record<string, string>) => {
@@ -32,10 +32,10 @@ export function WorldTimelineTable({ timelines, onChange }: WorldTimelineTablePr
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '16%' }}>Chapter · scene</th>
-            <th style={{ width: '28%' }}>Summary</th>
+            <th style={{ width: '15%' }}>Chapter · scene</th>
+            <th style={{ width: '40%' }}>Summary</th>
             <th style={{ width: '30%' }}>Context</th>
-            <th style={{ width: '20%' }}>Participants</th>
+            <th style={{ width: '15%' }}>Participants</th>
             <th style={{ width: 60 }} />
           </tr>
         </thead>

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import type { WorldGlossaryTerm } from '@/shared/app-workspace-extraction';
 import type { WorldTranslatedGlossaryTerm } from '@/shared/app-workspace-translation';
-import { Bilingual } from './translationFormat';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { Bilingual } from '@/features/workspaces/translationFormat';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface TranslationGlossaryTableProps {
+interface GlossaryTableProps {
   glossary: WorldTranslatedGlossaryTerm[];
   source: WorldGlossaryTerm[];
   onChange(glossary: WorldTranslatedGlossaryTerm[]): void;
@@ -20,7 +20,7 @@ function fieldsOf(term: WorldTranslatedGlossaryTerm, original: WorldGlossaryTerm
 }
 
 /** The novel's proper nouns as rendered, each beside the original term. */
-export function TranslationGlossaryTable({ glossary, source, onChange }: TranslationGlossaryTableProps) {
+export function GlossaryTable({ glossary, source, onChange }: GlossaryTableProps) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
 
   const originalOf = (term: WorldTranslatedGlossaryTerm): WorldGlossaryTerm | undefined => source.find((candidate) => candidate.term === term.termOriginal);
@@ -35,11 +35,11 @@ export function TranslationGlossaryTable({ glossary, source, onChange }: Transla
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '12%' }}>Category</th>
-            <th style={{ width: '18%' }}>Term</th>
-            <th style={{ width: '20%' }}>Rendered as</th>
-            <th style={{ width: '42%' }}>Definition</th>
-            <th style={{ width: '8%' }}>Chapters</th>
+            <th style={{ width: '15%' }}>Category</th>
+            <th style={{ width: '20%' }}>Term</th>
+            <th style={{ width: '25%' }}>Rendered as</th>
+            <th style={{ width: '35%' }}>Definition</th>
+            <th style={{ width: '5%' }}>Chapters</th>
             <th style={{ width: 40 }} />
           </tr>
         </thead>

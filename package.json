@@ -8,6 +8,7 @@
   "scripts": {
     "start": "electron-forge start",
     "scrape": "bash scripts/run-scrape.sh",
+    "speech": "bash scripts/run-speech.sh",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",

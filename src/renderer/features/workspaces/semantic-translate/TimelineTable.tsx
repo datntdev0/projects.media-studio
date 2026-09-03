@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { WorldTimeline } from '@/shared/app-workspace-extraction';
 import type { WorldTranslationTimeline } from '@/shared/app-workspace-translation';
-import { Bilingual } from './translationFormat';
-import { formatList, parseList, timelineKeyLabel } from './worldFormat';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { Bilingual } from '@/features/workspaces/translationFormat';
+import { formatList, parseList, timelineKeyLabel } from '@/features/workspaces/worldFormat';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface TranslationTimelineTableProps {
+interface TimelineTableProps {
   timelines: WorldTranslationTimeline[];
   source: WorldTimeline[];
   onChange(timelines: WorldTranslationTimeline[]): void;
@@ -21,7 +21,7 @@ function fieldsOf(timeline: WorldTranslationTimeline, original: WorldTimeline | 
 }
 
 /** The novel's scenes as translated, each beside the original summary it renders. */
-export function TranslationTimelineTable({ timelines, source, onChange }: TranslationTimelineTableProps) {
+export function TimelineTable({ timelines, source, onChange }: TimelineTableProps) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
 
   const originalOf = (timeline: WorldTranslationTimeline): WorldTimeline | undefined => source.find((candidate) => candidate.idx === timeline.idx);

@@ -86,6 +86,6 @@ export async function translateChapter(workspaceName: string, chapterNo: number,
   const translated = (await runLlmJson(prompt, CHAPTER_TEXT_TRANSLATION_SCHEMA, llm)) as ChapterTextTranslated;
 
   writeChapterText(workspaceName, chapterNo, translated.body.trim());
-  writeChapterTranslation(workspaceName, chapterNo, { ...metadata, chapterTitle: translated.title.trim() });
+  writeChapterTranslation(workspaceName, chapterNo, { ...metadata, chapterTitle: translated.title.replaceAll(':', '').trim() });
   logger.info(`[translation] chapter ${chapterNo} translated — ${translated.body.length} character(s)`);
 }

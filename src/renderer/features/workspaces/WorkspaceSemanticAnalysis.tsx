@@ -7,9 +7,9 @@ import { STEP_NAME, stepTagOf } from './workspaceFormat';
 import { LlmPicker } from './LlmPicker';
 import { useWorkspaceWorld } from './useWorkspaceWorld';
 import { WorldSection, WORLD_SECTION_LABEL, emptyCharacter, emptyTerm, emptyTimeline, extractionProgressOf } from './worldFormat';
-import { WorldCharacterTable } from './WorldCharacterTable';
-import { WorldGlossaryTable } from './WorldGlossaryTable';
-import { WorldTimelineTable } from './WorldTimelineTable';
+import { CharacterTable } from './semantic-analysis/CharacterTable';
+import { GlossaryTable } from './semantic-analysis/GlossaryTable';
+import { TimelineTable } from './semantic-analysis/TimelineTable';
 
 interface WorkspaceSemanticAnalysisProps {
   workspace: AppWorkspace;
@@ -139,10 +139,10 @@ export function WorkspaceSemanticAnalysis({ workspace }: WorkspaceSemanticAnalys
               </div>
 
               {section === WorldSection.Characters && (
-                <WorldCharacterTable characters={draft.characters} timelineIdxs={timelineIdxs} onChange={(characters) => edit({ ...draft, characters })} />
+                <CharacterTable characters={draft.characters} timelineIdxs={timelineIdxs} onChange={(characters) => edit({ ...draft, characters })} />
               )}
-              {section === WorldSection.Timelines && <WorldTimelineTable timelines={draft.timelines} onChange={(timelines) => edit({ ...draft, timelines })} />}
-              {section === WorldSection.Glossary && <WorldGlossaryTable glossary={draft.glossary} onChange={(glossary) => edit({ ...draft, glossary })} />}
+              {section === WorldSection.Timelines && <TimelineTable timelines={draft.timelines} onChange={(timelines) => edit({ ...draft, timelines })} />}
+              {section === WorldSection.Glossary && <GlossaryTable glossary={draft.glossary} onChange={(glossary) => edit({ ...draft, glossary })} />}
 
               <div style={{ display: 'flex', gap: 6.8, marginTop: 13.6 }}>
                 <button type="button" className="btn btn-secondary" style={{ fontSize: 13, gap: 6 }} onClick={() => edit(addTo(draft, section))}>

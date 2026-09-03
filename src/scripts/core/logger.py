@@ -1,6 +1,7 @@
 """Logging setup: the console, the log file, and a couple of corrections to Scrapling's."""
 
 import logging
+import sys
 from contextvars import ContextVar
 
 from .helpers import DATA_DIR
@@ -43,6 +44,9 @@ class TagWorker(logging.Filter):
 
 
 def configure_logging() -> None:
+    # A Windows console may not be UTF-8, and VieNeu logs emoji; better replaced than a crash.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(errors="replace")
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     handlers = [logging.StreamHandler(), logging.FileHandler(LOG_FILE, encoding="utf-8")]
     logging.basicConfig(level=logging.INFO, format=FORMAT, handlers=handlers)
@@ -50,6 +54,9 @@ def configure_logging() -> None:
     # records that reach it by propagation, and `worker` has to exist on every record.
     for handler in handlers:
         handler.addFilter(TagWorker())
+
+    # huggingface_hub logs every HEAD it makes for the model files at INFO; only its failures matter.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     scrapling = logging.getLogger("scrapling")
     # A filter on the logger runs before any handler, so it covers every destination.

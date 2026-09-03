@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { ChevronDownIcon, EditIcon, PlusIcon } from '@/components/icons';
 import type { CharacterWeight, WorldCharacter } from '@/shared/app-workspace-extraction';
-import { CHARACTER_WEIGHT_LABEL, WEIGHT_OPTIONS, characterChapterLabel, formatList, formatRelationshipLines, formatRelationships, parseList, parseRelationshipLines, sceneRowsOf, timelineKeyLabel } from './worldFormat';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { CHARACTER_WEIGHT_LABEL, WEIGHT_OPTIONS, characterChapterLabel, formatList, formatRelationshipLines, formatRelationships, parseList, parseRelationshipLines, sceneRowsOf, timelineKeyLabel } from '@/features/workspaces/worldFormat';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface WorldCharacterTableProps {
+interface CharacterTableProps {
   characters: WorldCharacter[];
   /** Every scene id in the bible, so a keyed detail can be filed under one of them. */
   timelineIdxs: string[];
@@ -31,7 +31,7 @@ function firstFreeIdx(timelineIdxs: string[], taken: string[]): string {
  * hold across the novel on the row itself, and what changes with the story —
  * outfit and relationships — in the per-scene block underneath.
  */
-export function WorldCharacterTable({ characters, timelineIdxs, onChange }: WorldCharacterTableProps) {
+export function CharacterTable({ characters, timelineIdxs, onChange }: CharacterTableProps) {
   const [expanded, setExpanded] = useState<number | undefined>(undefined);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
 
@@ -89,9 +89,9 @@ export function WorldCharacterTable({ characters, timelineIdxs, onChange }: Worl
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '22%' }}>Character</th>
-            <th style={{ width: '24%' }}>Alias</th>
-            <th style={{ width: '54%' }}>Body · face · features</th>
+            <th style={{ width: '25%' }}>Character</th>
+            <th style={{ width: '45%' }}>Alias</th>
+            <th style={{ width: '30%' }}>Body · face · features</th>
             <th style={{ width: 40 }} />
           </tr>
         </thead>
@@ -116,9 +116,9 @@ export function WorldCharacterTable({ characters, timelineIdxs, onChange }: Worl
                   <table className="table" style={{ margin: 0 }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '26%' }}>Chapter · scene</th>
-                        <th style={{ width: '37%' }}>Clothing · style</th>
-                        <th style={{ width: '37%' }}>Relationships</th>
+                        <th style={{ width: '20%' }}>Chapter · scene</th>
+                        <th style={{ width: '30%' }}>Clothing · style</th>
+                        <th style={{ width: '50%' }}>Relationships</th>
                         <th style={{ width: 60 }} />
                       </tr>
                     </thead>

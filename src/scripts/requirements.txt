@@ -1,1 +1,5 @@
 scrapling[fetchers]==0.4.14
+vieneu==3.3.0
+# The GPU path of vieneu needs these two; torch is its CUDA build from https://download.pytorch.org/whl/cu126 (see README)
+torch==2.13.0
+transformers==5.15.1

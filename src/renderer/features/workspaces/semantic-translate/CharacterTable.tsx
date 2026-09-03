@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { ChevronDownIcon, EditIcon } from '@/components/icons';
 import type { WorldCharacter } from '@/shared/app-workspace-extraction';
 import type { WorldTranslationCharacter } from '@/shared/app-workspace-translation';
-import { Bilingual } from './translationFormat';
-import { characterChapterLabel, formatList, formatRelationshipLines, formatRelationships, parseList, parseRelationshipLines, sceneRowsOf, timelineKeyLabel } from './worldFormat';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { Bilingual } from '@/features/workspaces/translationFormat';
+import { characterChapterLabel, formatList, formatRelationshipLines, formatRelationships, parseList, parseRelationshipLines, sceneRowsOf, timelineKeyLabel } from '@/features/workspaces/worldFormat';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface TranslationCharacterTableProps {
+interface CharacterTableProps {
   characters: WorldTranslationCharacter[];
   /** The world bible the translation is of, so every row can show what it renders. */
   source: WorldCharacter[];
@@ -27,7 +27,7 @@ function pairAliases(character: WorldTranslationCharacter, translated: string[])
  * expandable row each — the per-scene block underneath pairs each outfit and set
  * of relationships with the original wording.
  */
-export function TranslationCharacterTable({ characters, source, onChange }: TranslationCharacterTableProps) {
+export function CharacterTable({ characters, source, onChange }: CharacterTableProps) {
   const [expanded, setExpanded] = useState<number | undefined>(undefined);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
 

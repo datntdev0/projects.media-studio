@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { WorldGlossaryTerm } from '@/shared/app-workspace-extraction';
-import { RowActions } from './RowActions';
-import { WorldEditDialog, type WorldEditField } from './WorldEditDialog';
+import { RowActions } from '@/features/workspaces/RowActions';
+import { WorldEditDialog, type WorldEditField } from '@/features/workspaces/WorldEditDialog';
 
-interface WorldGlossaryTableProps {
+interface GlossaryTableProps {
   glossary: WorldGlossaryTerm[];
   onChange(glossary: WorldGlossaryTerm[]): void;
 }
@@ -18,7 +18,7 @@ function fieldsOf(term: WorldGlossaryTerm): WorldEditField[] {
 }
 
 /** The novel's proper nouns as the merge collected them. */
-export function WorldGlossaryTable({ glossary, onChange }: WorldGlossaryTableProps) {
+export function GlossaryTable({ glossary, onChange }: GlossaryTableProps) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
 
   const apply = (at: number, values: Record<string, string>) => {
@@ -31,10 +31,10 @@ export function WorldGlossaryTable({ glossary, onChange }: WorldGlossaryTablePro
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '14%' }}>Category</th>
-            <th style={{ width: '22%' }}>Term</th>
+            <th style={{ width: '15%' }}>Category</th>
+            <th style={{ width: '25%' }}>Term</th>
             <th style={{ width: '50%' }}>Definition</th>
-            <th style={{ width: '8%' }}>Chapters</th>
+            <th style={{ width: '10%' }}>Chapters</th>
             <th style={{ width: 60 }} />
           </tr>
         </thead>
