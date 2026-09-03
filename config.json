@@ -6,5 +6,10 @@
       "codex": ["gpt-5.5"]
     },
     "timeoutMs": 300000
+  },
+  "speech": {
+    "python": "src/scripts/.venv/Scripts/python.exe",
+    "device": "auto",
+    "batchSize": 32
   }
 }

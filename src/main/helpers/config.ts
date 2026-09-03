@@ -9,9 +9,20 @@ export interface LlmConfig {
   timeoutMs: number;
 }
 
+/** How `speech.py` is run — see src/main/helpers/speech-cli.ts. */
+export interface SpeechConfig {
+  /** The Python of the scripts' virtualenv, relative to the app root unless absolute. */
+  python: string;
+  /** Where the model runs: auto, cuda or cpu. */
+  device: string;
+  /** Text chunks per forward pass on the GPU — lower it if the GPU runs out of memory. */
+  batchSize: number;
+}
+
 export interface AppConfig {
   appDir: string;
   llm: LlmConfig;
+  speech: SpeechConfig;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -23,6 +34,11 @@ const DEFAULT_CONFIG: AppConfig = {
     },
     timeoutMs: 300_000,
   },
+  speech: {
+    python: process.platform === 'win32' ? 'src/scripts/.venv/Scripts/python.exe' : 'src/scripts/.venv/bin/python',
+    device: 'auto',
+    batchSize: 32,
+  },
 };
 
 /** Plain JSON isn't bundled into main.js by Vite — it ships as a packaged extraResource instead (see forge.config.ts), the same way migration SQL does. */
@@ -33,6 +49,7 @@ function getConfigPath(): string {
 interface PartialAppConfig {
   appDir?: string;
   llm?: Partial<LlmConfig>;
+  speech?: Partial<SpeechConfig>;
 }
 
 function loadConfig(): AppConfig {
@@ -43,6 +60,7 @@ function loadConfig(): AppConfig {
   return {
     appDir: parsed.appDir ?? DEFAULT_CONFIG.appDir,
     llm: { ...DEFAULT_CONFIG.llm, ...parsed.llm },
+    speech: { ...DEFAULT_CONFIG.speech, ...parsed.speech },
   };
 }
 

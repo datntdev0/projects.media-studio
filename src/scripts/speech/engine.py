@@ -3,9 +3,9 @@
 import os
 from pathlib import Path
 
-import librosa
 import numpy as np
 import soundfile as sf
+from pedalboard import time_stretch
 
 from core.helpers import DATA_DIR
 
@@ -47,10 +47,15 @@ class Speaker:
 
         return np.concatenate(parts[:-1]), spans
 
-    @staticmethod
-    def stretch(clip: np.ndarray, pace: float) -> np.ndarray:
-        """The clip spoken `pace` times faster with its pitch kept; 1.0 leaves it as synthesized."""
-        return clip if pace == 1.0 else librosa.effects.time_stretch(clip, rate=pace)
+    def stretch(self, clip: np.ndarray, pace: float) -> np.ndarray:
+        """The clip spoken `pace` times faster with its pitch kept; 1.0 leaves it as synthesized.
+
+        Rubber Band (via pedalboard) rather than a phase vocoder: the vocoder smears
+        consonants and leaves speech sounding hollow, which is audible at 1.2.
+        """
+        if pace == 1.0:
+            return clip
+        return time_stretch(clip, self.sample_rate, stretch_factor=pace, high_quality=True, transient_mode="crisp", use_time_domain_smoothing=False, preserve_formants=True)[0]
 
     def save(self, audio: np.ndarray, path: Path) -> None:
         sf.write(str(path), audio, self.sample_rate, format="WAV")

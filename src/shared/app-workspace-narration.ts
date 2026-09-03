@@ -1,14 +1,18 @@
 // Types and IPC contract for what the Narration Speech step produces. It lives on
 // disk under the workspace's own working directory (see helpers/paths.ts):
 //
-//   appDir/data/workspaces/<slug>/narrations/
-//   ├── chapter-0001.txt    the lines read aloud, one utterance per line — the title first
-//   ├── chapter-0001.wav    the chapter spoken, lines back to back
-//   └── chapter-0001.srt    one cue per line, timed by that line's own clip
+//   appDir/data/workspaces/<slug>/narrations/<lang>/
+//   ├── chapter-0001.vi.ngochuyen.080.wav    the chapter spoken, its text's lines back to back
+//   └── chapter-0001.vi.ngochuyen.080.srt    one cue per line, timed by that line's own clip
 //
-// The text is the chapter's translation when the workspace translates, and the
-// working copy's own chapter otherwise. The voice and pace are the workspace's,
-// stored on its row, since every chapter of one novel is read the same way.
+// Files are scoped by language, voice and pace (`speechFileTagOf`), so each pick keeps
+// its own audio and switching the pick shows what was read that way. The text read is
+// the chapter's `.vi.txt` under translations/ when the workspace translates, and the
+// working copy's own chapter file otherwise — as it is on disk, every non-blank line one
+// utterance. The voice and pace are the workspace's, stored on its row, since every
+// chapter of one novel is read the same way.
+
+import { plainSlug } from './text';
 
 /** How a workspace's chapters are read: which VieNeu preset voice, and how fast. */
 export interface SpeechSettings {
@@ -58,6 +62,11 @@ export function isSpeechSettings(speech: SpeechSettings): boolean {
 
 export function speechLabelOf(speech: SpeechSettings): string {
   return `${speech.voice} · ${speech.pace.toFixed(1)}×`;
+}
+
+/** How a voice and pace name the files read with them — `ngochuyen.080` for Ngọc Huyền at 0.8×. */
+export function speechFileTagOf(speech: SpeechSettings): string {
+  return `${plainSlug(speech.voice)}.${String(Math.round(speech.pace * 100)).padStart(3, '0')}`;
 }
 
 /** One line of an .srt: where it starts and ends in the audio, in seconds. */

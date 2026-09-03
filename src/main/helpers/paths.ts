@@ -101,22 +101,23 @@ export function getAppWorkspaceTranslationDir(workspaceName: string): string {
 
 const NARRATIONS_DIR = 'narrations';
 
-/** Where the Narration Speech step writes the lines it reads, and each chapter's .wav and .srt. */
+/** Where the Narration Speech step writes each chapter's .wav and .srt, under a folder per language. */
 export function getAppWorkspaceNarrationDir(workspaceName: string): string {
   return path.join(getAppWorkspaceDir(workspaceName), NARRATIONS_DIR);
 }
 
-/** Custom scheme the renderer streams narration audio through — `app-narration://<workspace slug>/<file>`. */
+/** Custom scheme the renderer streams narration audio through — `app-narration://<workspace slug>/<lang>/<file>`. */
 export const NARRATION_PROTOCOL = 'app-narration';
 
-export function narrationFileUrl(workspaceName: string, fileName: string): string {
-  return `${NARRATION_PROTOCOL}://${directorySlug(workspaceName, 'workspace')}/${encodeURIComponent(fileName)}`;
+export function narrationFileUrl(workspaceName: string, language: string, fileName: string): string {
+  return `${NARRATION_PROTOCOL}://${directorySlug(workspaceName, 'workspace')}/${language}/${encodeURIComponent(fileName)}`;
 }
 
-/** The file an `app-narration` URL names — the slug is the folder as it is on disk, and the file its bare name. */
+/** The file an `app-narration` URL names — the slug is the folder as it is on disk, the path the language folder and the file's bare name. */
 export function narrationFileOf(url: string): string {
   const { hostname, pathname } = new URL(url);
-  return path.join(getAppDataDir(), 'workspaces', hostname, NARRATIONS_DIR, path.basename(decodeURIComponent(pathname)));
+  const segments = decodeURIComponent(pathname).split('/').filter((segment) => segment !== '' && segment !== '.' && segment !== '..');
+  return path.join(getAppDataDir(), 'workspaces', hostname, NARRATIONS_DIR, ...segments);
 }
 
 /** One chapter of a workspace's working copy — its manifest entry and the body on disk beside it. */
@@ -150,17 +151,50 @@ export function readWorkspaceManifest(workspaceName: string): LibraryPackageMani
   return JSON.parse(fs.readFileSync(file, 'utf8')) as LibraryPackageManifest;
 }
 
+function workspaceChapterEntry(workspaceName: string, idx: number): LibraryPackageChapter | undefined {
+  return readWorkspaceManifest(workspaceName)?.chapters.find((chapter) => chapter.idx === idx);
+}
+
+function chapterFileOf(workspaceName: string, entry: LibraryPackageChapter | undefined): string | undefined {
+  if (!entry?.file) return undefined;
+  const file = path.join(getAppWorkspaceDir(workspaceName), entry.file);
+  return fs.existsSync(file) ? file : undefined;
+}
+
+/** The working copy's file for one chapter, or undefined when it was never fetched and so has none. */
+export function workspaceChapterFile(workspaceName: string, idx: number): string | undefined {
+  return chapterFileOf(workspaceName, workspaceChapterEntry(workspaceName, idx));
+}
+
 /** One chapter of the working copy, or undefined when it was never fetched and so carries no body. */
 export function readWorkspaceChapter(workspaceName: string, idx: number): WorkspaceChapter | undefined {
-  const entry = readWorkspaceManifest(workspaceName)?.chapters.find((chapter) => chapter.idx === idx);
-  if (!entry?.file) return undefined;
-
-  const file = path.join(getAppWorkspaceDir(workspaceName), entry.file);
-  return fs.existsSync(file) ? { entry, body: fs.readFileSync(file, 'utf8') } : undefined;
+  const entry = workspaceChapterEntry(workspaceName, idx);
+  const file = chapterFileOf(workspaceName, entry);
+  return entry && file ? { entry, body: fs.readFileSync(file, 'utf8') } : undefined;
 }
 
 /** Custom scheme the renderer loads cover images through — a raw file path is not a URL a browser will load. */
 export const COVER_PROTOCOL = 'app-cover';
+
+/** A closed span of bytes, both ends inclusive, as HTTP ranges are. */
+export interface ByteRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * The bytes a `Range: bytes=a-b` header asks for out of a file of `size` bytes,
+ * clamped to the file. `a-` runs to the end, `-n` is the last n bytes. Undefined
+ * when there is no header, it is not one of those forms, or it lies past the end.
+ */
+export function byteRangeOf(header: string | null, size: number): ByteRange | undefined {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header ?? '');
+  if (!match || (match[1] === '' && match[2] === '')) return undefined;
+  const [, from, to] = match;
+  const start = from === '' ? Math.max(0, size - Number(to)) : Number(from);
+  const end = from !== '' && to !== '' ? Math.min(Number(to), size - 1) : size - 1;
+  return start <= end ? { start, end } : undefined;
+}
 
 /** The cached cover an `app-cover` URL names. Chromium collapses a host-less URL's path into the host, so covers use a throwaway host and keep the file name in the path. */
 export function coverFileOf(url: string): string {

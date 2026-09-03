@@ -9,7 +9,7 @@ import { emptyWorldTranslation, translateMissingMetadata, type MetadataTranslati
 import { buildChapterPrompt, CHAPTER_TEXT_TRANSLATION_SCHEMA, type ChapterTextTranslated } from './prompt';
 import { readChapterTranslation, readWorldTranslation, writeChapterText, writeChapterTranslation, writeWorldTranslation } from './store';
 
-export { chaptersDistributedAt, hasChapterText, listDistributedChapterNos, listTranslatedChapterNos, readChapterText, readChapterTranslation, readWorldTranslation, worldTranslationWrittenAt, writeChapterText, writeWorldTranslation } from './store';
+export { chapterTextFile, chaptersDistributedAt, hasChapterText, listDistributedChapterNos, listTranslatedChapterNos, readChapterText, readChapterTranslation, readWorldTranslation, worldTranslationWrittenAt, writeChapterText, writeWorldTranslation } from './store';
 
 /** Said by the screen's button and by the step, so both name the same fix. */
 const NOTHING_EXTRACTED_MESSAGE = 'Semantic Analysis has not extracted any chapter yet — there is nothing to translate.';

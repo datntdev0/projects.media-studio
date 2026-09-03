@@ -81,7 +81,7 @@ function ChapterPane({ workspaceId, chapter, speech }: { workspaceId: string; ch
   const [narration, setNarration] = useState<WorkspaceChapterNarration | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  // Re-read when a run writes the chapter's audio under the screen.
+  // Re-read when a run writes the chapter's audio under the screen, or the pick changes — each voice and pace has its own files.
   useEffect(() => {
     window.appWorkspaceNarrationApi
       .readChapter(workspaceId, chapter.idx)
@@ -90,7 +90,7 @@ function ChapterPane({ workspaceId, chapter, speech }: { workspaceId: string; ch
         setError(undefined);
       })
       .catch((err) => setError(errorMessage(err)));
-  }, [workspaceId, chapter.idx, chapter.narrated]);
+  }, [workspaceId, chapter.idx, chapter.narrated, speech.voice, speech.pace]);
 
   if (!narration) return <div className="text-muted" style={{ padding: 20.4, fontSize: 13 }}>{error ?? 'Opening the chapter…'}</div>;
 

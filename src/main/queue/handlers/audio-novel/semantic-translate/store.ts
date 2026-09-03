@@ -18,8 +18,8 @@ function chapterMetaFile(workspaceName: string, chapterNo: number): string {
   return path.join(getAppWorkspaceTranslationDir(workspaceName), `${chapterFileStem(chapterNo)}${META_EXT}`);
 }
 
-/** One chapter's translated text, e.g. `chapter-0001.vi.txt`. */
-function chapterTextFile(workspaceName: string, chapterNo: number): string {
+/** One chapter's translated text, e.g. `chapter-0001.vi.txt` — what Narration Speech reads aloud. */
+export function chapterTextFile(workspaceName: string, chapterNo: number): string {
   return path.join(getAppWorkspaceTranslationDir(workspaceName), `${chapterFileStem(chapterNo)}${TEXT_EXT}`);
 }
 
