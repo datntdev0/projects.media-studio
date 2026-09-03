@@ -53,7 +53,7 @@ export const WORKSPACE_STEP_NEEDS_LLM: Record<WorkspaceStepKey, boolean> = {
 };
 
 /** Said by the run submission and by the step itself, so both name the same fix. */
-export const NO_LLM_MESSAGE = 'Pick an LLM engine and model on the Semantic Analysis step before running it.';
+export const NO_LLM_MESSAGE = 'Pick an LLM engine and model on the Semantic Analysis or Semantic Translate step before running it.';
 
 /** What a step counts one of — a run scopes the chapter-counted steps from its chapter range. */
 export enum WorkspaceStepUnit {

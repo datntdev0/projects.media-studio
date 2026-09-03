@@ -65,10 +65,9 @@ export function TranslationCharacterTable({ characters, source, onChange }: Tran
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '22%' }}>Character</th>
-            <th style={{ width: '24%' }}>Alias</th>
-            <th style={{ width: '54%' }}>Body · face · features</th>
-            <th style={{ width: 40 }} />
+            <th style={{ width: '25%' }}>Character</th>
+            <th style={{ width: '40%' }}>Alias</th>
+            <th style={{ width: '35%' }}>Body · face · features</th>
           </tr>
         </thead>
         {characters.map((character, at) => {
@@ -94,9 +93,9 @@ export function TranslationCharacterTable({ characters, source, onChange }: Tran
                     <table className="table" style={{ margin: 0 }}>
                       <thead>
                         <tr>
-                          <th style={{ width: '26%' }}>Chapter · scene</th>
-                          <th style={{ width: '37%' }}>Clothing · style</th>
-                          <th style={{ width: '37%' }}>Relationships</th>
+                          <th style={{ width: '20%' }}>Chapter · scene</th>
+                          <th style={{ width: '30%' }}>Clothing · style</th>
+                          <th style={{ width: '50%' }}>Relationships</th>
                           <th style={{ width: 40 }} />
                         </tr>
                       </thead>

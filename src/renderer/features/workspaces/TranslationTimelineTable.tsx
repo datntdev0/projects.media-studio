@@ -36,9 +36,9 @@ export function TranslationTimelineTable({ timelines, source, onChange }: Transl
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: '14%' }}>Chapter · scene</th>
-            <th style={{ width: '40%' }}>Summary</th>
-            <th style={{ width: '26%' }}>Context</th>
+            <th style={{ width: '15%' }}>Chapter · scene</th>
+            <th style={{ width: '50%' }}>Summary</th>
+            <th style={{ width: '25%' }}>Context</th>
             <th style={{ width: '20%' }}>Participants</th>
             <th style={{ width: 40 }} />
           </tr>

@@ -72,7 +72,7 @@ export function TranslationChapterPane({ workspaceId, chapters }: TranslationCha
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-      <div style={{ width: 280, flex: 'none', borderRight: '1px solid var(--color-divider)', overflow: 'auto' }}>
+      <div style={{ width: 360, flex: 'none', borderRight: '1px solid var(--color-divider)', overflow: 'auto' }}>
         {chapters.map((entry) => {
           const tag = chapterRailTagOf(entry);
           return (

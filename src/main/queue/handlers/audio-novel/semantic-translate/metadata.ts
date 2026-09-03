@@ -1,12 +1,17 @@
 import { logger } from '@/main/helpers/logger';
 import { runLlmJson } from '@/main/helpers/llm-cli';
-import type { CharacterRelationship, WorldBible, WorldCharacter } from '@/shared/app-workspace-extraction';
+import type { CharacterRelationship, WorldBible, WorldCharacter, WorldGlossaryTerm } from '@/shared/app-workspace-extraction';
 import type { TranslatedName, WorldTranslation, WorldTranslationCharacter, WorldTranslationTimeline, WorldTranslatedGlossaryTerm } from '@/shared/app-workspace-translation';
 import type { LlmSettings } from '@/shared/llm';
-import { buildCharactersPrompt, buildGlossaryPrompt, buildTimelinesPrompt, CHARACTERS_TRANSLATION_SCHEMA, GLOSSARY_TRANSLATION_SCHEMA, TIMELINES_TRANSLATION_SCHEMA, type CharacterSource, type CharacterTranslated, type CharactersTranslated, type GlossaryTranslated, type KeyedRelationship, type TimelinesTranslated } from './prompt';
+import { APPEARANCE_TRANSLATION_SCHEMA, buildAppearancePrompt, buildCharactersPrompt, buildGlossaryPrompt, buildRelationshipsPrompt, buildTimelinesPrompt, CHARACTERS_TRANSLATION_SCHEMA, GLOSSARY_TRANSLATION_SCHEMA, RELATIONSHIPS_TRANSLATION_SCHEMA, TIMELINES_TRANSLATION_SCHEMA, type AppearanceRow, type AppearanceRowsTranslated, type CharacterCoreSource, type CharacterCoreTranslated, type CharactersTranslated, type GlossaryTranslated, type RelationshipRow, type RelationshipRowsTranslated, type TimelinesTranslated } from './prompt';
 
-/** How many entries one call translates — enough to keep names consistent within a call, few enough to keep it short. */
-const BATCH_SIZE = 25;
+/**
+ * How much one call is asked to translate, as the JSON it is sent. The answer
+ * runs about as long as the question, and a model asked for tens of thousands of
+ * tokens in one go answers with a fraction of them — so batches are sized by
+ * payload, never by count.
+ */
+const MAX_BATCH_CHARS = 6_000;
 
 /** What one metadata call needs besides its entries. */
 export interface MetadataTranslationContext {
@@ -15,12 +20,37 @@ export interface MetadataTranslationContext {
   sourceLanguage: string;
 }
 
+/** Runs after every batch that lands, so a caller can persist it before the next call. */
+type OnBatch = (world: WorldTranslation) => void;
+
+/** One character's relationships in one scene — translated together so the scene is never half done. */
+interface RelationshipGroup {
+  character: string;
+  idx: string;
+  entries: CharacterRelationship[];
+}
+
 export function emptyWorldTranslation(): WorldTranslation {
   return { characters: [], timelines: [], glossary: [] };
 }
 
+/** Items in order, cut into batches that each fit the payload budget — an item too big for one batch gets a batch of its own. */
 function batchesOf<T>(items: T[]): T[][] {
-  return Array.from({ length: Math.ceil(items.length / BATCH_SIZE) }, (_unused, at) => items.slice(at * BATCH_SIZE, (at + 1) * BATCH_SIZE));
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let size = 0;
+  for (const item of items) {
+    const itemSize = JSON.stringify(item).length;
+    if (batch.length > 0 && size + itemSize > MAX_BATCH_CHARS) {
+      batches.push(batch);
+      batch = [];
+      size = 0;
+    }
+    batch.push(item);
+    size += itemSize;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
 }
 
 /** Every name the translation has decided so far — characters and their aliases. */
@@ -28,97 +58,144 @@ export function decidedNamesOf(world: WorldTranslation): TranslatedName[] {
   return world.characters.flatMap((character) => [{ name: character.name, nameOriginal: character.nameOriginal }, ...character.alias]);
 }
 
-/**
- * What of a character is still to be translated: the whole of them when they are
- * new, otherwise only the keyed details later chapters have added. Undefined when
- * nothing is missing.
- */
-function untranslatedPartOf(source: WorldCharacter, existing: WorldTranslationCharacter | undefined): CharacterSource | undefined {
-  const appearance = Object.entries(source.appearance).filter(([idx]) => !existing || !(idx in existing.appearance)).map(([idx, value]) => ({ idx, value }));
-  const relationships = Object.entries(source.relationships).filter(([idx]) => !existing || !(idx in existing.relationships)).flatMap(([idx, entries]) => entries.map((entry) => ({ idx, ...entry })));
-  if (existing && appearance.length === 0 && relationships.length === 0) return undefined;
-  return { name: source.name, alias: existing ? [] : source.alias, body: existing ? '' : source.body, appearance, relationships };
-}
-
-function groupRelationships(rows: KeyedRelationship[]): Record<string, CharacterRelationship[]> {
-  const grouped: Record<string, CharacterRelationship[]> = {};
-  for (const row of rows) {
-    (grouped[row.idx] ??= []).push({ target: row.target, type: row.type });
-  }
-  return grouped;
-}
-
-/** Folds a translated character into the world translation — a new entry, or the missing details of the one already there. */
-function mergeCharacter(world: WorldTranslation, source: WorldCharacter, translated: CharacterTranslated): void {
-  const existing = world.characters.find((candidate) => candidate.nameOriginal === source.name);
-  const merged: WorldTranslationCharacter = existing ?? {
-    name: translated.name || source.name,
-    nameOriginal: source.name,
-    alias: source.alias.map((alias) => ({ name: translated.alias.find((pair) => pair.nameOriginal === alias)?.name ?? alias, nameOriginal: alias })),
-    weight: source.weight,
-    body: translated.body,
-    appearance: {},
-    relationships: {},
-  };
-  if (!existing) world.characters.push(merged);
-
-  for (const row of translated.appearance) {
-    if (!(row.idx in merged.appearance)) merged.appearance[row.idx] = row.value;
-  }
-  for (const [idx, entries] of Object.entries(groupRelationships(translated.relationships))) {
-    if (!(idx in merged.relationships)) merged.relationships[idx] = entries;
-  }
-}
-
 /** The translated entry for a source entry — matched by what it echoes back, falling back to its position in the batch. */
-function pairUp<S, T>(sources: S[], translated: T[], originalOf: (source: S) => string, echoedOf: (entry: T) => string): [S, T][] {
+function pairUp<S, T>(sources: S[], translated: T[], keyOf: (source: S) => string, echoedOf: (entry: T) => string): [S, T][] {
   return sources.flatMap((source, at) => {
-    const match = translated.find((entry) => echoedOf(entry) === originalOf(source)) ?? translated[at];
+    const match = translated.find((entry) => echoedOf(entry) === keyOf(source)) ?? translated[at];
     return match ? [[source, match] as [S, T]] : [];
   });
 }
 
-async function translateCharacters(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext): Promise<void> {
-  const pending = source.characters.flatMap((character) => {
-    const part = untranslatedPartOf(character, world.characters.find((candidate) => candidate.nameOriginal === character.name));
-    return part ? [{ character, part }] : [];
-  });
+/** What of a section is still to be translated — an entry already in the world translation is skipped, edits and all. */
+function pendingOf<S>(section: string, entries: S[], isKnown: (entry: S) => boolean): S[] {
+  const pending = entries.filter((entry) => !isKnown(entry));
+  logger.info(`[translation] ${section}: ${entries.length - pending.length} already translated, ${pending.length} to translate`);
+  return pending;
+}
 
+/** Sends the pending entries of one section in payload-sized batches, folding each answer in before the next call. */
+async function translateSection<S, T>(world: WorldTranslation, pending: S[], ask: (batch: S[]) => Promise<T[]>, merge: (source: S, translated: T | undefined) => void, keyOf: (source: S) => string, echoedOf: (entry: T) => string, onBatch: OnBatch): Promise<void> {
   for (const batch of batchesOf(pending)) {
-    const prompt = buildCharactersPrompt(batch.map((entry) => entry.part), decidedNamesOf(world), context.language, context.sourceLanguage);
-    const result = (await runLlmJson(prompt, CHARACTERS_TRANSLATION_SCHEMA, context.llm)) as CharactersTranslated;
-    for (const [entry, translated] of pairUp(batch, result.characters, (candidate) => candidate.character.name, (candidate) => candidate.nameOriginal)) {
-      mergeCharacter(world, entry.character, translated);
-    }
+    const answered = await ask(batch);
+    const paired = new Map(pairUp(batch, answered, keyOf, echoedOf));
+    // An entry the model left out keeps its original wording, so no later pass asks for it again.
+    for (const source of batch) merge(source, paired.get(source));
+    onBatch(world);
   }
 }
 
-async function translateTimelines(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext): Promise<void> {
+function characterOf(world: WorldTranslation, nameOriginal: string): WorldTranslationCharacter | undefined {
+  return world.characters.find((candidate) => candidate.nameOriginal === nameOriginal);
+}
+
+/** Step one — every character's own facts; the names settled here are held to by everything after. */
+async function translateCharacterCores(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
+  const pending = pendingOf('characters', source.characters, (character) => characterOf(world, character.name) !== undefined);
+  await translateSection<WorldCharacter, CharacterCoreTranslated>(
+    world,
+    pending,
+    async (batch) => {
+      const cores: CharacterCoreSource[] = batch.map((character) => ({ name: character.name, alias: character.alias, body: character.body }));
+      const result = (await runLlmJson(buildCharactersPrompt(cores, decidedNamesOf(world), context.language, context.sourceLanguage), CHARACTERS_TRANSLATION_SCHEMA, context.llm)) as CharactersTranslated;
+      return result.characters;
+    },
+    (character, translated) => {
+      world.characters.push({
+        name: translated?.name || character.name,
+        nameOriginal: character.name,
+        alias: character.alias.map((alias) => ({ name: translated?.alias.find((pair) => pair.nameOriginal === alias)?.name ?? alias, nameOriginal: alias })),
+        weight: character.weight,
+        body: translated?.body || character.body,
+        appearance: {},
+        relationships: {},
+      });
+    },
+    (character) => character.name,
+    (translated) => translated.nameOriginal,
+    onBatch,
+  );
+}
+
+/** Step two — what each character wears in each scene, one row per scene. */
+async function translateAppearance(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
+  const rows: AppearanceRow[] = source.characters.flatMap((character) => Object.entries(character.appearance).map(([idx, value]) => ({ character: character.name, idx, value })));
+  const pending = pendingOf('appearance', rows, (row) => characterOf(world, row.character)?.appearance[row.idx] !== undefined);
+  const rowKey = (row: AppearanceRow): string => `${row.character}|${row.idx}`;
+
+  await translateSection<AppearanceRow, AppearanceRow>(
+    world,
+    pending,
+    async (batch) => ((await runLlmJson(buildAppearancePrompt(batch, decidedNamesOf(world), context.language, context.sourceLanguage), APPEARANCE_TRANSLATION_SCHEMA, context.llm)) as AppearanceRowsTranslated).rows,
+    (row, translated) => {
+      const character = characterOf(world, row.character);
+      if (character) character.appearance[row.idx] = translated?.value || row.value;
+    },
+    rowKey,
+    rowKey,
+    onBatch,
+  );
+}
+
+/** Step three — who each character is to whom in each scene, one row per relationship, a scene's rows kept in one batch. */
+async function translateRelationships(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
+  const groups: RelationshipGroup[] = source.characters.flatMap((character) => Object.entries(character.relationships).map(([idx, entries]) => ({ character: character.name, idx, entries })));
+  const pending = pendingOf('relationships', groups, (group) => characterOf(world, group.character)?.relationships[group.idx] !== undefined);
+  const rowKey = (row: RelationshipRow): string => `${row.character}|${row.idx}|${row.targetOriginal}`;
+  const rowOf = (group: RelationshipGroup, entry: CharacterRelationship): RelationshipRow => ({ character: group.character, idx: group.idx, targetOriginal: entry.target, target: entry.target, type: entry.type });
+
+  for (const batch of batchesOf(pending)) {
+    const rows = batch.flatMap((group) => group.entries.map((entry) => rowOf(group, entry)));
+    const result = (await runLlmJson(buildRelationshipsPrompt(rows, decidedNamesOf(world), context.language, context.sourceLanguage), RELATIONSHIPS_TRANSLATION_SCHEMA, context.llm)) as RelationshipRowsTranslated;
+    const translated = new Map(pairUp(rows, result.rows, rowKey, rowKey).map(([row, answer]) => [rowKey(row), answer]));
+
+    for (const group of batch) {
+      const character = characterOf(world, group.character);
+      if (!character) continue;
+      character.relationships[group.idx] = group.entries.map((entry) => {
+        const row = translated.get(rowKey(rowOf(group, entry)));
+        return { target: row?.target || entry.target, type: row?.type || entry.type };
+      });
+    }
+    onBatch(world);
+  }
+}
+
+async function translateTimelines(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
   const known = new Set(world.timelines.map((timeline) => timeline.idx));
-  const pending: WorldTranslationTimeline[] = source.timelines.filter((timeline) => !known.has(timeline.idx));
+  const pending = pendingOf('timelines', source.timelines, (timeline) => known.has(timeline.idx));
 
-  for (const batch of batchesOf(pending)) {
-    const prompt = buildTimelinesPrompt(batch, decidedNamesOf(world), context.language, context.sourceLanguage);
-    const result = (await runLlmJson(prompt, TIMELINES_TRANSLATION_SCHEMA, context.llm)) as TimelinesTranslated;
-    for (const [timeline, translated] of pairUp(batch, result.timelines, (candidate) => candidate.idx, (candidate) => candidate.idx)) {
-      world.timelines.push({ ...translated, idx: timeline.idx });
-    }
-  }
-  world.timelines.sort((left, right) => left.idx.localeCompare(right.idx));
+  await translateSection<WorldTranslationTimeline, WorldTranslationTimeline>(
+    world,
+    pending,
+    async (batch) => ((await runLlmJson(buildTimelinesPrompt(batch, decidedNamesOf(world), context.language, context.sourceLanguage), TIMELINES_TRANSLATION_SCHEMA, context.llm)) as TimelinesTranslated).timelines,
+    (timeline, translated) => {
+      world.timelines.push({ ...(translated ?? timeline), idx: timeline.idx });
+      world.timelines.sort((left, right) => left.idx.localeCompare(right.idx));
+    },
+    (timeline) => timeline.idx,
+    (translated) => translated.idx,
+    onBatch,
+  );
 }
 
-async function translateGlossary(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext): Promise<void> {
+async function translateGlossary(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
   const known = new Set(world.glossary.map((term) => term.termOriginal));
-  const pending = source.glossary.filter((term) => !known.has(term.term));
+  const pending = pendingOf('glossary', source.glossary, (term) => known.has(term.term));
 
-  for (const batch of batchesOf(pending)) {
-    const prompt = buildGlossaryPrompt(batch.map((term) => ({ termOriginal: term.term, term: term.term, category: term.category, definition: term.definition })), decidedNamesOf(world), context.language, context.sourceLanguage);
-    const result = (await runLlmJson(prompt, GLOSSARY_TRANSLATION_SCHEMA, context.llm)) as GlossaryTranslated;
-    for (const [term, translated] of pairUp(batch, result.glossary, (candidate) => candidate.term, (candidate) => candidate.termOriginal)) {
-      const entry: WorldTranslatedGlossaryTerm = { ...translated, termOriginal: term.term, chapterCount: term.chapterCount };
-      world.glossary.push(entry);
-    }
-  }
+  await translateSection<WorldGlossaryTerm, WorldTranslatedGlossaryTerm>(
+    world,
+    pending,
+    async (batch) => {
+      const terms = batch.map((term) => ({ termOriginal: term.term, term: term.term, category: term.category, definition: term.definition }));
+      return ((await runLlmJson(buildGlossaryPrompt(terms, decidedNamesOf(world), context.language, context.sourceLanguage), GLOSSARY_TRANSLATION_SCHEMA, context.llm)) as GlossaryTranslated).glossary.map((entry) => ({ ...entry, chapterCount: 0 }));
+    },
+    (term, translated) => {
+      world.glossary.push({ termOriginal: term.term, term: translated?.term || term.term, category: translated?.category || term.category, definition: translated?.definition || term.definition, chapterCount: term.chapterCount });
+    },
+    (term) => term.term,
+    (translated) => translated.termOriginal,
+    onBatch,
+  );
 }
 
 /** The facts that are counted rather than translated follow the source on every pass. */
@@ -132,19 +209,24 @@ function syncCounts(world: WorldTranslation, source: WorldBible): void {
 }
 
 /**
- * Brings a world translation up to date with the world bible: characters first,
- * so the names they settle can be held to in the scenes and terms that follow,
- * each section in its own calls. Only what is not translated yet is sent, so a
- * second pass after more chapters are analysed costs only the new entries and
- * keeps every edit made to the first. `onSection` runs after each section so a
- * caller can persist what has landed before the next one starts.
+ * Brings a world translation up to date with the world bible: the characters
+ * themselves first, so the names they settle can be held to in everything after;
+ * then their per-scene outfits and relationships as rows, since a main character
+ * carries hundreds of them and no single answer could hold them all; then the
+ * scenes and the terms. Whatever the translation already has — a character by
+ * its original name, a scene detail by its key, a timeline by its id, a term by
+ * its original — is skipped, so a second pass costs only what is new and keeps
+ * every edit. `onBatch` runs after every batch that lands, so a failure part-way
+ * loses one call's worth at most.
  */
-export async function translateMissingMetadata(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onSection: (world: WorldTranslation) => void): Promise<void> {
-  const sections = [translateCharacters, translateTimelines, translateGlossary];
-  for (const translate of sections) {
-    await translate(world, source, context);
-    syncCounts(world, source);
-    onSection(world);
-  }
+export async function translateMissingMetadata(world: WorldTranslation, source: WorldBible, context: MetadataTranslationContext, onBatch: OnBatch): Promise<void> {
+  await translateCharacterCores(world, source, context, onBatch);
+  await translateAppearance(world, source, context, onBatch);
+  await translateRelationships(world, source, context, onBatch);
+  await translateTimelines(world, source, context, onBatch);
+  await translateGlossary(world, source, context, onBatch);
+
+  syncCounts(world, source);
+  onBatch(world);
   logger.info(`[translation] world translation covers ${world.characters.length} character(s), ${world.timelines.length} timeline(s), ${world.glossary.length} term(s)`);
 }

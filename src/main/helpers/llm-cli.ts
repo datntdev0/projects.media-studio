@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { config } from './config';
+import { getAppTempDir } from './paths';
 import { LlmEngine, type LlmSettings } from '@/shared/llm';
 import { logger } from './logger';
 
@@ -62,10 +62,11 @@ function cliFailure(command: string, code: number | null, signal: NodeJS.Signals
 
 /** Runs the CLI with `prompt` on stdin, resolving to everything it wrote to stdout. */
 function spawnCli(command: string, args: string[], prompt: string): Promise<string> {
+  logger.debug(`[llm-cli] spawning CLI: ${command} ${args.join(' ')}`);
   const { file, argv, verbatim } = cliLaunch(command, args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(file, argv, { cwd: os.tmpdir(), timeout: config.llm.timeoutMs, windowsHide: true, windowsVerbatimArguments: verbatim });
+    const child = spawn(file, argv, { cwd: getAppTempDir(), timeout: config.llm.timeoutMs, windowsHide: true, windowsVerbatimArguments: verbatim });
     let out = '';
     let stderr = '';
     child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
@@ -103,8 +104,9 @@ function parseCodexUsage(stdout: string): LlmUsage | undefined {
 async function runCodex(prompt: string, schema: object, model: string): Promise<unknown> {
   const startTime = new Date();
   const stamp = crypto.randomUUID();
-  const outFile = path.join(os.tmpdir(), `codex-out-${stamp}.txt`);
-  const schemaFile = path.join(os.tmpdir(), `codex-schema-${stamp}.json`);
+  const tempDir = getAppTempDir();
+  const outFile = path.join(tempDir, `codex-out-${stamp}.txt`);
+  const schemaFile = path.join(tempDir, `codex-schema-${stamp}.json`);
   fs.writeFileSync(schemaFile, JSON.stringify(schema), 'utf8');
 
   try {

@@ -70,9 +70,21 @@ export function getAppBaseDir(): string {
   return path.join(root, config.appDir);
 }
 
+/** A stored path as it reads in a log line — relative to the app's own base dir, since the absolute prefix says nothing. */
+export function appRelativePath(target: string): string {
+  return path.relative(getAppBaseDir(), target).split(path.sep).join('/');
+}
+
 /** The `data` root every stored asset hangs off — covers, and the per-item chapter files. */
 export function getAppDataDir(): string {
   return path.join(getAppBaseDir(), 'data');
+}
+
+/** Scratch files that outlive nothing — what the LLM CLIs run from and write their answers to. Created on demand. */
+export function getAppTempDir(): string {
+  const dir = path.join(getAppDataDir(), 'temp');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 /** Where scraped binary assets (e.g. cover images) are cached on disk, keyed by file name. */
@@ -98,11 +110,6 @@ export function getAppWorkspaceExtractionDir(workspaceName: string): string {
 /** Where the Semantic Translate step writes the translated world bible, the chapter metadata distributed from it, and the translated chapter texts. */
 export function getAppWorkspaceTranslationDir(workspaceName: string): string {
   return path.join(getAppWorkspaceDir(workspaceName), 'translations', TRANSLATION_LANGUAGE);
-}
-
-/** A stored path as it reads in a log line — relative to the app's own base dir, since the absolute prefix says nothing. */
-export function appRelativePath(target: string): string {
-  return path.relative(getAppBaseDir(), target).split(path.sep).join('/');
 }
 
 /** One chapter of a workspace's working copy — its manifest entry and the body on disk beside it. */
