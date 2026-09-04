@@ -106,18 +106,46 @@ export function getAppWorkspaceNarrationDir(workspaceName: string): string {
   return path.join(getAppWorkspaceDir(workspaceName), NARRATIONS_DIR);
 }
 
+const ILLUSTRATIONS_DIR = 'illustrations';
+
+/** Where the Frame Illustration step writes the character design, its images, and the frames cut per chapter. */
+export function getAppWorkspaceIllustrationDir(workspaceName: string): string {
+  return path.join(getAppWorkspaceDir(workspaceName), ILLUSTRATIONS_DIR);
+}
+
 /** Custom scheme the renderer streams narration audio through — `app-narration://<workspace slug>/<lang>/<file>`. */
 export const NARRATION_PROTOCOL = 'app-narration';
 
-export function narrationFileUrl(workspaceName: string, language: string, fileName: string): string {
-  return `${NARRATION_PROTOCOL}://${directorySlug(workspaceName, 'workspace')}/${language}/${encodeURIComponent(fileName)}`;
+/** Custom scheme the renderer loads illustration images through — `app-illustration://<workspace slug>/characters/<file>`. */
+export const ILLUSTRATION_PROTOCOL = 'app-illustration';
+
+/** A file of a workspace's own step folder as a URL the renderer can load — the slug is the host, the rest the path under that folder. */
+function workspaceFileUrl(scheme: string, workspaceName: string, segments: string[]): string {
+  const tail = segments.map((segment) => encodeURIComponent(segment)).join('/');
+  return `${scheme}://${directorySlug(workspaceName, 'workspace')}/${tail}`;
 }
 
-/** The file an `app-narration` URL names — the slug is the folder as it is on disk, the path the language folder and the file's bare name. */
-export function narrationFileOf(url: string): string {
+/** The file such a URL names — the host is the workspace folder as it is on disk, the path the rest under `subDir`. */
+function workspaceFileOf(url: string, subDir: string): string {
   const { hostname, pathname } = new URL(url);
   const segments = decodeURIComponent(pathname).split('/').filter((segment) => segment !== '' && segment !== '.' && segment !== '..');
-  return path.join(getAppDataDir(), 'workspaces', hostname, NARRATIONS_DIR, ...segments);
+  return path.join(getAppDataDir(), 'workspaces', hostname, subDir, ...segments);
+}
+
+export function narrationFileUrl(workspaceName: string, language: string, fileName: string): string {
+  return workspaceFileUrl(NARRATION_PROTOCOL, workspaceName, [language, fileName]);
+}
+
+export function narrationFileOf(url: string): string {
+  return workspaceFileOf(url, NARRATIONS_DIR);
+}
+
+export function illustrationFileUrl(workspaceName: string, segments: string[]): string {
+  return workspaceFileUrl(ILLUSTRATION_PROTOCOL, workspaceName, segments);
+}
+
+export function illustrationFileOf(url: string): string {
+  return workspaceFileOf(url, ILLUSTRATIONS_DIR);
 }
 
 /** One chapter of a workspace's working copy — its manifest entry and the body on disk beside it. */

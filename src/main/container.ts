@@ -9,6 +9,7 @@ import { createAppWorkspaceRunManager, type AppWorkspaceRunManager } from './man
 import { createAppWorkspaceExtractionManager, type AppWorkspaceExtractionManager } from './managers/app-workspace-extraction.manager';
 import { createAppWorkspaceTranslationManager, type AppWorkspaceTranslationManager } from './managers/app-workspace-translation.manager';
 import { createAppWorkspaceNarrationManager, type AppWorkspaceNarrationManager } from './managers/app-workspace-narration.manager';
+import { createAppWorkspaceIllustrationManager, type AppWorkspaceIllustrationManager } from './managers/app-workspace-illustration.manager';
 import { createMessageBus, type MessageBus } from './queue/message-bus';
 
 export interface Managers {
@@ -21,6 +22,7 @@ export interface Managers {
   appWorkspaceExtraction: AppWorkspaceExtractionManager;
   appWorkspaceTranslation: AppWorkspaceTranslationManager;
   appWorkspaceNarration: AppWorkspaceNarrationManager;
+  appWorkspaceIllustration: AppWorkspaceIllustrationManager;
 }
 
 /**
@@ -52,6 +54,7 @@ export function createContainer(): Container {
     appWorkspaceExtraction: createAppWorkspaceExtractionManager(db),
     appWorkspaceTranslation: createAppWorkspaceTranslationManager(db),
     appWorkspaceNarration: createAppWorkspaceNarrationManager(db),
+    appWorkspaceIllustration: createAppWorkspaceIllustrationManager(db),
   };
 
   container = { db, bus, manager, scheduledJobs: [] };

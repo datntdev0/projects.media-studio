@@ -22,6 +22,11 @@ export enum CharacterWeight {
 /** Strongest first, so merging two readings of the same character is a matter of taking the lower index. */
 export const CHARACTER_WEIGHT_ORDER: CharacterWeight[] = [CharacterWeight.Main, CharacterWeight.Supporting, CharacterWeight.Minor];
 
+/** The chapter number a `chapterXXXX-timelineYYYY` scene id sits in, 0 when the id is not one. */
+export function sceneChapterNoOf(scene: string): number {
+  return Number(/^chapter(\d+)/.exec(scene)?.[1] ?? 0);
+}
+
 export interface CharacterRelationship {
   target: string;
   type: string;

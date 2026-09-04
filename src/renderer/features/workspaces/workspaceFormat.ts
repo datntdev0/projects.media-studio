@@ -87,16 +87,16 @@ const UNIT_LABEL: Record<WorkspaceStepUnit, string> = {
   [WorkspaceStepUnit.Part]: 'Sub-step: an exporting part',
 };
 
-/** What one sub-step of a step covers. Frame Illustration has no unit yet — it is not released. */
+/** What one sub-step of a step covers. */
 export function stepUnitLabelOf(key: WorkspaceStepKey): string {
-  return key === WorkspaceStepKey.FrameIllustration ? 'Coming soon' : UNIT_LABEL[WORKSPACE_STEP_UNIT[key]];
+  return UNIT_LABEL[WORKSPACE_STEP_UNIT[key]];
 }
 
 export const STEP_NOTE: Record<WorkspaceStepKey, string> = {
   [WorkspaceStepKey.SemanticAnalysis]: 'An LLM extracts characters, timelines and glossary per chapter, merged into global metadata.',
   [WorkspaceStepKey.SemanticTranslate]: 'A chapter can only be translated once its metadata is extracted.',
   [WorkspaceStepKey.NarrationSpeech]: 'Text-to-speech per chapter — a chapter needs its translation before speech.',
-  [WorkspaceStepKey.FrameIllustration]: 'Scene illustrations generated from chapter metadata.',
+  [WorkspaceStepKey.FrameIllustration]: 'Characters are designed once from the translated metadata — a chapter needs its narration before its frames.',
   [WorkspaceStepKey.Export]: 'Chapters are grouped into parts — export starts when narration completes.',
 };
 

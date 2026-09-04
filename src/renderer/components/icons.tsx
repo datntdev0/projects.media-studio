@@ -230,3 +230,21 @@ export const CalendarIcon = icon(
 );
 
 export const CloseIcon = icon(<path d="M18 6 6 18M6 6l12 12" />);
+
+export const SparkleIcon = icon(
+  <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" />,
+);
+
+export const RefreshIcon = icon(
+  <>
+    <path d="M21 12a9 9 0 1 1-3-6.7" />
+    <path d="M21 3v6h-6" />
+  </>,
+);
+
+export const StoryboardIcon = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" />
+    <path d="M3 9h18M9 21V9" />
+  </>,
+);

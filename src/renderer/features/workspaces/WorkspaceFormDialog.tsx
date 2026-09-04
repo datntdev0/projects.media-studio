@@ -82,6 +82,7 @@ export function WorkspaceFormDialog({ workspace, novels, onClose, onCreate, onUp
   const [step, setStep] = useState(1);
   const [preset, setPreset] = useState<WorkspacePreset>(WorkspacePreset.AudioNovel);
   const [translateEnabled, setTranslateEnabled] = useState(true);
+  const [illustrateEnabled, setIllustrateEnabled] = useState(true);
   const [libraryId, setLibraryId] = useState(novels[0]?.id ?? '');
   const [name, setName] = useState(workspace?.name ?? '');
   const [description, setDescription] = useState(workspace?.description ?? '');
@@ -92,7 +93,7 @@ export function WorkspaceFormDialog({ workspace, novels, onClose, onCreate, onUp
   const novel = novels.find((item) => item.id === libraryId);
   const metadata = novel?.novelMetadata ?? undefined;
   const missingContent = metadata !== undefined && metadata.downloadedCount < metadata.discoveredCount;
-  const pipeline = plannedStepsOf(preset, translateEnabled);
+  const pipeline = plannedStepsOf(preset, { translate: translateEnabled, illustrate: illustrateEnabled });
 
   const canAdvance = isEdit || step === 3 ? name.trim() !== '' : step === 2 ? novel !== undefined : true;
 
@@ -110,7 +111,7 @@ export function WorkspaceFormDialog({ workspace, novels, onClose, onCreate, onUp
       if (workspace) {
         await onUpdate(workspace.id, { name: name.trim(), description: description.trim() });
       } else {
-        await onCreate({ name: name.trim(), description: description.trim(), preset, libraryId, translateEnabled });
+        await onCreate({ name: name.trim(), description: description.trim(), preset, libraryId, translateEnabled, illustrateEnabled });
       }
       onClose();
     } catch (err) {
@@ -236,9 +237,9 @@ export function WorkspaceFormDialog({ workspace, novels, onClose, onCreate, onUp
                     <OptionCard
                       Icon={IllustrationIcon}
                       title="Illustration"
-                      hint="Generates a frame per scene to accompany the narration. Coming soon."
-                      checked={false}
-                      disabled
+                      hint="Designs the characters, then draws a frame per scene along each chapter's narration."
+                      checked={illustrateEnabled}
+                      onToggle={() => setIllustrateEnabled(!illustrateEnabled)}
                     />
                   </div>
                 </div>
@@ -250,7 +251,7 @@ export function WorkspaceFormDialog({ workspace, novels, onClose, onCreate, onUp
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {WORKSPACE_PRESET_STEPS[preset].map(({ key, idx, availability }) => {
                       const on = pipeline.some((planned) => planned.key === key);
-                      const tag = availability === StepAvailability.Soon ? 'Soon' : key === WorkspaceStepKey.SemanticTranslate ? (on ? 'On' : 'Off') : 'Required';
+                      const tag = availability === StepAvailability.Soon ? 'Soon' : availability === StepAvailability.Optional ? (on ? 'On' : 'Off') : 'Required';
                       const tagClass = tag === 'On' ? 'tag-accent' : tag === 'Required' ? 'tag-neutral' : 'tag-outline';
                       return (
                         <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, opacity: on ? 1 : 0.5 }}>

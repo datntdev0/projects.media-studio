@@ -5,6 +5,7 @@
 
 import type { LlmSettings } from './llm';
 import type { SpeechSettings } from './app-workspace-narration';
+import type { ArtStyle } from './app-workspace-illustration';
 
 export enum WorkspacePreset {
   AudioNovel = 'audio-novel',
@@ -49,7 +50,7 @@ export const WORKSPACE_STEP_NEEDS_LLM: Record<WorkspaceStepKey, boolean> = {
   [WorkspaceStepKey.SemanticAnalysis]: true,
   [WorkspaceStepKey.SemanticTranslate]: true,
   [WorkspaceStepKey.NarrationSpeech]: false,
-  [WorkspaceStepKey.FrameIllustration]: false,
+  [WorkspaceStepKey.FrameIllustration]: true,
   [WorkspaceStepKey.Export]: false,
 };
 
@@ -89,17 +90,24 @@ export const WORKSPACE_PRESET_STEPS: Record<WorkspacePreset, WorkspaceStepDefini
     { key: WorkspaceStepKey.SemanticAnalysis, idx: 1, availability: StepAvailability.Required },
     { key: WorkspaceStepKey.SemanticTranslate, idx: 2, availability: StepAvailability.Optional },
     { key: WorkspaceStepKey.NarrationSpeech, idx: 3, availability: StepAvailability.Required },
-    { key: WorkspaceStepKey.FrameIllustration, idx: 4, availability: StepAvailability.Soon },
+    { key: WorkspaceStepKey.FrameIllustration, idx: 4, availability: StepAvailability.Optional },
     { key: WorkspaceStepKey.Export, idx: 5, availability: StepAvailability.Required },
   ],
   [WorkspacePreset.VideoRecap]: [],
 };
 
+/** Which optional steps a new workspace runs — the pipeline is fixed after that. */
+export interface WorkspaceStepToggles {
+  translate: boolean;
+  illustrate: boolean;
+}
+
 /** The steps a preset runs once the optional ones are toggled as given — what a workspace gets rows for. */
-export function plannedStepsOf(preset: WorkspacePreset, translateEnabled: boolean): WorkspaceStepDefinition[] {
+export function plannedStepsOf(preset: WorkspacePreset, toggles: WorkspaceStepToggles): WorkspaceStepDefinition[] {
   return WORKSPACE_PRESET_STEPS[preset].filter((step) => {
     if (step.availability === StepAvailability.Soon) return false;
-    if (step.key === WorkspaceStepKey.SemanticTranslate) return translateEnabled;
+    if (step.key === WorkspaceStepKey.SemanticTranslate) return toggles.translate;
+    if (step.key === WorkspaceStepKey.FrameIllustration) return toggles.illustrate;
     return true;
   });
 }
@@ -136,6 +144,8 @@ export interface AppWorkspace {
   llm: LlmSettings | null;
   /** The voice and pace Narration Speech reads with — every workspace starts on the step's defaults. */
   speech: SpeechSettings;
+  /** The style Frame Illustration draws in, which scopes the images it writes. */
+  artStyle: ArtStyle;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
   createdAt: number;
@@ -151,6 +161,7 @@ export interface AppWorkspaceDraft {
   status: WorkspaceStatus;
   llm: LlmSettings | null;
   speech: SpeechSettings;
+  artStyle: ArtStyle;
   steps: WorkspaceStep[];
   lastRunAt: number | null;
 }
@@ -176,6 +187,7 @@ export interface CreateAppWorkspaceInput {
   preset: WorkspacePreset;
   libraryId: string;
   translateEnabled: boolean;
+  illustrateEnabled: boolean;
 }
 
 /** What a caller asks to change — a field left out keeps its current value. */

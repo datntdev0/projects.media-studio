@@ -19,10 +19,19 @@ export interface SpeechConfig {
   batchSize: number;
 }
 
+/** How images are generated — see src/main/helpers/image-cli.ts. */
+export interface ImageConfig {
+  /** The codex model its image tool is driven from; blank follows the first model configured for codex. */
+  model: string;
+  /** Drawing an image takes far longer than answering with text. */
+  timeoutMs: number;
+}
+
 export interface AppConfig {
   appDir: string;
   llm: LlmConfig;
   speech: SpeechConfig;
+  image: ImageConfig;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -39,6 +48,10 @@ const DEFAULT_CONFIG: AppConfig = {
     device: 'auto',
     batchSize: 32,
   },
+  image: {
+    model: '',
+    timeoutMs: 900_000,
+  },
 };
 
 /** Plain JSON isn't bundled into main.js by Vite — it ships as a packaged extraResource instead (see forge.config.ts), the same way migration SQL does. */
@@ -50,6 +63,7 @@ interface PartialAppConfig {
   appDir?: string;
   llm?: Partial<LlmConfig>;
   speech?: Partial<SpeechConfig>;
+  image?: Partial<ImageConfig>;
 }
 
 function loadConfig(): AppConfig {
@@ -61,6 +75,7 @@ function loadConfig(): AppConfig {
     appDir: parsed.appDir ?? DEFAULT_CONFIG.appDir,
     llm: { ...DEFAULT_CONFIG.llm, ...parsed.llm },
     speech: { ...DEFAULT_CONFIG.speech, ...parsed.speech },
+    image: { ...DEFAULT_CONFIG.image, ...parsed.image },
   };
 }
 
@@ -70,6 +85,11 @@ export const config: AppConfig = loadConfig();
 export function llmOptions(): LlmOptions {
   const models = config.llm.models;
   return { engines: Object.values(LlmEngine).filter((engine) => (models[engine]?.length ?? 0) > 0), models };
+}
+
+/** The codex model images are drawn with — config.json's own pick, or the first model it offers codex. */
+export function imageModel(): string {
+  return config.image.model || config.llm.models[LlmEngine.Codex]?.[0] || '';
 }
 
 /**

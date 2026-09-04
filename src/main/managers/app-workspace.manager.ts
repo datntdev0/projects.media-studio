@@ -4,6 +4,7 @@ import { deleteAppWorkspaceRunsByWorkspaceId } from '@/main/database/repositorie
 import { getAppLibrary } from '@/main/database/repositories/app-library.repo';
 import { AppLibraryType } from '@/shared/app-library';
 import { DEFAULT_SPEECH } from '@/shared/app-workspace-narration';
+import { DEFAULT_ART_STYLE } from '@/shared/app-workspace-illustration';
 import { WorkspacePreset, WorkspaceStatus, WorkspaceStepState, plannedStepsOf, type AppWorkspace, type CreateAppWorkspaceInput, type ListAppWorkspacesFilter, type UpdateAppWorkspaceInput, type WorkspaceStep } from '@/shared/app-workspace';
 
 export interface AppWorkspaceManager {
@@ -16,7 +17,7 @@ export interface AppWorkspaceManager {
 
 /** The pipeline a new workspace starts with — every step waiting, and unscoped until a run counts its units. */
 function initialSteps(input: CreateAppWorkspaceInput): WorkspaceStep[] {
-  return plannedStepsOf(input.preset, input.translateEnabled).map((step) => ({
+  return plannedStepsOf(input.preset, { translate: input.translateEnabled, illustrate: input.illustrateEnabled }).map((step) => ({
     key: step.key,
     idx: step.idx,
     state: WorkspaceStepState.Pending,
@@ -75,6 +76,7 @@ export function createAppWorkspaceManager(db: Db): AppWorkspaceManager {
         // Null: a new workspace follows config.json until its own picker changes it.
         llm: null,
         speech: DEFAULT_SPEECH,
+        artStyle: DEFAULT_ART_STYLE,
         steps: initialSteps(input),
         lastRunAt: null,
       });

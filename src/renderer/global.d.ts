@@ -7,6 +7,7 @@ import type { AppWorkspaceRunApi } from '@/shared/app-workspace-run';
 import type { AppWorkspaceExtractionApi } from '@/shared/app-workspace-extraction';
 import type { AppWorkspaceTranslationApi } from '@/shared/app-workspace-translation';
 import type { AppWorkspaceNarrationApi } from '@/shared/app-workspace-narration';
+import type { AppWorkspaceIllustrationApi } from '@/shared/app-workspace-illustration';
 
 declare global {
   interface Window {
@@ -19,6 +20,7 @@ declare global {
     appWorkspaceExtractionApi: AppWorkspaceExtractionApi;
     appWorkspaceTranslationApi: AppWorkspaceTranslationApi;
     appWorkspaceNarrationApi: AppWorkspaceNarrationApi;
+    appWorkspaceIllustrationApi: AppWorkspaceIllustrationApi;
   }
 }
 

@@ -7,6 +7,10 @@
     },
     "timeoutMs": 300000
   },
+  "image": {
+    "model": "",
+    "timeoutMs": 900000
+  },
   "speech": {
     "python": "src/scripts/.venv/Scripts/python.exe",
     "device": "auto",

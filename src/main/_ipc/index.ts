@@ -8,6 +8,7 @@ import { registerAppWorkspaceRunHandlers } from './app-workspace-run.handlers';
 import { registerAppWorkspaceExtractionHandlers } from './app-workspace-extraction.handlers';
 import { registerAppWorkspaceTranslationHandlers } from './app-workspace-translation.handlers';
 import { registerAppWorkspaceNarrationHandlers } from './app-workspace-narration.handlers';
+import { registerAppWorkspaceIllustrationHandlers } from './app-workspace-illustration.handlers';
 
 export function registerIpcHandlers(container: Container): void {
   registerAppInfoHandlers(container);
@@ -19,4 +20,5 @@ export function registerIpcHandlers(container: Container): void {
   registerAppWorkspaceExtractionHandlers(container);
   registerAppWorkspaceTranslationHandlers(container);
   registerAppWorkspaceNarrationHandlers(container);
+  registerAppWorkspaceIllustrationHandlers(container);
 }

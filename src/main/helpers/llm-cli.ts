@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runCli } from './cli';
 import { config } from './config';
 import { getAppTempDir } from './paths';
 import { LlmEngine, type LlmSettings } from '@/shared/llm';
@@ -29,54 +29,9 @@ function logUsage(engine: LlmEngine, usage: LlmUsage, startTime: Date): void {
   logger.info(`[llm] ${engine} usage — input: ${usage.inputTokens} (${usage.cachedInputTokens} cached), output: ${usage.outputTokens}, duration: ${new Date().getTime() - startTime.getTime()}ms`);
 }
 
-/** How much of a failing CLI's own output is worth carrying into the error. */
-const MAX_ERROR_CHARS = 600;
-
-/**
- * How one of these CLIs is launched. Windows cannot exec the `.cmd` shim npm
- * installs a CLI as, so the command line goes through cmd.exe there — as one
- * already-joined string, since handing an args array to a shell is deprecated
- * (DEP0190). Everywhere else the args go straight to the executable, no shell in
- * between. Nothing user-supplied reaches the command line either way: the prompt
- * travels on stdin, and the rest is literals plus config.json's own model names.
- */
-function cliLaunch(command: string, args: string[]): { file: string; argv: string[]; verbatim: boolean } {
-  if (process.platform !== 'win32') {
-    return { file: command, argv: args, verbatim: false };
-  }
-  return { file: process.env.ComSpec ?? 'cmd.exe', argv: ['/d', '/s', '/c', `"${command} ${args.join(' ')}"`], verbatim: true };
-}
-
-/**
- * Why the call failed, in as much detail as the CLI left behind — both streams,
- * because `--output-format json` reports some errors on stdout rather than
- * stderr, and a silent non-zero exit says nothing on its own.
- */
-function cliFailure(command: string, code: number | null, signal: NodeJS.Signals | null, stderr: string, stdout: string): string {
-  const how = signal ? `was killed by ${signal} after ${config.llm.timeoutMs / 1_000}s` : `exited ${code}`;
-  const said = [stderr.trim(), stdout.trim()].filter((text) => text !== '').join(' | ');
-  return said === ''
-    ? `${command} ${how} without writing anything — check that it is installed, on PATH, and signed in.`
-    : `${command} ${how}: ${said.slice(0, MAX_ERROR_CHARS)}`;
-}
-
-/** Runs the CLI with `prompt` on stdin, resolving to everything it wrote to stdout. */
+/** Runs the CLI from a scratch cwd with `prompt` on stdin, resolving to everything it wrote to stdout. */
 function spawnCli(command: string, args: string[], prompt: string): Promise<string> {
-  logger.debug(`[llm-cli] spawning CLI: ${command} ${args.join(' ')}`);
-  const { file, argv, verbatim } = cliLaunch(command, args);
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(file, argv, { cwd: getAppTempDir(), timeout: config.llm.timeoutMs, windowsHide: true, windowsVerbatimArguments: verbatim });
-    let out = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('close', (code, signal) => (code === 0 ? resolve(out) : reject(new Error(cliFailure(command, code, signal, stderr, out)))));
-    // A prompt runs to tens of kilobytes, so the pipe can break before it is drained.
-    child.stdin.on('error', (error: Error) => reject(new Error(`${command} stopped reading the prompt: ${error.message}`)));
-    child.stdin.end(prompt);
-  });
+  return runCli({ command, args, input: prompt, cwd: getAppTempDir(), timeoutMs: config.llm.timeoutMs });
 }
 
 /** The last `turn.completed` event of codex's `--json` stream, which carries the call's token usage. */

@@ -24,7 +24,7 @@ function addNovel(title = 'My Novel'): string {
 }
 
 function workspaceInput(libraryId: string, overrides: Partial<CreateAppWorkspaceInput> = {}): CreateAppWorkspaceInput {
-  return { name: 'My Novel — Audio VN', description: '', preset: WorkspacePreset.AudioNovel, libraryId, translateEnabled: true, ...overrides };
+  return { name: 'My Novel — Audio VN', description: '', preset: WorkspacePreset.AudioNovel, libraryId, translateEnabled: true, illustrateEnabled: true, ...overrides };
 }
 
 beforeEach(() => {
@@ -45,14 +45,15 @@ describe('app workspace manager', () => {
       { key: WorkspaceStepKey.SemanticAnalysis, idx: 1, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
       { key: WorkspaceStepKey.SemanticTranslate, idx: 2, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
       { key: WorkspaceStepKey.NarrationSpeech, idx: 3, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
+      { key: WorkspaceStepKey.FrameIllustration, idx: 4, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
       { key: WorkspaceStepKey.Export, idx: 5, state: WorkspaceStepState.Pending, doneCount: 0, failedCount: 0, totalCount: 0 },
     ]);
     expect(manager.get(created.id)).toEqual(created);
   });
 
-  it('create() leaves out the translate step when it is toggled off, keeping the preset numbering', () => {
+  it('create() leaves out the optional steps toggled off, keeping the preset numbering', () => {
     const manager = createAppWorkspaceManager(db);
-    const created = manager.create(workspaceInput(addNovel(), { translateEnabled: false }));
+    const created = manager.create(workspaceInput(addNovel(), { translateEnabled: false, illustrateEnabled: false }));
 
     expect(created.steps.map((step) => step.key)).toEqual([WorkspaceStepKey.SemanticAnalysis, WorkspaceStepKey.NarrationSpeech, WorkspaceStepKey.Export]);
     expect(created.steps.map((step) => step.idx)).toEqual([1, 3, 5]);

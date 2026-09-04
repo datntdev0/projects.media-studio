@@ -11,6 +11,7 @@ import { APP_WORKSPACE_RUN_IPC_CHANNELS, type AppWorkspaceRunApi } from '@/share
 import { APP_WORKSPACE_EXTRACTION_IPC_CHANNELS, type AppWorkspaceExtractionApi } from '@/shared/app-workspace-extraction';
 import { APP_WORKSPACE_TRANSLATION_IPC_CHANNELS, type AppWorkspaceTranslationApi } from '@/shared/app-workspace-translation';
 import { APP_WORKSPACE_NARRATION_IPC_CHANNELS, type AppWorkspaceNarrationApi } from '@/shared/app-workspace-narration';
+import { APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS, type AppWorkspaceIllustrationApi } from '@/shared/app-workspace-illustration';
 
 const appInfoApi: AppInfoApi = {
   get: () => ipcRenderer.invoke(APP_INFO_IPC_CHANNELS.get),
@@ -76,6 +77,18 @@ const appWorkspaceNarrationApi: AppWorkspaceNarrationApi = {
   readChapter: (workspaceId, chapterNo) => ipcRenderer.invoke(APP_WORKSPACE_NARRATION_IPC_CHANNELS.readChapter, workspaceId, chapterNo),
 };
 
+const appWorkspaceIllustrationApi: AppWorkspaceIllustrationApi = {
+  read: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.read, workspaceId),
+  setStyle: (workspaceId, style) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.setStyle, workspaceId, style),
+  saveDesign: (workspaceId, design) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.saveDesign, workspaceId, design),
+  rebuildDesign: (workspaceId) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.rebuildDesign, workspaceId),
+  readChapter: (workspaceId, chapterNo) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.readChapter, workspaceId, chapterNo),
+  saveFrames: (workspaceId, chapterNo, plan) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.saveFrames, workspaceId, chapterNo, plan),
+  planFrames: (workspaceId, chapterNo) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.planFrames, workspaceId, chapterNo),
+  drawCharacter: (workspaceId, characterSlug, outfitSlug) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.drawCharacter, workspaceId, characterSlug, outfitSlug),
+  drawFrame: (workspaceId, chapterNo, frameIdx) => ipcRenderer.invoke(APP_WORKSPACE_ILLUSTRATION_IPC_CHANNELS.drawFrame, workspaceId, chapterNo, frameIdx),
+};
+
 contextBridge.exposeInMainWorld('appInfoApi', appInfoApi);
 contextBridge.exposeInMainWorld('appLibraryApi', appLibraryApi);
 contextBridge.exposeInMainWorld('appLibraryPackageApi', appLibraryPackageApi);
@@ -85,3 +98,4 @@ contextBridge.exposeInMainWorld('appWorkspaceRunApi', appWorkspaceRunApi);
 contextBridge.exposeInMainWorld('appWorkspaceExtractionApi', appWorkspaceExtractionApi);
 contextBridge.exposeInMainWorld('appWorkspaceTranslationApi', appWorkspaceTranslationApi);
 contextBridge.exposeInMainWorld('appWorkspaceNarrationApi', appWorkspaceNarrationApi);
+contextBridge.exposeInMainWorld('appWorkspaceIllustrationApi', appWorkspaceIllustrationApi);
